@@ -112,12 +112,37 @@ export class PlaceholderGoogleSheetsDataSource implements SheetsDataSource {
         description: 'Generic placeholder representing statistical and data-analysis software products (e.g. SmartPLS, SPSS, AMOS, NVivo, MAXQDA, Mplus, EViews) to be populated from the inventory sheet.',
         details: [
           'Statistical computing environment placeholder',
-          'Compatible with Windows & macOS',
-          'Single-user research license model'
+          'Compatible with Windows & Mac',
+          'Academic research license model'
         ],
         referenceTypes: ['Statistical Tool', 'Quantitative Analysis'],
-        pricingNote: 'Pricing managed via Google Sheets inventory',
-        status: 'catalog-preview'
+        pricingNote: 'Prices in Ghana Cedis (GHS)',
+        status: 'available',
+        osCompatibility: ['Windows', 'Mac'],
+        minPriceGhs: 180,
+        machineCodeType: 'lock-code',
+        variants: [
+          { id: 'var-a-v29', version: 'v29.0', isRecommended: true, osList: ['Windows', 'Mac'], priceGhs: 240 },
+          { id: 'var-a-v28', version: 'v28.0', isRecommended: false, osList: ['Windows', 'Mac'], priceGhs: 200 },
+          { id: 'var-a-v26', version: 'v26.0', isRecommended: false, osList: ['Windows'], priceGhs: 180 }
+        ],
+        about: 'Sample Software A represents statistical software packages used by researchers and students for hypothesis testing, linear modeling, regression, and multivariate analysis.',
+        features: [
+          'Advanced statistical modeling modules',
+          'Descriptive and inferential data procedures',
+          'Cross-tabulations and graphical representations',
+          'Automated data screening output'
+        ],
+        systemRequirements: [
+          'Windows 10 / 11 (64-bit) or macOS 12 Monterey or newer',
+          'Minimum 4 GB RAM (8 GB recommended)',
+          '2 GB available disk storage'
+        ],
+        screenshots: [
+          'Workspace analysis interface preview',
+          'Output dataset and model summary'
+        ],
+        installationGuide: 'Download the authorized installer, run the setup wizard, open the Licence Authorization Wizard, and provide your Machine Lock Code for instant activation.'
       },
       {
         id: 'placeholder-software-b',
@@ -128,12 +153,60 @@ export class PlaceholderGoogleSheetsDataSource implements SheetsDataSource {
         placeholderLabel: 'Generic Placeholder — Qualitative / Structural Tool',
         description: 'Generic placeholder representing qualitative and structural equation analysis tools to be synced from the Google Sheets backend.',
         details: [
-          'Qualitative and thematic coding workflow placeholder',
-          'Cross-platform data project support'
+          'Thematic and content coding workflow placeholder',
+          'Multi-format audio, text, and PDF import'
         ],
         referenceTypes: ['Qualitative Analysis', 'Thematic Coding'],
-        pricingNote: 'Pricing managed via Google Sheets inventory',
-        status: 'catalog-preview'
+        pricingNote: 'Prices in Ghana Cedis (GHS)',
+        status: 'available',
+        osCompatibility: ['Windows', 'Mac'],
+        minPriceGhs: 220,
+        machineCodeType: 'hardware-id',
+        variants: [
+          { id: 'var-b-2024', version: '2024', isRecommended: true, osList: ['Windows', 'Mac'], priceGhs: 290 },
+          { id: 'var-b-2022', version: '2022', isRecommended: false, osList: ['Windows', 'Mac'], priceGhs: 220 }
+        ],
+        about: 'Sample Software B represents qualitative mixed-methods software for organizing, coding, and visualizing unstructured qualitative data.',
+        features: [
+          'Thematic text coding and matrix queries',
+          'Mixed-methods visualization tools',
+          'Team project merging capabilities'
+        ],
+        systemRequirements: [
+          'Windows 10 / 11 or macOS 11 Big Sur or newer',
+          '4 GB RAM minimum'
+        ],
+        installationGuide: 'Install software package, copy the displayed Hardware ID, and submit it during checkout for your license file.'
+      },
+      {
+        id: 'placeholder-software-c',
+        name: 'Sample Software C',
+        categoryId: 'statistical-software',
+        categoryName: 'Statistical & Data-Analysis Software',
+        isPlaceholder: true,
+        placeholderLabel: 'Generic Placeholder — Econometric Modeling Tool',
+        description: 'Generic placeholder representing time-series and econometric forecasting tools with single straightforward license option.',
+        details: [
+          'Time-series forecasting and regression',
+          'Single Windows platform edition'
+        ],
+        referenceTypes: ['Econometrics', 'Time Series'],
+        pricingNote: 'Exact price in Ghana Cedis (GHS)',
+        status: 'available',
+        osCompatibility: ['Windows'],
+        priceGhs: 195,
+        machineCodeType: 'none',
+        variants: [
+          { id: 'var-c-single', version: 'Standard Edition', isRecommended: true, osList: ['Windows'], priceGhs: 195 }
+        ],
+        about: 'Sample Software C provides statistical analysis, forecasting, and econometric modeling for business, academic, and financial research.',
+        features: [
+          'Autoregressive distributed lag (ARDL) estimation',
+          'Vector autoregression (VAR) & cointegration',
+          'Panel data analysis'
+        ],
+        systemRequirements: ['Windows 10 / 11 (64-bit), 2 GB RAM'],
+        installationGuide: 'Run the setup installer and input the provided serial key during the initial launch.'
       },
       {
         id: 'placeholder-service-a',
@@ -144,13 +217,27 @@ export class PlaceholderGoogleSheetsDataSource implements SheetsDataSource {
         placeholderLabel: 'Generic Placeholder — Turnitin Similarity Check',
         description: 'Generic placeholder for academic document similarity checks, digital originality reports, and AI detection screening services.',
         details: [
-          'Document similarity report generation placeholder',
+          'Comprehensive similarity breakdown percentage',
           'Non-repository private submission pipeline',
-          'Express delivery timeframe'
+          'Express delivery to WhatsApp or Email'
         ],
         referenceTypes: ['Originality Check', 'Turnitin Verification'],
-        pricingNote: 'Per-document or word-count rate in sheet',
-        status: 'catalog-preview'
+        pricingNote: 'Per-document report in Ghana Cedis (GHS)',
+        status: 'available',
+        osCompatibility: ['Web / Cloud'],
+        priceGhs: 35,
+        machineCodeType: 'service',
+        variants: [
+          { id: 'var-serv-single', version: 'Single Document Check', isRecommended: true, osList: ['Web / Cloud'], priceGhs: 35 }
+        ],
+        about: 'Originality verification service for research papers, dissertations, and capstone projects. Files are screened safely without adding them to institutional repositories.',
+        features: [
+          'Detailed colour-coded matched sources report',
+          'AI-generated text indicator breakdown',
+          'Safe non-repository submission',
+          'Fast turnaround (15–30 mins)'
+        ],
+        installationGuide: 'Upload or email your research draft along with your contact phone number. Your detailed PDF similarity report will be delivered directly via WhatsApp or Email.'
       },
       {
         id: 'placeholder-service-b',
@@ -162,11 +249,26 @@ export class PlaceholderGoogleSheetsDataSource implements SheetsDataSource {
         description: 'Generic placeholder for research audio transcription, survey data cleaning, coding, and statistical summary reporting.',
         details: [
           'Interview audio transcription placeholder',
-          'Data screening and formatting service'
+          'Data screening and formatting service',
+          'Consultation with research analysts'
         ],
         referenceTypes: ['Transcription', 'Data Cleaning'],
-        pricingNote: 'Hourly or per-audio-minute rate in sheet',
-        status: 'catalog-preview'
+        pricingNote: 'Starting rates in Ghana Cedis (GHS)',
+        status: 'available',
+        osCompatibility: ['Web / Cloud'],
+        minPriceGhs: 120,
+        machineCodeType: 'service',
+        variants: [
+          { id: 'var-serv-trans', version: 'Audio Transcription (per 30 min)', isRecommended: true, osList: ['Web / Cloud'], priceGhs: 120 },
+          { id: 'var-serv-clean', version: 'Dataset Screening & Cleaning', isRecommended: false, osList: ['Web / Cloud'], priceGhs: 180 },
+          { id: 'var-serv-analysis', version: 'Full Statistical Analysis & Writeup', isRecommended: false, osList: ['Web / Cloud'], priceGhs: 450 }
+        ],
+        about: 'Professional research support services for postgraduate scholars, research institutions, and development organizations.',
+        features: [
+          'Verbatim or clean transcript options',
+          'Outlier checking and missing value replacement',
+          'Standard APA format tables and figures'
+        ]
       },
       {
         id: 'placeholder-bundle-a',
@@ -178,11 +280,23 @@ export class PlaceholderGoogleSheetsDataSource implements SheetsDataSource {
         description: 'Generic placeholder representing multi-software combination packages for postgraduate and academic research projects.',
         details: [
           'Combined quantitative + qualitative tools bundle',
-          'Special package pricing model'
+          'Cost-effective multi-package option'
         ],
         referenceTypes: ['Multi-Product Bundle', 'Academic Suite'],
-        pricingNote: 'Bundle discount pricing managed in sheet',
-        status: 'catalog-preview'
+        pricingNote: 'Special bundle rate in Ghana Cedis (GHS)',
+        status: 'available',
+        osCompatibility: ['Windows', 'Mac'],
+        priceGhs: 380,
+        machineCodeType: 'none',
+        variants: [
+          { id: 'var-bundle-standard', version: 'Dual Research Suite', isRecommended: true, osList: ['Windows', 'Mac'], priceGhs: 380 }
+        ],
+        about: 'Save when ordering complementary software tools together. Ideal for mixed-methods graduate theses and research studies.',
+        features: [
+          'Both quantitative statistical modeling and qualitative coding tools included',
+          'Full documentation and installation setup guide'
+        ],
+        installationGuide: 'You will receive download links and setup guides for both software packages upon order confirmation.'
       },
       {
         id: 'placeholder-laptop-a',
@@ -198,8 +312,22 @@ export class PlaceholderGoogleSheetsDataSource implements SheetsDataSource {
           'Pre-configured analysis environment optional'
         ],
         referenceTypes: ['Hardware', 'Laptop Workstation'],
-        pricingNote: 'Hardware pricing and availability managed in sheet',
-        status: 'catalog-preview'
+        pricingNote: 'Hardware pricing in Ghana Cedis (GHS)',
+        status: 'available',
+        osCompatibility: ['Windows'],
+        minPriceGhs: 4200,
+        machineCodeType: 'service',
+        variants: [
+          { id: 'var-laptop-core-i5', version: 'Core i5 / 16GB RAM / 512GB SSD', isRecommended: true, osList: ['Windows'], priceGhs: 4200 },
+          { id: 'var-laptop-core-i7', version: 'Core i7 / 32GB RAM / 1TB SSD', isRecommended: false, osList: ['Windows'], priceGhs: 5800 }
+        ],
+        about: 'Reliable research and analysis laptops thoroughly tested for demanding computational workloads, structural equation modeling, and multi-program multitasking.',
+        features: [
+          'High performance processors for computation',
+          'Flicker-free anti-glare display for long research sessions',
+          'Full hardware check and guarantee'
+        ],
+        installationGuide: 'Laptops can be collected in person or delivered nationwide across Ghana via VIP/STC parcel services with tracking.'
       }
     ];
   }

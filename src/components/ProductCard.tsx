@@ -1,78 +1,141 @@
 import React from 'react';
 import { Product } from '../types';
-import { Tag, Info, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Laptop, CheckCircle, ChevronRight, Sparkles } from 'lucide-react';
+import { STORE_COPY } from '../config/storeCopy';
 
 interface ProductCardProps {
   product: Product;
+  onSelect: (product: Product) => void;
+  onBuyNowClick: (product: Product) => void;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
+export const ProductCard: React.FC<ProductCardProps> = ({
+  product,
+  onSelect,
+  onBuyNowClick
+}) => {
+  const hasMultipleVariants = product.variants && product.variants.length > 1;
+
+  // Format GHS price string: From ₵... or ₵...
+  const displayPrice = hasMultipleVariants && product.minPriceGhs
+    ? STORE_COPY.product.fromPrice(`₵${product.minPriceGhs.toLocaleString()}`)
+    : product.priceGhs
+    ? `₵${product.priceGhs.toLocaleString()}`
+    : product.variants?.[0]
+    ? `₵${product.variants[0].priceGhs.toLocaleString()}`
+    : '₵0.00';
+
+  // Primary action button label (Buy now vs View options)
+  const actionLabel = hasMultipleVariants ? STORE_COPY.product.viewOptions : STORE_COPY.product.buyNow;
+
+  // Fallback initial/icon for logo image area
+  const getProductInitial = (name: string) => {
+    const parts = name.split(' ');
+    if (parts.length > 1) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
+
   return (
     <div
       id={`product-card-${product.id}`}
-      className="flex flex-col justify-between rounded-xl bg-[#0e1c1c] border border-[#014040] hover:border-[#05ef28]/60 transition-all duration-200 overflow-hidden text-slate-100 shadow-md"
+      className="group flex flex-col justify-between rounded-2xl bg-white border border-[#d8e7e4] hover:border-[#014040]/70 hover:shadow-md transition-all duration-200 overflow-hidden text-slate-900"
     >
-      <div className="p-5">
-        {/* Top Badges */}
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <span className="text-[11px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#014040] text-[#05ef28] border border-[#05ef28]/30">
-            {product.placeholderLabel}
-          </span>
-          <span className="text-[10px] font-semibold text-slate-400 bg-black/40 px-2 py-0.5 rounded">
-            {product.categoryName}
-          </span>
+      <div className="p-5 sm:p-6">
+        {/* Top bar: Product Image/Logo Area + Category Label */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div
+            onClick={() => onSelect(product)}
+            className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#edf5f3] to-[#d8e9e6] border border-[#c6deda] flex items-center justify-center font-black text-lg text-[#014040] shadow-2xs group-hover:scale-105 transition-transform cursor-pointer"
+          >
+            {product.categoryId === 'laptops' ? (
+              <Laptop className="w-7 h-7 text-[#014040]" />
+            ) : product.categoryId === 'research-services' ? (
+              <Sparkles className="w-7 h-7 text-[#014040]" />
+            ) : (
+              <span>{getProductInitial(product.name)}</span>
+            )}
+          </div>
+
+          <div className="text-right">
+            <span className="inline-block text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#edf5f3] text-[#014040] border border-[#d0e4e0]">
+              {product.categoryName}
+            </span>
+            {hasMultipleVariants && (
+              <span className="block text-[10px] text-slate-500 mt-1 font-medium">
+                {product.variants?.length} editions available
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Product Title */}
-        <h3 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+        {/* Product Name */}
+        <h3
+          onClick={() => onSelect(product)}
+          className="text-base sm:text-lg font-bold text-[#014040] tracking-tight hover:text-[#025656] cursor-pointer transition-colors leading-snug"
+        >
           {product.name}
         </h3>
 
-        {/* Description */}
-        <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+        {/* Short Description */}
+        <p className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed">
           {product.description}
         </p>
 
-        {/* Details / Specs list */}
-        {product.details && product.details.length > 0 && (
-          <div className="mt-4 space-y-1.5 pt-3 border-t border-[#014040]/50">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Specifications & Scope:
-            </span>
-            {product.details.map((detail, idx) => (
-              <div key={idx} className="flex items-start gap-1.5 text-xs text-slate-300">
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#05ef28] shrink-0 mt-0.5" />
-                <span>{detail}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Reference types / Tags */}
-        {product.referenceTypes && product.referenceTypes.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {product.referenceTypes.map((ref, idx) => (
+        {/* OS Compatibility badges */}
+        {product.osCompatibility && product.osCompatibility.length > 0 && (
+          <div className="mt-3.5 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] text-slate-500 font-medium">Platform:</span>
+            {product.osCompatibility.map((os, idx) => (
               <span
                 key={idx}
-                className="text-[10px] px-2 py-0.5 rounded-full bg-[#014040]/70 text-slate-300 border border-[#014040]"
+                className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-[#f1f6f5] text-slate-700 border border-[#dbe8e5]"
               >
-                {ref}
+                {os}
               </span>
             ))}
           </div>
         )}
+
+        {/* Highlighted recommended version if present */}
+        {product.variants && product.variants.some(v => v.isRecommended) && (
+          <div className="mt-3 text-[11px] flex items-center gap-1.5 text-[#014040] font-medium bg-[#f0f8f6] px-2.5 py-1 rounded-lg border border-[#cbe5df]">
+            <CheckCircle className="w-3.5 h-3.5 text-[#05ef28] shrink-0" />
+            <span>
+              {STORE_COPY.product.latest}: <strong>{product.variants.find(v => v.isRecommended)?.version}</strong> ({STORE_COPY.product.recommended})
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Card Footer: Pricing note & Read-only preview state */}
-      <div className="px-5 py-3 bg-[#014040]/30 border-t border-[#014040] flex items-center justify-between gap-2 text-xs">
-        <div className="flex items-center gap-1.5 text-slate-300">
-          <Info className="w-3.5 h-3.5 text-[#05ef28]" />
-          <span className="text-[11px] font-medium">{product.pricingNote || 'Configured via Google Sheets'}</span>
+      {/* Footer: Price in GHS & Primary Action Button */}
+      <div className="px-5 sm:px-6 py-4 bg-[#f8fbfa] border-t border-[#e2ecea] flex items-center justify-between gap-3">
+        {/* Price in GHS only */}
+        <div>
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold block">
+            Price (GHS)
+          </span>
+          <span className="text-base sm:text-lg font-black text-[#014040]">
+            {displayPrice}
+          </span>
         </div>
 
-        <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#014040] text-[#05ef28] text-[10px] font-bold uppercase tracking-wider border border-[#05ef28]/40">
-          Read-Only Preview
-        </div>
+        {/* Primary Action Button */}
+        <button
+          id={`product-action-btn-${product.id}`}
+          onClick={() => {
+            if (hasMultipleVariants) {
+              onSelect(product);
+            } else {
+              onBuyNowClick(product);
+            }
+          }}
+          className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-[#05ef28] hover:bg-[#04d824] active:scale-98 text-[#014040] font-black text-xs sm:text-sm shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+        >
+          <span>{actionLabel}</span>
+          <ChevronRight className="w-3.5 h-3.5 stroke-[3]" />
+        </button>
       </div>
     </div>
   );

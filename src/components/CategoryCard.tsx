@@ -1,6 +1,6 @@
 import React from 'react';
 import { Category, BusinessCategory } from '../types';
-import { Binary, FileSearch, Package, Laptop, Check } from 'lucide-react';
+import { BarChart3, FileText, Layers, Laptop, ChevronRight } from 'lucide-react';
 
 interface CategoryCardProps {
   category: Category;
@@ -16,15 +16,15 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
   const getCategoryIcon = (id: BusinessCategory) => {
     switch (id) {
       case 'statistical-software':
-        return <Binary className="w-5 h-5" />;
+        return <BarChart3 className="w-5 h-5" />;
       case 'research-services':
-        return <FileSearch className="w-5 h-5" />;
+        return <FileText className="w-5 h-5" />;
       case 'software-bundles':
-        return <Package className="w-5 h-5" />;
+        return <Layers className="w-5 h-5" />;
       case 'laptops':
         return <Laptop className="w-5 h-5" />;
       default:
-        return <Binary className="w-5 h-5" />;
+        return <BarChart3 className="w-5 h-5" />;
     }
   };
 
@@ -32,56 +32,71 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
     <div
       id={`category-card-${category.id}`}
       onClick={() => onSelect(category.id)}
-      className={`cursor-pointer text-left p-4 sm:p-5 rounded-xl border transition-all duration-200 flex flex-col justify-between ${
+      className={`group cursor-pointer text-left p-4 sm:p-5 rounded-2xl border transition-all duration-200 flex flex-col justify-between select-none ${
         isSelected
-          ? 'bg-[#014040] border-[#05ef28] shadow-lg shadow-[#014040]/50 ring-1 ring-[#05ef28]'
-          : 'bg-[#0e1c1c] border-[#014040]/70 hover:border-[#05ef28]/50 hover:bg-[#122323]'
+          ? 'bg-[#014040] text-white border-[#014040] shadow-md ring-2 ring-[#05ef28]'
+          : 'bg-white text-slate-800 border-[#d8e7e4] hover:border-[#014040] hover:shadow-xs hover:bg-[#fbfdfc]'
       }`}
     >
       <div>
         <div className="flex items-center justify-between mb-3">
           <div
-            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
               isSelected
                 ? 'bg-[#05ef28] text-[#014040]'
-                : 'bg-[#014040] text-[#05ef28]'
+                : 'bg-[#edf5f3] text-[#014040] group-hover:bg-[#014040] group-hover:text-[#05ef28]'
             }`}
           >
             {getCategoryIcon(category.id)}
           </div>
-          {isSelected && (
-            <span className="flex items-center gap-1 text-[11px] font-bold text-[#05ef28] bg-black/40 px-2 py-0.5 rounded-full border border-[#05ef28]/40">
-              <Check className="w-3 h-3" />
-              Active
-            </span>
-          )}
+          <ChevronRight
+            className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${
+              isSelected ? 'text-[#05ef28]' : 'text-slate-400 group-hover:text-[#014040]'
+            }`}
+          />
         </div>
 
-        <h3 className="text-base font-bold text-white tracking-tight">
+        <h3
+          className={`text-sm sm:text-base font-bold tracking-tight leading-snug ${
+            isSelected ? 'text-white' : 'text-[#014040]'
+          }`}
+        >
           {category.name}
         </h3>
-        <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+
+        <p
+          className={`text-xs mt-1.5 leading-relaxed ${
+            isSelected ? 'text-slate-200' : 'text-slate-600'
+          }`}
+        >
           {category.shortDescription}
         </p>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-[#014040]/50">
-        <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1">
-          Representative Offerings:
-        </span>
+      {/* Examples tag */}
+      <div className="mt-3 pt-2.5 border-t border-dashed border-current/15">
         <div className="flex flex-wrap gap-1">
-          {category.representativeItems.map((item, idx) => (
+          {category.representativeItems.slice(0, 3).map((item, idx) => (
             <span
               key={idx}
-              className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+              className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
                 isSelected
-                  ? 'bg-black/30 text-white border border-[#05ef28]/30'
-                  : 'bg-[#014040]/60 text-slate-300'
+                  ? 'bg-white/15 text-slate-100'
+                  : 'bg-[#edf4f3] text-slate-700'
               }`}
             >
               {item}
             </span>
           ))}
+          {category.representativeItems.length > 3 && (
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
+                isSelected ? 'text-slate-300' : 'text-slate-400'
+              }`}
+            >
+              +{category.representativeItems.length - 3} more
+            </span>
+          )}
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 {
   "name": "Hack-Key Tech Store",
-  "description": "Read-only catalogue foundation for Hack-Key Tech software, research services, bundles, and laptops migration",
+  "description": "Software, research services and laptops — with support when you need it.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

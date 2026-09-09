@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 120" fill="none">
+  <!-- Stylized Angled H Glyph -->
+  <g fill="#05ef28">
+    <!-- Left Angled Stem -->
+    <polygon points="45,0 95,0 55,120 5,120" />
+    <!-- Right Angled Stem -->
+    <polygon points="140,0 190,0 150,120 100,120" />
+    <!-- Connecting Horizontal Bar -->
+    <polygon points="45,45 155,45 145,75 35,75" />
+  </g>
+
+  <!-- Wordmark Text -->
+  <!-- Top: HACK_KEY -->
+  <text x="240" y="65" font-family="'Archivo', sans-serif" font-weight="900" font-size="64" fill="#05ef28" letter-spacing="1">HACK_KEY</text>
+  <!-- Bottom: TECH SUPPORT -->
+  <text x="242" y="104" font-family="'Archivo', sans-serif" font-weight="600" font-size="28" fill="#05ef28" letter-spacing="11">TECH SUPPORT</text>
+</svg>

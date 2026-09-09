@@ -4,6 +4,16 @@ export type BusinessCategory =
   | 'software-bundles'
   | 'laptops';
 
+export type MachineCodeType = 'lock-code' | 'hardware-id' | 'none' | 'service';
+
+export interface ProductVariant {
+  id: string;
+  version: string;
+  isRecommended?: boolean;
+  osList: ('Windows' | 'Mac' | 'Windows & Mac' | 'Web / Cloud' | string)[];
+  priceGhs: number;
+}
+
 export interface Category {
   id: BusinessCategory;
   name: string;
@@ -23,6 +33,16 @@ export interface Product {
   referenceTypes?: string[];
   pricingNote?: string;
   status: 'available' | 'catalog-preview';
+  osCompatibility?: ('Windows' | 'Mac' | 'Windows & Mac' | 'Web / Cloud')[];
+  priceGhs?: number;
+  minPriceGhs?: number;
+  variants?: ProductVariant[];
+  machineCodeType?: MachineCodeType;
+  about?: string;
+  features?: string[];
+  systemRequirements?: string[];
+  screenshots?: string[];
+  installationGuide?: string;
 }
 
 export interface CatalogResponse {

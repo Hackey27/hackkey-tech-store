@@ -10,8 +10,8 @@
 @layer base {
   body {
     font-family: var(--font-sans);
-    background-color: #0b1414;
-    color: #f8fafc;
+    background-color: #f7faf9;
+    color: #0f2828;
   }
 }
 
@@ -21,12 +21,12 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0b1414;
+  background: #f1f5f4;
 }
 ::-webkit-scrollbar-thumb {
-  background: #014040;
+  background: #cbdcd9;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #05ef28;
+  background: #014040;
 }
