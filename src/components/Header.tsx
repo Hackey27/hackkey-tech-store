@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, ShoppingBag, MessageSquare } from 'lucide-react';
+import { Search, ShoppingBag } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import { STORE_COPY } from '../config/storeCopy';
 
@@ -20,46 +20,6 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <header className="sticky top-0 z-40 w-full bg-white border-b border-[#e2ecea] shadow-xs">
-      {/* Top micro bar with support info and quick links */}
-      <div className="bg-[#014040] text-white text-[11px] sm:text-xs py-1.5 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <a
-              href={STORE_COPY.brand.whatsAppUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 hover:text-[#05ef28] transition-colors font-medium"
-            >
-              <MessageSquare className="w-3.5 h-3.5 text-[#05ef28] fill-current" />
-              <span><b>{STORE_COPY.brand.phone}</b> · <b>{STORE_COPY.brand.email}</b></span>
-            </a>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => onSelectTab('find-order')}
-              className="hover:text-[#05ef28] transition-colors font-medium text-slate-200 cursor-pointer"
-            >
-              {STORE_COPY.navigation.findOrder}
-            </button>
-            <span className="text-slate-400">•</span>
-            <button
-              onClick={() => onSelectTab('help')}
-              className="hover:text-[#05ef28] transition-colors font-medium text-slate-200 cursor-pointer"
-            >
-              {STORE_COPY.navigation.help}
-            </button>
-            <span className="text-slate-400">•</span>
-            <button
-              onClick={() => onSelectTab('request')}
-              className="hover:text-[#05ef28] transition-colors font-medium text-slate-200 cursor-pointer"
-            >
-              {STORE_COPY.navigation.request}
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Main Header */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
         <div className="flex items-center justify-between gap-4">
