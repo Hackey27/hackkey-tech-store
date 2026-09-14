@@ -1,0 +1,11 @@
+# Mirrors .dockerignore -- controls what is uploaded to Cloud Build.
+.git
+.gitignore
+.github
+node_modules
+dist
+dist-server
+.env
+.env.*
+!.env.example
+.DS_Store

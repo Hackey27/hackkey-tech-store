@@ -1,0 +1,134 @@
+# Deploying to Cloud Run
+
+The app is a single container: Express serves the API and the built React SPA
+from one process. Cloud Run injects `PORT`; the server binds it on `0.0.0.0`.
+
+## Before you start
+
+You need a Google Cloud project with billing enabled, and the `gcloud` CLI
+authenticated locally (`gcloud auth login`).
+
+```bash
+export PROJECT_ID=your-project-id
+export REGION=europe-west1          # closest standard region to Ghana
+export REPOSITORY=hackkey
+export SERVICE=hackkey-tech-store
+
+gcloud config set project "$PROJECT_ID"
+
+gcloud services enable \
+  run.googleapis.com \
+  artifactregistry.googleapis.com \
+  cloudbuild.googleapis.com \
+  iamcredentials.googleapis.com
+
+gcloud artifacts repositories create "$REPOSITORY" \
+  --repository-format=docker \
+  --location="$REGION" \
+  --description="Hack-Key Tech Store images"
+```
+
+## First deploy (from your machine)
+
+This builds the `Dockerfile` with Cloud Build and deploys the result:
+
+```bash
+gcloud run deploy "$SERVICE" \
+  --source . \
+  --region "$REGION" \
+  --allow-unauthenticated \
+  --port 8080 \
+  --cpu 1 \
+  --memory 512Mi \
+  --min-instances 0 \
+  --max-instances 1 \
+  --set-env-vars NODE_ENV=production
+```
+
+The command prints the service URL. Check it:
+
+```bash
+curl -s "$(gcloud run services describe "$SERVICE" --region "$REGION" \
+  --format='value(status.url)')/api/health"
+```
+
+## Continuous deployment
+
+`.github/workflows/deploy-cloudrun.yml` typechecks, builds, pushes to Artifact
+Registry and deploys on every push to `main`. It authenticates with Workload
+Identity Federation, so there are no service-account JSON keys to store.
+
+Create the deploy service account and let GitHub impersonate it:
+
+```bash
+export POOL=github
+export PROVIDER=github-oidc
+export GH_REPO=Hackey27/hackkey-tech-store
+export SA=cloudrun-deployer
+
+gcloud iam service-accounts create "$SA" --display-name="Cloud Run deployer"
+
+for ROLE in roles/run.admin roles/artifactregistry.writer roles/iam.serviceAccountUser; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
+    --role="$ROLE"
+done
+
+gcloud iam workload-identity-pools create "$POOL" --location=global \
+  --display-name="GitHub Actions"
+
+gcloud iam workload-identity-pools providers create-oidc "$PROVIDER" \
+  --location=global \
+  --workload-identity-pool="$POOL" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository == '${GH_REPO}'"
+
+export POOL_ID=$(gcloud iam workload-identity-pools describe "$POOL" \
+  --location=global --format='value(name)')
+
+gcloud iam service-accounts add-iam-policy-binding \
+  "${SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/${POOL_ID}/attribute.repository/${GH_REPO}"
+
+# Value for the GCP_WORKLOAD_IDENTITY_PROVIDER secret:
+gcloud iam workload-identity-pools providers describe "$PROVIDER" \
+  --location=global --workload-identity-pool="$POOL" --format='value(name)'
+```
+
+Then add three GitHub repository secrets (Settings -> Secrets and variables ->
+Actions):
+
+| Secret | Value |
+| --- | --- |
+| `GCP_PROJECT_ID` | your project id |
+| `GCP_SERVICE_ACCOUNT` | `cloudrun-deployer@PROJECT_ID.iam.gserviceaccount.com` |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | the provider resource name printed above |
+
+## Runtime configuration
+
+| Variable | Effect |
+| --- | --- |
+| `PORT` | Set by Cloud Run. Defaults to 3000 locally. |
+| `NODE_ENV` | Must be `production` in the deployed service, so the server serves `dist/` instead of starting Vite. |
+| `ADMIN_TOKEN` | Optional. Unset in production, `/api/admin/data` returns 404. Set it, and the endpoint requires the same value in an `x-admin-token` header. |
+
+To enable the admin endpoint on a deployed service:
+
+```bash
+gcloud run services update "$SERVICE" --region "$REGION" \
+  --set-env-vars NODE_ENV=production,ADMIN_TOKEN="$(openssl rand -hex 32)"
+```
+
+## Known limitation: state is in memory
+
+`server/storeDatabase.ts` is a plain in-memory instance. Orders, licence-key
+assignments, and software/laptop requests live only in the running container, so
+they are **lost whenever Cloud Run replaces an instance**, and two instances
+would each hold different data.
+
+`--max-instances 1` is set for that reason: it prevents two instances from
+diverging, but does not prevent loss on restart. Before taking real orders,
+move that state to a managed store (Firestore or Cloud SQL) and then raise the
+instance ceiling.
