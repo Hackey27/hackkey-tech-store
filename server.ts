@@ -1,10 +1,10 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import { storeDatabase } from './server/storeDatabase';
 import { HealthResponse } from './src/types';
 
-const PORT = 3000;
+// Cloud Run injects PORT (8080 by default); 3000 keeps local dev unchanged.
+const PORT = Number(process.env.PORT) || 3000;
 const HOST = '0.0.0.0';
 
 async function startServer() {
@@ -202,7 +202,21 @@ async function startServer() {
   });
 
   // Admin Diagnostics and Data View (Section 8)
+  // Returns orders, the licence key pool and customer PII, so it must never be
+  // open on a public URL. In production it stays disabled until ADMIN_TOKEN is
+  // set, and then requires that value in the x-admin-token header. Local
+  // development is unaffected.
   app.get('/api/admin/data', (req: Request, res: Response) => {
+    if (process.env.NODE_ENV === 'production') {
+      const adminToken = process.env.ADMIN_TOKEN;
+      if (!adminToken) {
+        return res.status(404).json({ error: 'Not found.' });
+      }
+      if (req.header('x-admin-token') !== adminToken) {
+        return res.status(401).json({ error: 'Unauthorized.' });
+      }
+    }
+
     res.json({
       orders: storeDatabase.orders,
       licensePool: storeDatabase.licenseKeyPool,
@@ -215,6 +229,8 @@ async function startServer() {
 
   // Vite development middleware or production static asset server
   if (process.env.NODE_ENV !== 'production') {
+    // Imported lazily so the production image never needs vite (a devDependency).
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
