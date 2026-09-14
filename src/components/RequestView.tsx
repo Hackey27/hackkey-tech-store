@@ -33,18 +33,78 @@ export const RequestView: React.FC = () => {
   const [laptopSubmitted, setLaptopSubmitted] = useState(false);
   const [laptopRef, setLaptopRef] = useState('');
 
-  const handleSoftwareSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const handleSoftwareSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sFirst || !sLast || !sPhone || !sEmail || !sSoftware) return;
-    setSoftwareSubmitted(true);
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch('/api/requests/software', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: sFirst,
+          lastName: sLast,
+          phone: sPhone,
+          email: sEmail,
+          softwareName: sSoftware,
+          websiteUrl: sUrl,
+          notes: sNotes,
+        })
+      });
+      if (!res.ok) {
+        throw new Error('Failed to submit software request.');
+      }
+      setSoftwareSubmitted(true);
+    } catch (err: any) {
+      setSubmitError(err.message || 'Error submitting request');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleLaptopSubmit = (e: React.FormEvent) => {
+  const handleLaptopSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!lName || !lPhone || !lBudget) return;
-    const generatedRef = 'LR-' + Math.floor(100000 + Math.random() * 900000);
-    setLaptopRef(generatedRef);
-    setLaptopSubmitted(true);
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch('/api/requests/laptop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: lName,
+          phone: lPhone,
+          email: lEmail,
+          location: lLocation,
+          budget: lBudget,
+          preferredBrand: lPreferred,
+          storage: lStorage,
+          ram: lRam,
+          specsNotes: lSpecs,
+          purpose: lPurpose,
+          condition: lCondition,
+          timeline: lTimeline,
+          readiness: lReadiness,
+          notes: lNotes,
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error('Failed to submit laptop sourcing request.');
+      }
+      setLaptopRef(data.request?.request_id || 'LR-' + Math.floor(100000 + Math.random() * 900000));
+      setLaptopSubmitted(true);
+    } catch (err: any) {
+      setSubmitError(err.message || 'Error submitting request');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const resetSoftware = () => {

@@ -28,10 +28,12 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
     }
   };
 
+  const catId = category.category_id || category.id || '';
+
   return (
     <div
-      id={`category-card-${category.id}`}
-      onClick={() => onSelect(category.id)}
+      id={`category-card-${catId}`}
+      onClick={() => onSelect(catId)}
       className={`group cursor-pointer text-left p-4 sm:p-5 rounded-2xl border transition-all duration-200 flex flex-col justify-between select-none ${
         isSelected
           ? 'bg-[#014040] text-white border-[#014040] shadow-md ring-2 ring-[#05ef28]'
@@ -47,7 +49,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
                 : 'bg-[#edf5f3] text-[#014040] group-hover:bg-[#014040] group-hover:text-[#05ef28]'
             }`}
           >
-            {getCategoryIcon(category.id)}
+            {getCategoryIcon(catId)}
           </div>
           <ChevronRight
             className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${
@@ -74,31 +76,33 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
       </div>
 
       {/* Examples tag */}
-      <div className="mt-3 pt-2.5 border-t border-dashed border-current/15">
-        <div className="flex flex-wrap gap-1">
-          {category.representativeItems.slice(0, 3).map((item, idx) => (
-            <span
-              key={idx}
-              className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
-                isSelected
-                  ? 'bg-white/15 text-slate-100'
-                  : 'bg-[#edf4f3] text-slate-700'
-              }`}
-            >
-              {item}
-            </span>
-          ))}
-          {category.representativeItems.length > 3 && (
-            <span
-              className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
-                isSelected ? 'text-slate-300' : 'text-slate-400'
-              }`}
-            >
-              +{category.representativeItems.length - 3} more
-            </span>
-          )}
+      {category.representativeItems && category.representativeItems.length > 0 && (
+        <div className="mt-3 pt-2.5 border-t border-dashed border-current/15">
+          <div className="flex flex-wrap gap-1">
+            {category.representativeItems.slice(0, 3).map((item, idx) => (
+              <span
+                key={idx}
+                className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
+                  isSelected
+                    ? 'bg-white/15 text-slate-100'
+                    : 'bg-[#edf4f3] text-slate-700'
+                }`}
+              >
+                {item}
+              </span>
+            ))}
+            {category.representativeItems.length > 3 && (
+              <span
+                className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
+                  isSelected ? 'text-slate-300' : 'text-slate-400'
+                }`}
+              >
+                +{category.representativeItems.length - 3} more
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

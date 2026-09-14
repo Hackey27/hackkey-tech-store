@@ -37,7 +37,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
 
   return (
     <svg
-      viewBox="0 0 540 120"
+      viewBox="0 0 680 120"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={`inline-block shrink-0 select-none ${className}`}
@@ -54,14 +54,14 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         <polygon points="45,45 155,45 145,75 35,75" />
       </g>
 
-      {/* Wordmark Text */}
+      {/* Wordmark Text - Positioned with ample viewBox breathing room to prevent clipping */}
       {/* Top: HACK_KEY */}
       <text
-        x="240"
+        x="220"
         y="65"
-        fontFamily="'Archivo', sans-serif"
+        fontFamily="'Archivo', -apple-system, BlinkMacSystemFont, sans-serif"
         fontWeight="900"
-        fontSize="64"
+        fontSize="62"
         fill={textColor || '#05ef28'}
         letterSpacing="1"
       >
@@ -69,13 +69,13 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
       </text>
       {/* Bottom: TECH SUPPORT */}
       <text
-        x="242"
+        x="222"
         y="104"
-        fontFamily="'Archivo', sans-serif"
+        fontFamily="'Archivo', -apple-system, BlinkMacSystemFont, sans-serif"
         fontWeight="600"
-        fontSize="28"
+        fontSize="27"
         fill={textColor || '#05ef28'}
-        letterSpacing="11"
+        letterSpacing="9"
       >
         TECH SUPPORT
       </text>

@@ -16,13 +16,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const hasMultipleVariants = product.variants && product.variants.length > 1;
 
+  const productName = product.product_name || product.name || 'Software';
+
   // Format GHS price string: From ₵... or ₵...
-  const displayPrice = hasMultipleVariants && product.minPriceGhs
-    ? STORE_COPY.product.fromPrice(`₵${product.minPriceGhs.toLocaleString()}`)
-    : product.priceGhs
-    ? `₵${product.priceGhs.toLocaleString()}`
-    : product.variants?.[0]
-    ? `₵${product.variants[0].priceGhs.toLocaleString()}`
+  const firstVariant = product.variants?.[0];
+  const firstVariantPrice = firstVariant?.payable_price_ghs ?? firstVariant?.price_ghs ?? firstVariant?.priceGhs ?? 0;
+  const minPrice = product.min_price_ghs ?? product.minPriceGhs ?? (firstVariantPrice > 0 ? firstVariantPrice : 0);
+
+  const displayPrice = hasMultipleVariants && minPrice > 0
+    ? STORE_COPY.product.fromPrice(`₵${minPrice.toLocaleString()}`)
+    : product.price_ghs || product.priceGhs
+    ? `₵${(product.price_ghs ?? product.priceGhs ?? 0).toLocaleString()}`
+    : firstVariantPrice > 0
+    ? `₵${firstVariantPrice.toLocaleString()}`
     : '₵0.00';
 
   // Primary action button label (Buy now vs View options)
@@ -30,11 +36,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   // Fallback initial/icon for logo image area
   const getProductInitial = (name: string) => {
-    const parts = name.split(' ');
-    if (parts.length > 1) {
+    const parts = (name || '').trim().split(' ');
+    if (parts.length > 1 && parts[0] && parts[1]) {
       return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
     }
-    return name.slice(0, 2).toUpperCase();
+    return (name || 'HK').slice(0, 2).toUpperCase();
   };
 
   return (
@@ -54,13 +60,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             ) : product.categoryId === 'research-services' ? (
               <Sparkles className="w-7 h-7 text-[#014040]" />
             ) : (
-              <span>{getProductInitial(product.name)}</span>
+              <span>{getProductInitial(productName)}</span>
             )}
           </div>
 
           <div className="text-right">
             <span className="inline-block text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#edf5f3] text-[#014040] border border-[#d0e4e0]">
-              {product.categoryName}
+              {product.categoryName || product.category || 'Software'}
             </span>
             {hasMultipleVariants && (
               <span className="block text-[10px] text-slate-500 mt-1 font-medium">
@@ -75,7 +81,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           onClick={() => onSelect(product)}
           className="text-base sm:text-lg font-bold text-[#014040] tracking-tight hover:text-[#025656] cursor-pointer transition-colors leading-snug"
         >
-          {product.name}
+          {productName}
         </h3>
 
         {/* Short Description */}
@@ -99,11 +105,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         )}
 
         {/* Highlighted recommended version if present */}
-        {product.variants && product.variants.some(v => v.isRecommended) && (
+        {product.variants && product.variants.some((v) => v.latest || v.isRecommended) && (
           <div className="mt-3 text-[11px] flex items-center gap-1.5 text-[#014040] font-medium bg-[#f0f8f6] px-2.5 py-1 rounded-lg border border-[#cbe5df]">
             <CheckCircle className="w-3.5 h-3.5 text-[#05ef28] shrink-0" />
             <span>
-              {STORE_COPY.product.latest}: <strong>{product.variants.find(v => v.isRecommended)?.version}</strong> ({STORE_COPY.product.recommended})
+              {STORE_COPY.product.latest}:{' '}
+              <strong>
+                {
+                  product.variants.find((v) => v.latest || v.isRecommended)?.version_or_plan ||
+                  product.variants.find((v) => v.latest || v.isRecommended)?.version
+                }
+              </strong>{' '}
+              ({STORE_COPY.product.recommended})
             </span>
           </div>
         )}

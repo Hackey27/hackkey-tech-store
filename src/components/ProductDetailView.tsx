@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Product, ProductVariant } from '../types';
+import { Product, Variant, MachineCodeType } from '../types';
 import {
   X,
   CheckCircle,
@@ -7,18 +7,17 @@ import {
   Laptop,
   Sparkles,
   ChevronRight,
-  Cpu,
-  DownloadCloud,
   AlertCircle,
   Check
 } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
 import { STORE_COPY } from '../config/storeCopy';
+import { formatCurrencyGHS } from '../utils/pricingEngine';
 
 interface ProductDetailViewProps {
   product: Product;
   onClose: () => void;
-  onAddToCart?: (product: Product, variant?: ProductVariant, os?: string) => void;
+  onAddToCart?: (product: Product, variant?: Variant, os?: string) => void;
 }
 
 export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
@@ -28,22 +27,35 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
 }) => {
   // Determine versions & selection state
   const variants = product.variants || [];
-  const recommendedVariant = variants.find(v => v.isRecommended) || variants[0];
-  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | undefined>(recommendedVariant);
-  
-  // OS Selection
-  const availableOsList = selectedVariant
-    ? selectedVariant.osList
-    : (product.osCompatibility || ['Windows']);
+  const recommendedVariant =
+    variants.find((v) => v.latest || v.isRecommended) || variants[0];
+  const [selectedVariant, setSelectedVariant] = useState<Variant | undefined>(
+    recommendedVariant
+  );
+
+  // OS Selection based on Section 1.3
+  const availableOsList: string[] = selectedVariant
+    ? selectedVariant.resolved_os_list || selectedVariant.osList || [selectedVariant.os || 'Windows']
+    : product.osCompatibility || ['Windows'];
   const hasMultipleOs = availableOsList.length > 1;
   const [selectedOs, setSelectedOs] = useState<string>(availableOsList[0] || 'Windows');
 
   // Active price in GHS
-  const currentPriceGhs = selectedVariant?.priceGhs ?? product.priceGhs ?? product.minPriceGhs ?? 0;
+  const currentPriceGhs =
+    selectedVariant?.payable_price_ghs ??
+    selectedVariant?.price_ghs ??
+    selectedVariant?.priceGhs ??
+    product.min_price_ghs ??
+    product.minPriceGhs ??
+    product.price_ghs ??
+    product.priceGhs ??
+    0;
 
   // Active step for progress preview
   const [progressDemoStep, setProgressDemoStep] = useState(1);
   const [addedNotice, setAddedNotice] = useState(false);
+
+  const productName = product.product_name || product.name || 'Software';
 
   const handleBuyClick = () => {
     if (onAddToCart) {
@@ -54,14 +66,25 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
   };
 
   const getProductInitial = (name: string) => {
-    const parts = name.split(' ');
-    if (parts.length > 1) {
+    const parts = (name || '').trim().split(' ');
+    if (parts.length > 1 && parts[0] && parts[1]) {
       return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
     }
-    return name.slice(0, 2).toUpperCase();
+    return (name || 'HK').slice(0, 2).toUpperCase();
   };
 
-  const olderVersions = variants.filter(v => v.id !== recommendedVariant?.id);
+  const recommendedId = recommendedVariant?.variant_id || recommendedVariant?.id;
+  const olderVersions = variants.filter(
+    (v) => (v.variant_id || v.id) !== recommendedId
+  );
+
+  // Machine code type
+  const machineCodeType: MachineCodeType =
+    product.customer_input_type === 'Lock Code'
+      ? 'lock-code'
+      : product.customer_input_type === 'Hardware ID'
+      ? 'hardware-id'
+      : product.machineCodeType || 'none';
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-150">
@@ -70,7 +93,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
         <div className="px-5 py-4 bg-[#f8fbfa] border-b border-[#e2ecea] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold uppercase tracking-wider text-[#014040] bg-[#edf5f3] px-2.5 py-1 rounded-full border border-[#d0e4e0]">
-              {product.categoryName}
+              {product.categoryName || product.category || 'Software'}
             </span>
           </div>
           <button
@@ -94,7 +117,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                 ) : product.categoryId === 'research-services' ? (
                   <Sparkles className="w-16 h-16 text-[#014040]" />
                 ) : (
-                  <span>{getProductInitial(product.name)}</span>
+                  <span>{getProductInitial(productName)}</span>
                 )}
               </div>
             </div>
@@ -103,7 +126,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
             <div className="md:col-span-8 space-y-5">
               <div>
                 <h1 className="text-2xl sm:text-3xl font-black text-[#014040] tracking-tight">
-                  {product.name}
+                  {productName}
                 </h1>
                 <p className="text-sm text-slate-600 mt-1 leading-relaxed">
                   {product.description}
@@ -117,7 +140,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                 </span>
                 {hasMultipleOs ? (
                   <div className="flex gap-2">
-                    {availableOsList.map((os) => (
+                    {availableOsList.map((os: string) => (
                       <button
                         key={os}
                         type="button"
@@ -152,28 +175,36 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                     <div
                       onClick={() => {
                         setSelectedVariant(recommendedVariant);
-                        setSelectedOs(recommendedVariant.osList[0]);
+                        const osList =
+                          recommendedVariant.resolved_os_list ||
+                          recommendedVariant.osList || [recommendedVariant.os || 'Windows'];
+                        setSelectedOs(osList[0]);
                       }}
                       className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between ${
-                        selectedVariant?.id === recommendedVariant.id
+                        (selectedVariant?.variant_id || selectedVariant?.id) ===
+                        (recommendedVariant.variant_id || recommendedVariant.id)
                           ? 'bg-[#f0f9f7] border-[#014040] shadow-xs'
                           : 'bg-white border-slate-200 hover:border-slate-300'
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                          selectedVariant?.id === recommendedVariant.id
-                            ? 'border-[#014040] bg-[#014040]'
-                            : 'border-slate-300'
-                        }`}>
-                          {selectedVariant?.id === recommendedVariant.id && (
+                        <div
+                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                            (selectedVariant?.variant_id || selectedVariant?.id) ===
+                            (recommendedVariant.variant_id || recommendedVariant.id)
+                              ? 'border-[#014040] bg-[#014040]'
+                              : 'border-slate-300'
+                          }`}
+                        >
+                          {(selectedVariant?.variant_id || selectedVariant?.id) ===
+                            (recommendedVariant.variant_id || recommendedVariant.id) && (
                             <div className="w-2 h-2 rounded-full bg-[#05ef28]" />
                           )}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-[#014040]">
-                              {recommendedVariant.version}
+                              {recommendedVariant.version_or_plan || recommendedVariant.version}
                             </span>
                             <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#05ef28] text-[#014040]">
                               {STORE_COPY.product.recommended}
@@ -183,7 +214,12 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                       </div>
                       <div className="text-right">
                         <span className="text-sm font-black text-[#014040]">
-                          ₵{recommendedVariant.priceGhs.toLocaleString()}
+                          {formatCurrencyGHS(
+                            recommendedVariant.payable_price_ghs ??
+                              recommendedVariant.price_ghs ??
+                              recommendedVariant.priceGhs ??
+                              0
+                          )}
                         </span>
                       </div>
                     </div>
@@ -193,33 +229,47 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                   {olderVersions.length > 0 && (
                     <div className="space-y-2 pt-1">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {olderVersions.map((variant) => (
-                          <div
-                            key={variant.id}
-                            onClick={() => {
-                              setSelectedVariant(variant);
-                              setSelectedOs(variant.osList[0]);
-                            }}
-                            className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between text-xs ${
-                              selectedVariant?.id === variant.id
-                                ? 'bg-[#f0f9f7] border-[#014040] font-bold'
-                                : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
-                            }`}
-                          >
-                            <span>{variant.version}</span>
-                            <span className="font-bold text-[#014040]">
-                              ₵{variant.priceGhs.toLocaleString()}
-                            </span>
-                          </div>
-                        ))}
+                        {olderVersions.map((variant) => {
+                          const vKey = variant.variant_id || variant.id || 'var';
+                          const isSelected =
+                            (selectedVariant?.variant_id || selectedVariant?.id) === vKey;
+                          const vPrice =
+                            variant.payable_price_ghs ??
+                            variant.price_ghs ??
+                            variant.priceGhs ??
+                            0;
+
+                          return (
+                            <div
+                              key={vKey}
+                              onClick={() => {
+                                setSelectedVariant(variant);
+                                const osList =
+                                  variant.resolved_os_list ||
+                                  variant.osList || [variant.os || 'Windows'];
+                                setSelectedOs(osList[0]);
+                              }}
+                              className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between text-xs ${
+                                isSelected
+                                  ? 'bg-[#f0f9f7] border-[#014040] font-bold'
+                                  : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                              }`}
+                            >
+                              <span>{variant.version_or_plan || variant.version}</span>
+                              <span className="font-bold text-[#014040]">
+                                {formatCurrencyGHS(vPrice)}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Device lock warning for licensed software */}
-              {product.machineCodeType !== 'service' && product.machineCodeType !== 'none' && (
+              {/* Device lock warning for licensed software (Section 9.3) */}
+              {machineCodeType !== 'service' && machineCodeType !== 'none' && (
                 <div className="p-3.5 bg-[#fffaf0] border-l-4 border-[#e0a800] rounded-r-xl text-xs text-[#8a5b00] leading-relaxed flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 text-[#8a5b00] shrink-0 mt-0.5" />
                   <span>{STORE_COPY.deviceLock.before}</span>
@@ -233,7 +283,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                     Price
                   </span>
                   <div className="text-2xl font-black text-[#014040]">
-                    ₵{currentPriceGhs.toLocaleString()}
+                    {formatCurrencyGHS(currentPriceGhs)}
                   </div>
                 </div>
 
@@ -265,26 +315,28 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
             </h3>
 
             <OrderProgressBar
-              machineCodeType={product.machineCodeType}
+              machineCodeType={machineCodeType}
               currentStep={progressDemoStep}
               onStepClick={(step) => setProgressDemoStep(step)}
             />
 
             <div className="flex justify-end gap-1.5 pt-1">
               <span className="text-[10px] text-slate-400 self-center mr-2">Preview step:</span>
-              {[1, 2, 3, 4, 5].slice(0, product.machineCodeType === 'service' || product.machineCodeType === 'none' ? 4 : 5).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setProgressDemoStep(s)}
-                  className={`px-2 py-0.5 text-[10px] font-bold rounded-md cursor-pointer ${
-                    progressDemoStep === s
-                      ? 'bg-[#014040] text-[#05ef28]'
-                      : 'bg-white border border-slate-200 text-slate-600'
-                  }`}
-                >
-                  Step {s}
-                </button>
-              ))}
+              {[1, 2, 3, 4, 5]
+                .slice(0, machineCodeType === 'service' || machineCodeType === 'none' ? 4 : 5)
+                .map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setProgressDemoStep(s)}
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded-md cursor-pointer ${
+                      progressDemoStep === s
+                        ? 'bg-[#014040] text-[#05ef28]'
+                        : 'bg-white border border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    Step {s}
+                  </button>
+                ))}
             </div>
           </div>
 

@@ -358,6 +358,7 @@ export const App: React.FC = () => {
             onRemoveItem={(id) => setCartItems(cartItems.filter((item) => item.id !== id))}
             onClearCart={() => setCartItems([])}
             onContinueShopping={() => setActiveTab('home')}
+            onNavigateToFindOrder={() => setActiveTab('find-order')}
           />
         )}
       </main>

@@ -17,13 +17,15 @@ interface CartViewProps {
   onRemoveItem: (id: string) => void;
   onClearCart: () => void;
   onContinueShopping: () => void;
+  onNavigateToFindOrder?: () => void;
 }
 
 export const CartView: React.FC<CartViewProps> = ({
   items,
   onRemoveItem,
   onClearCart,
-  onContinueShopping
+  onContinueShopping,
+  onNavigateToFindOrder
 }) => {
   const [showCheckout, setShowCheckout] = useState(false);
   const [cFirst, setCFirst] = useState('');
@@ -38,14 +40,79 @@ export const CartView: React.FC<CartViewProps> = ({
     return sum + price * item.quantity;
   }, 0);
 
-  const handleCheckoutSubmit = (e: React.FormEvent) => {
+  const [createdOrderIds, setCreatedOrderIds] = useState<string[]>([]);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cFirst || !cLast || !cPhone || !cEmail) return;
+
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    setCheckoutError(null);
+
+    try {
+      const res = await fetch('/api/orders/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: `${cFirst.trim()} ${cLast.trim()}`,
+          phone: cPhone.trim(),
+          email: cEmail.trim(),
+          items: items.map((item) => {
+            const pName = item.product.product_name || item.product.name || 'Software';
+            const pId = item.product.product_id || item.product.id || 'PROD';
+            const vPlan = item.variant?.version_or_plan || item.variant?.version || 'Standard';
+            const price =
+              item.variant?.payable_price_ghs ??
+              item.variant?.price_ghs ??
+              item.variant?.priceGhs ??
+              item.product.min_price_ghs ??
+              item.product.minPriceGhs ??
+              item.product.price_ghs ??
+              item.product.priceGhs ??
+              0;
+            const inputType =
+              item.product.customer_input_type ||
+              (item.product.machineCodeType === 'lock-code'
+                ? 'Lock Code'
+                : item.product.machineCodeType === 'hardware-id'
+                ? 'Hardware ID'
+                : undefined);
+            const isParallels =
+              Boolean(item.variant?.mac_via_parallels) ||
+              (item.selectedOs?.toLowerCase().includes('mac') &&
+                (item.variant?.os === 'Windows' || item.product.platform === 'Windows'));
+
+            return {
+              productId: pId,
+              productName: pName,
+              versionOrPlan: vPlan,
+              deliveryOs: item.selectedOs || item.variant?.os || item.product.platform || 'Windows',
+              amountGhs: price,
+              quantity: item.quantity,
+              customerInputType: inputType,
+              installerUrl: item.variant?.windows_installer_url || item.product.installerUrl,
+              guideUrl: item.variant?.guide_url || item.product.guideUrl,
+              learningUrl: item.variant?.learning_resources_url || item.product.learningResourcesUrl,
+              isParallels
+            };
+          })
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit order');
+      }
+
+      setCreatedOrderIds(data.orders?.map((o: any) => o.order_id) || []);
       setOrderComplete(true);
-    }, 600);
+      onClearCart();
+    } catch (err: any) {
+      setCheckoutError(err.message || 'Error processing checkout');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -95,16 +162,16 @@ export const CartView: React.FC<CartViewProps> = ({
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-[#edf5f3] text-[#014040] font-black flex items-center justify-center text-sm shrink-0 border border-[#cbe3dd]">
-                      {item.product.name.slice(0, 2).toUpperCase()}
+                      {(item.product.product_name || item.product.name || 'SW').slice(0, 2).toUpperCase()}
                     </div>
                     <div>
                       <h3 className="text-sm sm:text-base font-bold text-[#014040]">
-                        {item.product.name}
+                        {item.product.product_name || item.product.name}
                       </h3>
                       <div className="text-xs text-slate-600 flex flex-wrap gap-2 mt-0.5">
                         {item.variant && (
                           <span className="font-semibold text-slate-800">
-                            {item.variant.version}
+                            {item.variant.version_or_plan || item.variant.version}
                           </span>
                         )}
                         {item.selectedOs && (
@@ -238,6 +305,12 @@ export const CartView: React.FC<CartViewProps> = ({
                   {STORE_COPY.cart.afterPaymentNotice}
                 </div>
 
+                {checkoutError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs">
+                    {checkoutError}
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   disabled={isSubmitting}
@@ -247,12 +320,28 @@ export const CartView: React.FC<CartViewProps> = ({
                 </button>
               </form>
             ) : (
-              <div className="p-4 bg-[#d9ffe0] text-[#0d6520] rounded-xl text-xs space-y-2 text-center">
-                <div className="flex justify-center">
-                  <Check className="w-5 h-5 stroke-[3]" />
+              <div className="p-5 bg-[#d9ffe0] text-[#0d6520] rounded-2xl text-xs space-y-3 text-center border border-[#b2f0bf]">
+                <div className="w-10 h-10 bg-[#0d6520] text-[#05ef28] rounded-full flex items-center justify-center mx-auto">
+                  <Check className="w-6 h-6 stroke-[3]" />
                 </div>
-                <div className="font-bold text-sm">Order Created</div>
-                <div>Reference generated. Proceeding to payment and licence retrieval.</div>
+                <div className="font-black text-base text-[#014040]">Order Placed Successfully!</div>
+                <p className="text-slate-700">
+                  Your order has been registered. You can track progress, make payment, and retrieve your licence key anytime using your phone number <strong>{cPhone}</strong>.
+                </p>
+                {createdOrderIds.length > 0 && (
+                  <div className="font-mono text-xs font-bold text-[#014040] bg-white/70 py-1.5 px-3 rounded-lg">
+                    Order Ref: {createdOrderIds.join(', ')}
+                  </div>
+                )}
+                {onNavigateToFindOrder && (
+                  <button
+                    type="button"
+                    onClick={onNavigateToFindOrder}
+                    className="w-full py-2.5 px-4 bg-[#014040] hover:bg-[#025656] text-white font-black text-xs rounded-xl transition-all cursor-pointer shadow-2xs"
+                  >
+                    Track in Find My Order
+                  </button>
+                )}
               </div>
             )}
           </div>
