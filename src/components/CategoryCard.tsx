@@ -65,14 +65,6 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
         >
           {category.name}
         </h3>
-
-        <p
-          className={`text-xs mt-1.5 leading-relaxed ${
-            isSelected ? 'text-slate-200' : 'text-slate-600'
-          }`}
-        >
-          {category.shortDescription}
-        </p>
       </div>
 
       {/* Examples tag */}

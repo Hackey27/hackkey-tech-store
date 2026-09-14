@@ -69,8 +69,12 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex items-center gap-3 cursor-pointer select-none shrink-0"
             title={STORE_COPY.brand.name}
           >
-            {/* Full logo for screens sm and up */}
-            <BrandLogo height={38} className="hidden sm:inline-block" />
+            {/* Full logo for screens sm and up.
+                Wrapped so the display utility is not overridden by the svg's own
+                base classes, which would render both logo variants at once. */}
+            <span className="hidden sm:inline-block">
+              <BrandLogo height={38} />
+            </span>
             
             {/* Glyph + text on small mobile */}
             <div className="flex items-center gap-2 sm:hidden">

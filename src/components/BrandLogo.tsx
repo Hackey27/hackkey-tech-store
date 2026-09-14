@@ -4,15 +4,25 @@ interface BrandLogoProps {
   className?: string;
   variant?: 'full' | 'glyph';
   height?: number | string;
+  /** Override the wordmark colour (e.g. white when placed on a dark surface). */
   textColor?: string;
+  /** Override the angled "H" glyph colour. */
+  glyphColor?: string;
 }
+
+/** Primary brand colour: the deep green used across the storefront chrome. */
+const BRAND_DARK_GREEN = '#014040';
 
 export const BrandLogo: React.FC<BrandLogoProps> = ({
   className = '',
   variant = 'full',
   height = 36,
   textColor,
+  glyphColor,
 }) => {
+  const glyphFill = glyphColor || BRAND_DARK_GREEN;
+  const wordmarkFill = textColor || BRAND_DARK_GREEN;
+
   if (variant === 'glyph') {
     return (
       <svg
@@ -23,7 +33,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         style={{ height, width: 'auto' }}
         aria-label="Hack-Key Tech"
       >
-        <g fill="#05ef28">
+        <g fill={glyphFill}>
           {/* Left Angled Stem */}
           <polygon points="45,0 95,0 55,120 5,120" />
           {/* Right Angled Stem */}
@@ -45,7 +55,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
       aria-label="Hack-Key Tech Support"
     >
       {/* Stylized Angled H Glyph */}
-      <g fill="#05ef28">
+      <g fill={glyphFill}>
         {/* Left Angled Stem */}
         <polygon points="45,0 95,0 55,120 5,120" />
         {/* Right Angled Stem */}
@@ -62,7 +72,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         fontFamily="'Archivo', -apple-system, BlinkMacSystemFont, sans-serif"
         fontWeight="900"
         fontSize="62"
-        fill={textColor || '#05ef28'}
+        fill={wordmarkFill}
         letterSpacing="1"
       >
         HACK_KEY
@@ -74,7 +84,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         fontFamily="'Archivo', -apple-system, BlinkMacSystemFont, sans-serif"
         fontWeight="600"
         fontSize="27"
-        fill={textColor || '#05ef28'}
+        fill={wordmarkFill}
         letterSpacing="9"
       >
         TECH SUPPORT

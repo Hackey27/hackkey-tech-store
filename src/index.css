@@ -15,6 +15,47 @@
   }
 }
 
+/* Floating WhatsApp shortcut: gentle attention pulse */
+@keyframes hk-whatsapp-ring {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+@keyframes hk-whatsapp-nudge {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.hk-whatsapp-ring {
+  animation: hk-whatsapp-ring 2.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.hk-whatsapp-fab {
+  animation: hk-whatsapp-nudge 2.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hk-whatsapp-ring,
+  .hk-whatsapp-fab {
+    animation: none;
+  }
+}
+
 /* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;

@@ -10,6 +10,7 @@ import { RequestView } from './components/RequestView';
 import { ProductDetailView } from './components/ProductDetailView';
 import { CartView, CartItem } from './components/CartView';
 import { BrandLogo } from './components/BrandLogo';
+import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { STORE_COPY } from './config/storeCopy';
 import { CatalogResponse, BusinessCategory, Product, ProductVariant } from './types';
 import {
@@ -373,6 +374,9 @@ export const App: React.FC = () => {
           }}
         />
       )}
+
+      {/* Persistent WhatsApp shortcut (lower-left) */}
+      <FloatingWhatsApp />
 
       {/* Mobile Fixed Bottom Navigation */}
       <BottomNav

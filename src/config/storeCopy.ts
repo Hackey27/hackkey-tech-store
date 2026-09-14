@@ -176,7 +176,7 @@ export const STORE_COPY = {
 
   // Help Support Hub
   help: {
-    secTitle: 'Help & requests',
+    secTitle: 'Help & support',
     contactTitle: 'Contact Hack-Key Tech',
     contactDesc:
       'Need help with an order, installation, activation, or choosing the right product? Contact us directly.',
