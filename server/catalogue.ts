@@ -14,6 +14,12 @@ import {
 import { COLLECTIONS, getFirestore, toIsoString } from './firestore';
 import { PRICING_CONFIG } from './pricingConfig';
 import {
+  applyPricingRules,
+  cheapestOptionPesewas,
+  pesewasToCedis,
+  serviceTargetIds
+} from '../src/utils/money';
+import {
   calculateVariantPricing,
   isProductSellable,
   isVariantSellable,
@@ -135,11 +141,13 @@ function bundleToCatalogueItem(bundle: Bundle): CatalogueItem {
 }
 
 function serviceToCatalogueItem(service: Service): CatalogueItem {
-  // Services are usually quoted rather than listed, so priceGhs is often
-  // absent. It must stay absent, not become 0.
+  // A service with options is purchasable and advertises a "from" price taken
+  // from its cheapest option. A service without them is quote-only and has no
+  // price at all, which must stay absent rather than become 0.
+  const cheapest = service.options?.length ? cheapestOptionPesewas(service.options) : undefined;
   const pricing =
-    typeof service.priceGhs === 'number' && service.priceGhs > 0
-      ? calculateVariantPricing(service.priceGhs, service.serviceId, service.serviceId, PRICING_CONFIG)
+    cheapest != null
+      ? applyPricingRules(cheapest, serviceTargetIds(service.serviceId), PRICING_CONFIG)
       : undefined;
 
   return {
@@ -149,10 +157,19 @@ function serviceToCatalogueItem(service: Service): CatalogueItem {
     categoryId: service.categoryId,
     description: service.description || service.tagline,
     sortOrder: service.sortOrder ?? 0,
-    priceGhs: pricing?.payablePriceGhs,
-    listPriceGhs: pricing?.listPriceGhs,
+    priceGhs: pricing ? pesewasToCedis(pricing.payablePesewas) : undefined,
+    listPriceGhs: pricing ? pesewasToCedis(pricing.listPesewas) : undefined,
     promoLabel: pricing?.promoLabel,
     promoPercent: pricing?.promoPercent,
+    // A service is never licence-delivered, so the fulfilment workflow must not
+    // offer a licence step for it.
+    machineCodeType: 'service',
+    // Carried to the frontend so the option picker, quantity selector and the
+    // disclaimer can all render before purchase.
+    options: service.options?.slice().sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+    minQty: service.minQty ?? 1,
+    maxQty: service.maxQty ?? 50,
+    disclaimer: service.disclaimer,
     service
   };
 }
@@ -317,6 +334,13 @@ export async function getCatalogue(
     totalProducts: items.length,
     timestamp: new Date().toISOString()
   };
+}
+
+/** Look up one service, for order placement. */
+export async function findService(serviceId: string): Promise<Service | null> {
+  const db = getFirestore();
+  const snap = await db.collection(COLLECTIONS.services).doc(serviceId).get();
+  return snap.exists ? (snap.data() as Service) : null;
 }
 
 /** Look up one variant, with its product, for order placement. */

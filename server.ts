@@ -3,6 +3,7 @@ import path from 'path';
 import { HealthResponse } from './src/types';
 import { getCatalogue } from './server/catalogue';
 import {
+  attachDocument,
   createOrders,
   createRequest,
   getOrder,
@@ -11,8 +12,18 @@ import {
   listRequests,
   lookupOrdersByPhone,
   markOrderPaidAndFulfil,
+  saveServiceAnswers,
   submitCustomerInput
 } from './server/orders';
+import { findService } from './server/catalogue';
+import {
+  confirmUpload,
+  createSignedDownload,
+  createSignedUpload,
+  documentObjectPath,
+  validateServiceAnswers,
+  validateUpload
+} from './server/storage';
 
 // Cloud Run injects PORT (8080 by default); 3000 keeps local dev unchanged.
 const PORT = Number(process.env.PORT) || 3000;
@@ -143,7 +154,9 @@ async function startServer() {
             // Say that the licence still has to be issued. Never imply one is
             // already on its way when the pool held none.
             ? 'Payment recorded. This order still needs a licence: the team has been notified and will contact you once it is issued.'
-            : 'Payment recorded. The team will complete activation and contact you.'
+            : outcome.order.fulfilmentStatus === 'awaiting-document'
+              ? 'Payment recorded. Send us your document and we will get started.'
+              : 'Payment recorded. The team will complete activation and contact you.'
       });
     } catch (err) {
       failed(res, err, 'Failed to record payment');
@@ -157,6 +170,116 @@ async function startServer() {
       res.json({ order });
     } catch (err) {
       failed(res, err, 'Failed to retrieve order');
+    }
+  });
+
+  // ---- Service document submission -------------------------------------
+  //
+  // An upload is only ever issued against an existing paid order, and the size
+  // and type limits are enforced here rather than trusted from the browser.
+
+  app.post('/api/orders/:orderId/document-url', async (req: Request, res: Response) => {
+    const { contentType, sizeBytes } = req.body;
+    if (!contentType || sizeBytes === undefined) {
+      return res.status(400).json({ error: 'contentType and sizeBytes are required.' });
+    }
+
+    try {
+      const order = await getOrder(String(req.params.orderId));
+      if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+      // No upload URL exists for an unpaid order.
+      if (order.paymentStatus !== 'paid') {
+        return res.status(403).json({ error: 'This order has not been paid for.' });
+      }
+
+      const validation = validateUpload(String(contentType), Number(sizeBytes));
+      if (!validation.ok) {
+        return res.status(400).json({ error: validation.error });
+      }
+
+      res.json(await createSignedUpload(order.orderId, String(contentType), Number(sizeBytes)));
+    } catch (err) {
+      failed(res, err, 'Failed to prepare the upload');
+    }
+  });
+
+  // Called once the browser has finished uploading. The order advances only on
+  // the strength of what is actually in the bucket.
+  app.post('/api/orders/:orderId/document', async (req: Request, res: Response) => {
+    const { contentType } = req.body;
+    if (!contentType) {
+      return res.status(400).json({ error: 'contentType is required.' });
+    }
+
+    try {
+      const order = await getOrder(String(req.params.orderId));
+      if (!order) return res.status(404).json({ error: 'Order not found.' });
+      if (order.paymentStatus !== 'paid') {
+        return res.status(403).json({ error: 'This order has not been paid for.' });
+      }
+
+      const objectPath = documentObjectPath(order.orderId, String(contentType));
+      const confirmed = await confirmUpload(objectPath);
+      if (!confirmed.ok) {
+        return res.status(400).json({ error: confirmed.error });
+      }
+
+      const result = await attachDocument(order.orderId, objectPath);
+      if (!result.success) return res.status(400).json({ error: result.message });
+      res.json(result);
+    } catch (err) {
+      failed(res, err, 'Failed to record the document');
+    }
+  });
+
+  // Retrieval is server-mediated and short-lived; documents are never public.
+  // Until the Phase 2 admin portal exists this is admin-only.
+  app.get('/api/orders/:orderId/document', async (req: Request, res: Response) => {
+    const adminToken = process.env.ADMIN_TOKEN;
+    if (!adminToken || req.header('x-admin-token') !== adminToken) {
+      return res.status(401).json({ error: 'Unauthorized.' });
+    }
+
+    try {
+      const order = await getOrder(String(req.params.orderId));
+      if (!order?.documentPath) {
+        return res.status(404).json({ error: 'No document on this order.' });
+      }
+      res.json({ url: await createSignedDownload(order.documentPath) });
+    } catch (err) {
+      failed(res, err, 'Failed to prepare the download');
+    }
+  });
+
+  // The answers to a purchasable service's submission form.
+  app.post('/api/orders/:orderId/service-answers', async (req: Request, res: Response) => {
+    const { answers } = req.body;
+    if (!answers || typeof answers !== 'object') {
+      return res.status(400).json({ error: 'answers are required.' });
+    }
+
+    try {
+      const order = await getOrder(String(req.params.orderId));
+      if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+      const service = await findService(order.variantId);
+      if (service?.fields?.length) {
+        // showIf is honoured, so an upload hidden because the customer chose
+        // WhatsApp is not treated as missing.
+        const validation = validateServiceAnswers(service.fields, answers);
+        if (!validation.ok) {
+          return res.status(400).json({
+            error: `Please complete: ${validation.missing.join(', ')}.`,
+            missing: validation.missing
+          });
+        }
+      }
+
+      const updated = await saveServiceAnswers(order.orderId, answers);
+      res.json({ success: true, order: updated });
+    } catch (err) {
+      failed(res, err, 'Failed to save answers');
     }
   });
 

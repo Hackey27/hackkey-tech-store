@@ -10,7 +10,12 @@ import {
   Variant
 } from '../src/types';
 import { COLLECTIONS, getFirestore } from './firestore';
-import { findVariant } from './catalogue';
+import { findService, findVariant } from './catalogue';
+import { applyPricingRules, pesewasToCedis, priceServiceLine, serviceTargetIds } from '../src/utils/money';
+import { PRICING_CONFIG } from './pricingConfig';
+
+/** Orders for a service are fulfilled by hand and never touch the licence pool. */
+export const SERVICE_FULFILMENT_TYPE = 'Service';
 
 /** Ghana numbers are written as 0542638979 or +233542638979; both must match. */
 export function normalisePhone(phone: string): string {
@@ -29,9 +34,12 @@ function nowIso(): string {
 }
 
 export interface CheckoutItem {
-  variantId: string;
+  /** A software line names a variant; a service line names a service option. */
+  variantId?: string;
   selectedOs?: string;
   quantity?: number;
+  serviceId?: string;
+  optionId?: string;
 }
 
 export interface CheckoutRequest {
@@ -58,12 +66,89 @@ function statusAfterPayment(variant: Variant, customerInputValue?: string): Fulf
   return 'ready';
 }
 
+/**
+ * One order for a purchasable service.
+ *
+ * A service goes through the same cart and checkout as software; only its
+ * pricing and fulfilment differ. Quantity stays on the single order rather than
+ * becoming N orders, because the customer buys "three checks", not three
+ * separate jobs, and the historical rows are one row per purchase.
+ */
+async function createServiceOrder(
+  request: CheckoutRequest,
+  item: CheckoutItem,
+  cartId: string
+): Promise<Order> {
+  const service = await findService(item.serviceId as string);
+  if (!service) throw new Error(`Unknown service: ${item.serviceId}`);
+  if (!service.options?.length) {
+    throw new Error(`Service ${service.serviceId} is quote-only and cannot be bought.`);
+  }
+
+  const option = service.options.find((o) => o.optionId === item.optionId);
+  if (!option) {
+    throw new Error(`Unknown option "${item.optionId}" for service ${service.serviceId}.`);
+  }
+
+  const minQty = service.minQty ?? 1;
+  const maxQty = service.maxQty ?? 50;
+  const quantity = Math.min(maxQty, Math.max(minQty, Math.floor(item.quantity || 1) || 1));
+
+  // Priced in integer pesewas; the store's pricing rules apply on top of the
+  // resolved total, the same way variant targets work.
+  const line = priceServiceLine(option, quantity);
+  const applied = applyPricingRules(
+    line.totalPesewas,
+    serviceTargetIds(service.serviceId, option.optionId),
+    PRICING_CONFIG
+  );
+
+  return {
+    orderId: newId('HK'),
+    cartId,
+    orderDate: nowIso(),
+    lastUpdated: nowIso(),
+    customerName: request.customerName.trim(),
+    phone: normalisePhone(request.phone),
+    email: request.email.trim(),
+    // Matches the historical Turnitin orders.
+    variantId: service.serviceId,
+    productId: service.serviceId,
+    productName: service.name,
+    // Historical rows put "Service" here and recorded no option, so which check
+    // was bought is unrecoverable from them. Recording the option name from now
+    // on is a deliberate improvement rather than reproducing that ambiguity.
+    versionOrPlan: option.name,
+    serviceOptionId: option.optionId,
+    quantity,
+    deliveryOs: '',
+    amountGhs: pesewasToCedis(applied.payablePesewas),
+    originalAmountGhs: pesewasToCedis(applied.listPesewas),
+    paymentStatus: 'pending',
+    fulfilmentStatus: 'pending-payment',
+    fulfilmentType: SERVICE_FULFILMENT_TYPE,
+    fulfilmentMethod: 'manual',
+    receiptSent: false
+  };
+}
+
 export async function createOrders(request: CheckoutRequest): Promise<Order[]> {
   const db = getFirestore();
   const cartId = newId('CART');
   const orders: Order[] = [];
 
   for (const item of request.items) {
+    if (item.serviceId) {
+      const order = await createServiceOrder(request, item, cartId);
+      await db.collection(COLLECTIONS.orders).doc(order.orderId).set(order);
+      orders.push(order);
+      continue;
+    }
+
+    if (!item.variantId) {
+      throw new Error('Each cart line must name either a variantId or a serviceId.');
+    }
+
     const found = await findVariant(item.variantId);
     if (!found) {
       throw new Error(`Unknown variant: ${item.variantId}`);
@@ -97,6 +182,7 @@ export async function createOrders(request: CheckoutRequest): Promise<Order[]> {
         guideUrl: variant.guideUrl,
         learningResourcesUrl: variant.learningResourcesUrl,
         macViaParallels: variant.macViaParallels,
+        quantity: 1,
         receiptSent: false
       };
 
@@ -137,7 +223,11 @@ export async function markOrderPaidAndFulfil(orderId: string): Promise<Fulfilmen
   // never contended, and a transaction body can be retried several times.
   const existing = await orderRef.get();
   if (!existing.exists) return null;
-  const variant = (await findVariant((existing.data() as Order).variantId))?.variant;
+  const existingOrder = existing.data() as Order;
+  const variant =
+    existingOrder.fulfilmentType === SERVICE_FULFILMENT_TYPE
+      ? undefined
+      : (await findVariant(existingOrder.variantId))?.variant;
 
   return db.runTransaction(async (tx) => {
     const orderSnap = await tx.get(orderRef);
@@ -154,6 +244,19 @@ export async function markOrderPaidAndFulfil(orderId: string): Promise<Fulfilmen
       paymentStatus: 'paid',
       lastUpdated: nowIso()
     };
+
+    // A service is fulfilled by hand and must never touch the licence pool.
+    // Landing one in awaiting-licence would be meaningless and would hide it
+    // from the queue the seller actually watches. Checked before the variant
+    // lookup, because a service order has no variant to find.
+    if (order.fulfilmentType === SERVICE_FULFILMENT_TYPE) {
+      // Paid but nothing received yet, unless the customer already uploaded.
+      patch.fulfilmentStatus = order.documentPath
+        ? 'awaiting-seller-activation'
+        : 'awaiting-document';
+      tx.update(orderRef, patch);
+      return { order: { ...order, ...patch } as Order, licenceIssued: false };
+    }
 
     if (!variant) {
       // The variant vanished from the catalogue after the order was placed.
@@ -268,6 +371,57 @@ export async function submitCustomerInput(
 
   await ref.update(patch);
   return { success: true, message: 'Input received.', order: { ...order, ...patch } as Order };
+}
+
+/**
+ * Attach an uploaded document to a paid order and move it on.
+ *
+ * `awaiting-document` means paid with nothing received; once a file lands the
+ * order is ready for the seller to run. The WhatsApp route has no upload, so it
+ * stays in `awaiting-document` until the seller marks it received, which is a
+ * Phase 2 admin action — remaining visible as outstanding in the meantime,
+ * which is correct.
+ */
+export async function attachDocument(
+  orderId: string,
+  documentPath: string
+): Promise<{ success: boolean; message: string; order?: Order }> {
+  const db = getFirestore();
+  const ref = db.collection(COLLECTIONS.orders).doc(orderId);
+  const snap = await ref.get();
+
+  if (!snap.exists) return { success: false, message: 'Order not found.' };
+
+  const order = snap.data() as Order;
+  if (order.paymentStatus !== 'paid') {
+    // Uploads are only ever accepted against an order that has been paid for.
+    return { success: false, message: 'This order has not been paid for.' };
+  }
+
+  const patch: Partial<Order> = {
+    documentPath,
+    documentUploadedAt: nowIso(),
+    fulfilmentStatus: 'awaiting-seller-activation',
+    lastUpdated: nowIso()
+  };
+
+  await ref.update(patch);
+  return { success: true, message: 'Document received.', order: { ...order, ...patch } as Order };
+}
+
+/** Store the customer's answers to a service's submission form. */
+export async function saveServiceAnswers(
+  orderId: string,
+  answers: Record<string, unknown>
+): Promise<Order | null> {
+  const db = getFirestore();
+  const ref = db.collection(COLLECTIONS.orders).doc(orderId);
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+
+  const patch: Partial<Order> = { serviceAnswers: answers, lastUpdated: nowIso() };
+  await ref.update(patch);
+  return { ...(snap.data() as Order), ...patch } as Order;
 }
 
 export async function createRequest(

@@ -130,7 +130,9 @@ export type ServiceFieldType =
   | 'textarea'
   | 'select'
   | 'radio'
-  | 'datetime';
+  | 'datetime'
+  /** Uploaded to Cloud Storage against an existing paid order. */
+  | 'file';
 
 export interface ServiceFieldCondition {
   field: string;
@@ -151,6 +153,20 @@ export interface ServiceField {
   showIf?: ServiceFieldCondition;
 }
 
+/** A priced choice within a service, e.g. Turnitin's two check types.
+ *
+ *  `bulkPriceGhs` REPLACES `unitPriceGhs` for every unit once the quantity
+ *  reaches `bulkFromQty` — it is not a tier applied only to the units above
+ *  the threshold. See priceServiceLine in src/utils/money.ts. */
+export interface ServiceOption {
+  optionId: string;
+  name: string;
+  unitPriceGhs: number;
+  bulkPriceGhs?: number;
+  bulkFromQty?: number;
+  sortOrder?: number;
+}
+
 export interface Service {
   serviceId: string;
   name: string;
@@ -161,7 +177,14 @@ export interface Service {
   fields: ServiceField[];
   ctaLabel: string;
   ctaNote?: string;
-  priceGhs?: number;
+  /** Present => the service is purchasable through the normal cart and
+   *  checkout. Absent => it stays quote-only, as Data Analysis and
+   *  Transcription are. Price lives on the option, never on the service. */
+  options?: ServiceOption[];
+  minQty?: number; // default 1
+  maxQty?: number; // default 50
+  /** Rendered verbatim before purchase. Never paraphrased or reformatted. */
+  disclaimer?: string;
   active: boolean; // Status: 'Published' -> true
   sortOrder: number;
 }
@@ -226,6 +249,11 @@ export interface CatalogueItem {
   osList?: string[];
   /** Derived from the variants: what the customer must supply to activate. */
   machineCodeType?: MachineCodeType;
+  /** Services only: present when the service is purchasable. */
+  options?: ServiceOption[];
+  minQty?: number;
+  maxQty?: number;
+  disclaimer?: string;
   /** Products only. */
   variants?: Variant[];
   bundle?: Bundle;
@@ -266,6 +294,10 @@ export type PaymentStatus = 'pending' | 'paid';
 export type FulfilmentStatus =
   | 'pending-payment'
   | 'awaiting-customer-input'
+  /** Paid, but the customer has not sent the document yet. Kept separate from
+   *  awaiting-seller-activation so the seller's queue shows only work that can
+   *  actually be started. */
+  | 'awaiting-document'
   /** Paid, but the licence pool held no available key for the variant. The
    *  order is valid and owed a licence; the owner must issue one. */
   | 'awaiting-licence'
@@ -287,6 +319,13 @@ export interface Order {
   productName: string;
   versionOrPlan: string;
   deliveryOs: string;
+  /** Units ordered. Services are bought in quantity; a software order is 1. */
+  quantity?: number;
+  /** Which service option was bought. Historical Turnitin rows recorded no
+   *  option, so which check was purchased is unrecoverable from them —
+   *  recording it from now on is a deliberate improvement. */
+  serviceOptionId?: string;
+  /** Computed in integer pesewas, stored in cedis. See src/utils/money.ts. */
   amountGhs: number;
   originalAmountGhs?: number;
   paymentStatus: PaymentStatus;
@@ -311,6 +350,12 @@ export interface Order {
   guideUrl?: string;
   learningResourcesUrl?: string;
   macViaParallels?: boolean;
+  /** Cloud Storage object path, never a public URL. Retrieval is
+   *  server-mediated: these are customers' unpublished academic documents. */
+  documentPath?: string;
+  documentUploadedAt?: string;
+  /** Answers to the service's enquiry form. */
+  serviceAnswers?: Record<string, unknown>;
 }
 
 // ==========================================

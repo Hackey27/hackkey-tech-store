@@ -12,7 +12,7 @@ import { CartView, CartItem } from './components/CartView';
 import { BrandLogo } from './components/BrandLogo';
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { STORE_COPY } from './config/storeCopy';
-import { CatalogResponse, CatalogueItem, Variant } from './types';
+import { CatalogResponse, CatalogueItem, ServiceOption, Variant } from './types';
 import {
   AlertCircle,
   RefreshCw,
@@ -87,25 +87,43 @@ export const App: React.FC = () => {
     }
   };
 
-  // Add to cart handler
-  const handleAddToCart = (product: CatalogueItem, variant?: Variant, selectedOs?: string) => {
+  // Add to cart handler. A service line carries its chosen option and the
+  // quantity the customer picked; software lines behave exactly as before.
+  const handleAddToCart = (
+    product: CatalogueItem,
+    variant?: Variant,
+    selectedOs?: string,
+    serviceOption?: ServiceOption,
+    quantity?: number
+  ) => {
     setCartItems((prev) => {
       const existingIdx = prev.findIndex(
-        (item) => item.product.itemId === product.itemId && item.variant?.variantId === variant?.variantId && item.selectedOs === selectedOs
+        (item) =>
+          item.product.itemId === product.itemId &&
+          item.variant?.variantId === variant?.variantId &&
+          item.selectedOs === selectedOs &&
+          item.serviceOption?.optionId === serviceOption?.optionId
       );
       if (existingIdx > -1) {
         const updated = [...prev];
-        updated[existingIdx].quantity += 1;
+        // The service panel sets an explicit quantity; software adds one unit.
+        updated[existingIdx] = {
+          ...updated[existingIdx],
+          quantity: serviceOption
+            ? quantity ?? updated[existingIdx].quantity
+            : updated[existingIdx].quantity + 1
+        };
         return updated;
       }
       return [
         ...prev,
         {
-          id: `${product.itemId}-${variant?.variantId || 'default'}-${selectedOs || 'std'}`,
+          id: `${product.itemId}-${serviceOption?.optionId || variant?.variantId || 'default'}-${selectedOs || 'std'}`,
           product,
           variant,
           selectedOs,
-          quantity: 1,
+          quantity: quantity ?? 1,
+          serviceOption,
         }
       ];
     });

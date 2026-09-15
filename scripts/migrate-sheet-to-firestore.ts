@@ -43,6 +43,7 @@ import {
   ServiceField,
   Variant
 } from '../src/types';
+import { SEED_SERVICES } from '../server/seed/turnitin';
 
 // ---------------------------------------------------------------------------
 // Owner decisions applied during import
@@ -561,10 +562,19 @@ function buildServices(rows: Row[]): Service[] {
       fields: parseServiceFields(str(row, 'Fields'), serviceId),
       ctaLabel: str(row, 'CTA_Label') || 'Request this service',
       ctaNote: str(row, 'CTA_Note'),
-      priceGhs: num(row, 'Price_GHS', 'PriceGHS', 'Price'),
+      // Price lives on the option, never on the service. A sheet row with a
+      // Price_GHS column is reported rather than silently dropped.
       active: bool(row, 'Status', 'Active'),
       sortOrder: num(row, 'Sort_Order', 'SortOrder') ?? 0
     });
+
+    if (num(row, 'Price_GHS', 'PriceGHS', 'Price') !== undefined) {
+      warn(
+        `Services ${serviceId}: a Price_GHS value was ignored. Priced services carry ` +
+          `their price on options[] — add it to a seed module like ` +
+          `server/seed/turnitin.ts.`
+      );
+    }
   });
 
   return services;
@@ -761,21 +771,71 @@ async function writeAll(db: Firestore, docs: Writeable[]): Promise<void> {
 // Main
 // ---------------------------------------------------------------------------
 
-function parseArgs(argv: string[]): { file?: string; dryRun: boolean } {
+function parseArgs(argv: string[]): { file?: string; dryRun: boolean; seedOnly: boolean } {
   const args = argv.slice(2);
   const dryRun = args.includes('--dry-run');
+  // --seed-turnitin on its own seeds the coded services without a workbook.
+  const seedOnly = args.includes('--seed-turnitin');
   const fileFlag = args.indexOf('--file');
   let file = fileFlag >= 0 ? args[fileFlag + 1] : undefined;
   if (!file) file = args.find((a) => a.endsWith('.xlsx'));
-  return { file, dryRun };
+  return { file, dryRun, seedOnly };
+}
+
+function firestoreClient(): Firestore {
+  return new Firestore({
+    projectId: process.env.GOOGLE_CLOUD_PROJECT || undefined,
+    ignoreUndefinedProperties: true,
+    ...(process.env.FIRESTORE_DATABASE_ID ? { databaseId: process.env.FIRESTORE_DATABASE_ID } : {})
+  });
+}
+
+/**
+ * Services that are defined in code rather than in the workbook.
+ *
+ * Turnitin was never a row in the Services tab, so there is nothing to migrate:
+ * it is seeded from server/seed/turnitin.ts, which keeps it reproducible and
+ * reviewable instead of hand-entered in the console. Seeding uses the same
+ * document ids, so it is as idempotent as the rest of the import.
+ */
+async function seedCodedServices(dryRun: boolean): Promise<void> {
+  console.log('Seeded services (defined in code, not in the workbook):');
+  for (const service of SEED_SERVICES) {
+    const priced = service.options?.length
+      ? `${service.options.length} option(s), from ${Math.min(
+          ...service.options.map((o) => o.unitPriceGhs)
+        ).toFixed(2)} GHS`
+      : 'quote-only';
+    console.log(`  ${service.serviceId.padEnd(12)} ${service.name} — ${priced}`);
+  }
+
+  if (dryRun) {
+    console.log('  --dry-run: nothing written.\n');
+    return;
+  }
+
+  const db = firestoreClient();
+  await writeAll(
+    db,
+    SEED_SERVICES.map((s) => ({ collection: 'services', docId: s.serviceId, data: { ...s } }))
+  );
+  console.log(`  Wrote ${SEED_SERVICES.length} seeded service document(s).\n`);
 }
 
 async function main(): Promise<void> {
-  const { file, dryRun } = parseArgs(process.argv);
+  const { file, dryRun, seedOnly } = parseArgs(process.argv);
+
+  // --seed-turnitin without a workbook seeds only the coded services.
+  if (seedOnly && !file) {
+    await seedCodedServices(dryRun);
+    return;
+  }
 
   if (!file) {
     console.error(
-      'Usage: npx tsx scripts/migrate-sheet-to-firestore.ts --file <workbook.xlsx> [--dry-run]'
+      'Usage:\n' +
+        '  npx tsx scripts/migrate-sheet-to-firestore.ts --file <workbook.xlsx> [--dry-run]\n' +
+        '  npx tsx scripts/migrate-sheet-to-firestore.ts --seed-turnitin [--dry-run]'
     );
     process.exit(2);
   }
@@ -869,15 +929,14 @@ async function main(): Promise<void> {
     ...built.requests.map((r) => ({ collection: 'requests', docId: r.requestId, data: { ...r } }))
   ];
 
-  const db = new Firestore({
-    projectId: process.env.GOOGLE_CLOUD_PROJECT || undefined,
-    ignoreUndefinedProperties: true,
-    ...(process.env.FIRESTORE_DATABASE_ID ? { databaseId: process.env.FIRESTORE_DATABASE_ID } : {})
-  });
+  const db = firestoreClient();
 
   await writeAll(db, docs);
+  console.log(`Wrote ${docs.length} documents.\n`);
 
-  console.log(`Wrote ${docs.length} documents.`);
+  // Services defined in code are seeded as part of a normal run, so one
+  // command leaves a complete catalogue.
+  await seedCodedServices(false);
   console.log(
     'Expected on a clean run: 5 categories, 19 products carrying 48 variants, 7 bundles ' +
       'with 25 items, 2 services, 2 laptops, 0 licences and 0 orders. Any other numbers ' +

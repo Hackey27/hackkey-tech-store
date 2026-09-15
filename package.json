@@ -7,10 +7,13 @@
     "dev": "tsx server.ts",
     "lint": "tsc --noEmit",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist-server/server.cjs",
-    "start": "node dist-server/server.cjs"
+    "start": "node dist-server/server.cjs",
+    "test": "tsx --test tests/*.test.ts",
+    "seed": "tsx scripts/migrate-sheet-to-firestore.ts --seed-turnitin"
   },
   "dependencies": {
     "@google-cloud/firestore": "^9.1.0",
+    "@google-cloud/storage": "^8.1.0",
     "express": "^4.21.2",
     "lucide-react": "^1.16.0",
     "motion": "^12.4.7",

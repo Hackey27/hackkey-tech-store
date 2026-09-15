@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CatalogueItem, Variant, MachineCodeType } from '../types';
+import { CatalogueItem, ServiceOption, Variant, MachineCodeType } from '../types';
 import {
   X,
   CheckCircle,
@@ -13,11 +13,18 @@ import {
 import { OrderProgressBar } from './OrderProgressBar';
 import { STORE_COPY } from '../config/storeCopy';
 import { formatCurrencyGHS } from '../utils/pricingEngine';
+import { ServicePurchasePanel } from './ServicePurchasePanel';
 
 interface ProductDetailViewProps {
   product: CatalogueItem;
   onClose: () => void;
-  onAddToCart?: (product: CatalogueItem, variant?: Variant, os?: string) => void;
+  onAddToCart?: (
+    product: CatalogueItem,
+    variant?: Variant,
+    os?: string,
+    serviceOption?: ServiceOption,
+    quantity?: number
+  ) => void;
 }
 
 export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
@@ -77,6 +84,18 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
   // Machine code type
   const machineCodeType: MachineCodeType = product.machineCodeType || 'none';
 
+  // A service with options is bought, not enquired about: it gets the option
+  // picker, quantity selector and disclaimer instead of the version and OS
+  // controls, which mean nothing for it. Services without options are
+  // untouched and keep their quote-request behaviour.
+  const isPurchasableService = product.kind === 'service' && (product.options?.length ?? 0) > 0;
+
+  const handleServiceAdd = (option: ServiceOption, quantity: number) => {
+    onAddToCart?.(product, undefined, undefined, option, quantity);
+    setAddedNotice(true);
+    setTimeout(() => setAddedNotice(false), 2500);
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-150">
       <div className="bg-white w-full max-w-4xl rounded-2xl sm:rounded-3xl shadow-2xl border border-[#d8e7e4] overflow-hidden my-auto flex flex-col max-h-[92vh]">
@@ -124,7 +143,12 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                 </p>
               </div>
 
+              {isPurchasableService && (
+                <ServicePurchasePanel item={product} onAddToCart={handleServiceAdd} />
+              )}
+
               {/* OS Compatibility */}
+              {!isPurchasableService && (
               <div>
                 <span className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
                   {STORE_COPY.product.chooseOperatingSystem}
@@ -153,9 +177,10 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                   </div>
                 )}
               </div>
+              )}
 
               {/* Version Selection Experience */}
-              {variants.length > 0 && (
+              {!isPurchasableService && variants.length > 0 && (
                 <div className="space-y-3">
                   <span className="block text-xs font-bold uppercase tracking-wider text-slate-700">
                     {STORE_COPY.product.chooseVersion}
@@ -264,6 +289,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
               )}
 
               {/* Price & Action Box */}
+              {!isPurchasableService && (
               <div className="p-4 rounded-2xl bg-[#f7faf9] border border-[#d8e7e4] flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold block">
@@ -285,6 +311,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                   </button>
                 </div>
               </div>
+              )}
 
               {addedNotice && (
                 <div className="p-3 rounded-xl bg-[#d9ffe0] border border-[#b2f0bf] text-xs font-bold text-[#0d6520] flex items-center gap-2 animate-in fade-in">
@@ -353,14 +380,19 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
             {STORE_COPY.product.close}
           </button>
 
-          <button
-            type="button"
-            onClick={handleBuyClick}
-            className="px-6 py-2.5 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-xs sm:text-sm shadow-xs transition-all flex items-center gap-2 cursor-pointer"
-          >
-            <span>{STORE_COPY.product.buyNow}</span>
-            <ChevronRight className="w-4 h-4 stroke-[3]" />
-          </button>
+          {/* A priced service is added from its own panel, which knows the
+              chosen option and quantity. This button would add a line with
+              neither. */}
+          {!isPurchasableService && (
+            <button
+              type="button"
+              onClick={handleBuyClick}
+              className="px-6 py-2.5 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-xs sm:text-sm shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <span>{STORE_COPY.product.buyNow}</span>
+              <ChevronRight className="w-4 h-4 stroke-[3]" />
+            </button>
+          )}
         </div>
       </div>
     </div>

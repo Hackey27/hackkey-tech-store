@@ -8,8 +8,10 @@ from one process, with Firestore behind it.
 ```bash
 npm run dev     # Vite middleware + API on :3000
 npm run lint    # tsc --noEmit
+npm test        # node:test via tsx — money and submission rules
 npm run build   # SPA -> dist/, server bundle -> dist-server/
 npm start       # node dist-server/server.cjs
+npm run seed    # seed services defined in code (Turnitin)
 ```
 
 ## Data
@@ -25,7 +27,7 @@ Collections (all camelCase, in Firestore and in TypeScript):
 | `categories/{categoryId}` | The five browsable departments. |
 | `products/{productId}` | Variants are **embedded** as `variants[]`, not a subcollection. |
 | `bundles/{bundleId}` | Items embedded as `items[]`; `altGroup`/`altLabel` mean "choose one of these". |
-| `services/{serviceId}` | `fields[]` is the parsed enquiry form, structured at import. |
+| `services/{serviceId}` | `fields[]` is the parsed enquiry form. `options[]` present => purchasable. |
 | `laptops/{laptopId}` | `picturesUrl` is a `string[]`. |
 | `licencePool/{licenceId}` | **Empty in Phase 1.** Populated through the admin portal in Phase 2. |
 | `orders/{orderId}` | Survives instance restarts, which is the point of all this. |
@@ -43,13 +45,40 @@ variants need querying independently of their product.
 - **One field per concept.** There are deliberately no alias pairs
   (`product_id` *and* `id`, `price_ghs` *and* `priceGhs`). The old model had
   them and the two halves drifted apart.
-- **Money is a number** in whole Ghana cedis, never a string.
+- **Money is a number** in Ghana cedis, never a string. It is no longer always
+  a whole number: ₵47.50 exists, so see the pesewa rule below.
 - **Booleans are real booleans.** The sheet's `Yes`/`No`, `Published`/`Draft`
   and `Available`/`Unavailable` were converted at import, not at read time.
 - **Version numbers are always strings.** Excel coerced them to floats, so
   migration normalises `31.0` to `"31"` while leaving `"4.1.1.8"` untouched.
 - **A blank price is not a free item.** It means "ask for price": the field
   stays absent and the item is not sellable.
+- **Money is calculated in integer pesewas.** `src/utils/money.ts` is the only
+  place money arithmetic happens. Cedis are for storage and display; every
+  calculation converts to pesewas first. ₵47.50 is the first non-integer price
+  in the system and float cedis accumulate error.
+
+### Priced services
+
+A service with `options[]` is **purchasable** and goes through the same cart and
+checkout as software. A service without them stays quote-only — Data Analysis
+and Transcription are untouched. Price lives on the option, never on the
+service.
+
+`bulkPriceGhs` **replaces** `unitPriceGhs` for every unit once the quantity
+reaches `bulkFromQty`. Two AI checks are ₵95.00, not ₵97.50. A tiered
+calculation overcharges every bulk customer by an amount nobody reports, so it
+is covered by tests — run `npm test` before touching `priceServiceLine`.
+
+A service order has `fulfilmentType: 'Service'` and **never touches the licence
+pool**: the auto-fulfil transaction is skipped for it entirely. Landing one in
+`awaiting-licence` would be meaningless and would hide it from the seller's
+queue. Paid service orders sit in `awaiting-document` until the document
+arrives, then move to `awaiting-seller-activation`.
+
+Turnitin is seeded from `server/seed/turnitin.ts` rather than migrated: it was
+never a row in the Services tab. Re-seed with `npm run seed`; never hand-enter
+it in the console.
 
 ## Server layout
 
@@ -59,6 +88,8 @@ variants need querying independently of their product.
 | `server/catalogue.ts` | Assembles and caches the catalogue response. |
 | `server/orders.ts` | Checkout, order lookup, licence assignment. |
 | `server/pricingConfig.ts` | Pricing rules — neutral by default; the admin portal owns them from Phase 2. |
+| `server/storage.ts` | Customer document uploads: signed URLs, server-side limits, form validation. |
+| `server/seed/turnitin.ts` | Services defined in code rather than migrated. |
 
 The catalogue merges bundles, services and laptops in alongside products, each
 tagged with `kind`. That merge is what stops the Services, Bundles and Laptops
@@ -94,6 +125,12 @@ of reach of a browser.
 `/api/admin/data` returns that same sensitive data. In production it is
 disabled until `ADMIN_TOKEN` is set, and then requires it in an
 `x-admin-token` header.
+
+`storage.rules` denies all client access for the same reason. Customer
+documents are unpublished academic work: an upload URL is issued only against an
+existing **paid** order, the 20 MB and PDF/DOC/DOCX limits are enforced
+server-side as a condition of the signed URL rather than trusted from the
+browser, and retrieval is a short-lived signed download URL.
 
 ## Migration
 

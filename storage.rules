@@ -1,0 +1,13 @@
+rules_version = '2';
+
+// Customer documents are reached only through the server, which uses the Admin
+// SDK and bypasses these rules, and through short-lived signed URLs it issues
+// per object. Denying all client access matches firestore.rules and keeps
+// customers' unpublished academic documents out of reach of a browser.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -19,6 +19,28 @@ import { Order } from '../types';
 import { STORE_COPY } from '../config/storeCopy';
 import { formatCurrencyGHS } from '../utils/pricingEngine';
 
+/** The stored statuses are kebab-case; these are what the customer reads. */
+const FULFILMENT_LABELS: Record<string, string> = {
+  'pending-payment': 'Pending payment',
+  'awaiting-customer-input': 'Awaiting your details',
+  'awaiting-document': 'Awaiting your document',
+  'awaiting-licence': 'Awaiting licence',
+  'awaiting-seller-activation': 'Being prepared',
+  ready: 'Ready'
+};
+
+const fulfilmentLabel = (status: string) => FULFILMENT_LABELS[status] || status;
+
+/**
+ * A WhatsApp link with the order reference already in the message, so the
+ * document arrives identifying the order it belongs to rather than as an
+ * anonymous file.
+ */
+function whatsAppSubmissionLink(orderId: string, productName: string): string {
+  const text = `Order ${orderId} — ${productName}. Here is my document.`;
+  return `${STORE_COPY.brand.whatsAppUrl}?text=${encodeURIComponent(text)}`;
+}
+
 export const FindOrderView: React.FC = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
@@ -279,10 +301,29 @@ export const FindOrderView: React.FC = () => {
                             : 'bg-slate-200 text-slate-700'
                         }`}
                       >
-                        {order.fulfilmentStatus}
+                        {fulfilmentLabel(order.fulfilmentStatus)}
                       </span>
                     </div>
                   </div>
+
+                  {/* Paid, but nothing received yet. The customer either
+                      uploads, or sends it on WhatsApp with the reference
+                      already filled in. */}
+                  {order.fulfilmentStatus === 'awaiting-document' && (
+                    <div className="p-3.5 rounded-xl bg-[#f0f9f7] border border-[#cbdcd9] space-y-2">
+                      <p className="text-xs text-slate-700 leading-relaxed">
+                        We have your payment. Send us your document and we will get started.
+                      </p>
+                      <a
+                        href={whatsAppSubmissionLink(order.orderId, order.productName)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#25d366] hover:bg-[#1fb855] text-white text-xs font-bold transition-colors"
+                      >
+                        Send it on WhatsApp
+                      </a>
+                    </div>
+                  )}
 
                   {/* Stepped Progress Bar matching exact specification */}
                   <div className="pt-1">

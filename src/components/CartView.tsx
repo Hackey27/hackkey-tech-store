@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { CatalogueItem, Variant } from '../types';
+import { CatalogueItem, Variant, ServiceOption } from '../types';
 import { ShoppingBag, Trash2, ChevronRight, Check } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
 import { STORE_COPY } from '../config/storeCopy';
+import { formatPesewas, priceServiceLine } from '../utils/money';
 
 export interface CartItem {
   id: string;
@@ -10,6 +11,8 @@ export interface CartItem {
   variant?: Variant;
   selectedOs?: string;
   quantity: number;
+  /** Set when the line is a purchasable service rather than software. */
+  serviceOption?: ServiceOption;
 }
 
 interface CartViewProps {
@@ -62,8 +65,9 @@ export const CartView: React.FC<CartViewProps> = ({
             const pName = item.product.name || 'Software';
             const pId = item.product.itemId;
             const vPlan = item.variant?.versionOrPlan || 'Standard';
-            const price =
-              item.variant?.payablePriceGhs ?? item.variant?.priceGhs ?? item.product.priceGhs ?? 0;
+            const price = item.serviceOption
+              ? priceServiceLine(item.serviceOption, item.quantity).totalPesewas / 100
+              : item.variant?.payablePriceGhs ?? item.variant?.priceGhs ?? item.product.priceGhs ?? 0;
             const inputType =
               item.product.machineCodeType === 'lock-code'
                 ? 'Lock Code'
@@ -74,6 +78,19 @@ export const CartView: React.FC<CartViewProps> = ({
               Boolean(item.variant?.macViaParallels) ||
               (item.selectedOs?.toLowerCase().includes('mac') &&
                 (item.variant?.os === 'Windows' || item.product.osList?.join(", ") === 'Windows'));
+
+            // A service line is resolved from its service and option; the
+            // server prices it again rather than trusting the browser.
+            if (item.serviceOption) {
+              return {
+                serviceId: item.product.itemId,
+                optionId: item.serviceOption.optionId,
+                quantity: item.quantity,
+                productName: pName,
+                versionOrPlan: item.serviceOption.name,
+                amountGhs: price
+              };
+            }
 
             return {
               // The server resolves the order from the variant, so this is the

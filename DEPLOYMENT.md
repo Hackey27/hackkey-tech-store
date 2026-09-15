@@ -105,6 +105,43 @@ service are obsolete and should be removed.
 Populate the catalogue with `scripts/migrate-sheet-to-firestore.ts`, run by
 hand from a machine with credentials — see `CLAUDE.md`.
 
+## Customer document uploads
+
+Turnitin submissions go to Cloud Storage in the same project. The Cloud Run
+runtime service account needs `roles/storage.objectAdmin` on the bucket, and
+`roles/iam.serviceAccountTokenCreator` on itself so it can sign URLs:
+
+```bash
+SA=$(gcloud run services describe "$SERVICE" --region "$REGION" \
+  --format='value(spec.template.spec.serviceAccountName)')
+
+gcloud storage buckets add-iam-policy-binding "gs://${PROJECT_ID}.appspot.com" \
+  --member="serviceAccount:${SA}" --role=roles/storage.objectAdmin
+
+gcloud iam service-accounts add-iam-policy-binding "$SA" \
+  --member="serviceAccount:${SA}" --role=roles/iam.serviceAccountTokenCreator
+
+firebase deploy --only storage   # uses storage.rules (deny-all, like Firestore)
+```
+
+Set `DOCUMENTS_BUCKET` if you use a bucket other than the project default.
+
+**Retrieving submitted documents, until Phase 2.** The admin portal does not
+exist yet, so uploaded files are read from the Firebase Storage browser in the
+console, under `orders/<orderId>/`. This is expected for now, not missing
+functionality. `GET /api/orders/:orderId/document` also returns a short-lived
+signed link when `ADMIN_TOKEN` is set.
+
+## Seeding priced services
+
+Turnitin is defined in code, not in the workbook, so it is seeded rather than
+migrated. A full migration run seeds it too; to seed on its own:
+
+```bash
+npm run seed -- --dry-run
+npm run seed
+```
+
 ## Instance count
 
 `--max-instances 1` is no longer required for correctness: orders live in
