@@ -1,11 +1,11 @@
 import React from 'react';
-import { Category, BusinessCategory } from '../types';
+import { Category } from '../types';
 import { BarChart3, FileText, Layers, Laptop, ChevronRight } from 'lucide-react';
 
 interface CategoryCardProps {
   category: Category;
   isSelected: boolean;
-  onSelect: (categoryId: BusinessCategory) => void;
+  onSelect: (categoryId: string) => void;
 }
 
 export const CategoryCard: React.FC<CategoryCardProps> = ({
@@ -13,7 +13,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
   isSelected,
   onSelect
 }) => {
-  const getCategoryIcon = (id: BusinessCategory) => {
+  const getCategoryIcon = (id: string) => {
     switch (id) {
       case 'statistical-software':
         return <BarChart3 className="w-5 h-5" />;
@@ -28,7 +28,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
     }
   };
 
-  const catId = category.category_id || category.id || '';
+  const catId = category.categoryId || category.categoryId || '';
 
   return (
     <div

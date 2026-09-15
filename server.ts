@@ -1,11 +1,43 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
-import { storeDatabase } from './server/storeDatabase';
 import { HealthResponse } from './src/types';
+import { getCatalogue } from './server/catalogue';
+import {
+  createOrders,
+  createRequest,
+  getOrder,
+  listLicencePool,
+  listOrders,
+  listRequests,
+  lookupOrdersByPhone,
+  markOrderPaidAndFulfil,
+  submitCustomerInput
+} from './server/orders';
 
 // Cloud Run injects PORT (8080 by default); 3000 keeps local dev unchanged.
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = '0.0.0.0';
+
+/** Order lookup is by phone number alone, so it is rate limited per caller. */
+const LOOKUP_WINDOW_MS = 60_000;
+const LOOKUP_MAX_PER_WINDOW = 10;
+const lookupHits = new Map<string, number[]>();
+
+function isRateLimited(key: string): boolean {
+  const now = Date.now();
+  const hits = (lookupHits.get(key) || []).filter((t) => now - t < LOOKUP_WINDOW_MS);
+  hits.push(now);
+  lookupHits.set(key, hits);
+  return hits.length > LOOKUP_MAX_PER_WINDOW;
+}
+
+function failed(res: Response, err: unknown, message: string, status = 500) {
+  console.error(`[API] ${message}:`, err);
+  res.status(status).json({
+    error: message,
+    message: err instanceof Error ? err.message : 'Internal server error'
+  });
+}
 
 async function startServer() {
   const app = express();
@@ -18,195 +50,191 @@ async function startServer() {
       service: 'Hack-Key Tech Platform',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
-      dataSource: 'Hack-Key Tech Authoritative Data Engine',
+      dataSource: 'Firestore',
       currency: 'GHS',
       timezone: 'Africa/Accra'
     };
     res.json(healthData);
   });
 
-  // Hydrated Catalog Endpoint
-  app.get('/api/catalog', (req: Request, res: Response) => {
+  // Catalogue: products, bundles, services and laptops, each tagged with kind.
+  app.get('/api/catalog', async (req: Request, res: Response) => {
     try {
       const categoryFilter = req.query.category as string | undefined;
       const searchQuery = req.query.q as string | undefined;
-
-      const catalogData = storeDatabase.getHydratedCatalog(categoryFilter, searchQuery);
-      res.json(catalogData);
-    } catch (err: any) {
-      console.error('[API] Error retrieving catalogue:', err);
-      res.status(500).json({
-        error: 'Failed to retrieve catalogue from data source',
-        message: err.message || 'Internal server error'
-      });
+      res.json(await getCatalogue(categoryFilter, searchQuery));
+    } catch (err) {
+      failed(res, err, 'Failed to retrieve catalogue from Firestore');
     }
   });
 
-  // Rate-Limited Order Lookup Endpoint (Sections 4 & 7)
-  app.get('/api/orders/lookup', (req: Request, res: Response) => {
+  // Rate-limited order lookup
+  app.get('/api/orders/lookup', async (req: Request, res: Response) => {
     const phone = req.query.phone as string;
     if (!phone || !phone.trim()) {
       return res.status(400).json({ error: 'Phone number is required.' });
     }
 
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
-    const rateLimitKey = `${clientIp}-${phone.trim()}`;
-
-    if (storeDatabase.isRateLimited(rateLimitKey)) {
+    if (isRateLimited(`${clientIp}-${phone.trim()}`)) {
       return res.status(429).json({
         error: 'Too many search requests. Please wait a moment before trying again.'
       });
     }
 
-    const orders = storeDatabase.lookupOrdersByPhone(phone);
-    res.json({ orders, count: orders.length });
+    try {
+      const orders = await lookupOrdersByPhone(phone);
+      res.json({ orders, count: orders.length });
+    } catch (err) {
+      failed(res, err, 'Failed to look up orders');
+    }
   });
 
-  // Customer Input Submission (Lock Code or Hardware ID) (Section 4.3)
-  app.post('/api/orders/:orderId/customer-input', (req: Request, res: Response) => {
-    const orderId = String(req.params.orderId);
+  // Customer input (lock code or hardware ID)
+  app.post('/api/orders/:orderId/customer-input', async (req: Request, res: Response) => {
     const { inputValue } = req.body;
-
-    if (!inputValue || !inputValue.trim()) {
+    if (!inputValue || !String(inputValue).trim()) {
       return res.status(400).json({ error: 'Input value is required.' });
     }
 
-    const result = storeDatabase.submitCustomerInput(orderId, inputValue);
-    if (!result.success) {
-      return res.status(400).json({ error: result.message });
+    try {
+      const result = await submitCustomerInput(String(req.params.orderId), String(inputValue));
+      if (!result.success) {
+        return res.status(400).json({ error: result.message });
+      }
+      res.json(result);
+    } catch (err) {
+      failed(res, err, 'Failed to save customer input');
     }
-
-    res.json(result);
   });
 
-  // Save Licence Code (Section 4.3)
-  app.post('/api/orders/:orderId/save-licence', (req: Request, res: Response) => {
-    const orderId = String(req.params.orderId);
-    const { licenceCode } = req.body;
-
-    if (!licenceCode || !licenceCode.trim()) {
-      return res.status(400).json({ error: 'Licence code is required.' });
-    }
-
-    const result = storeDatabase.saveLicenceCode(orderId, licenceCode);
-    if (!result.success) {
-      return res.status(400).json({ error: result.message });
-    }
-
-    res.json(result);
-  });
-
-  // Checkout and Order Placement (Sections 3 & 4)
-  app.post('/api/orders/checkout', (req: Request, res: Response) => {
+  // Checkout
+  app.post('/api/orders/checkout', async (req: Request, res: Response) => {
     const { customerName, phone, email, items } = req.body;
     if (!customerName || !phone || !email || !items || !items.length) {
       return res.status(400).json({ error: 'Customer details and at least one item are required.' });
     }
 
-    const result = storeDatabase.createCartOrders({
-      customerName,
-      phone,
-      email,
-      items
-    });
-
-    res.json(result);
-  });
-
-  // Mark Order as Paid (Simulate Payment or Paystack Webhook)
-  app.post('/api/orders/:orderId/pay', (req: Request, res: Response) => {
-    const orderId = String(req.params.orderId);
-    const updatedOrder = storeDatabase.markOrderAsPaid(orderId);
-    if (!updatedOrder) {
-      return res.status(404).json({ error: 'Order not found.' });
+    try {
+      const orders = await createOrders({ customerName, phone, email, items });
+      res.json({ success: true, orders, cartId: orders[0]?.cartId });
+    } catch (err) {
+      failed(res, err, 'Failed to place order', 400);
     }
-
-    res.json({ success: true, order: updatedOrder });
   });
 
-  // Software Request Submission
-  app.post('/api/requests/software', (req: Request, res: Response) => {
+  // Mark an order paid (simulated payment, or a Paystack webhook)
+  app.post('/api/orders/:orderId/pay', async (req: Request, res: Response) => {
+    try {
+      const outcome = await markOrderPaidAndFulfil(String(req.params.orderId));
+      if (!outcome) {
+        return res.status(404).json({ error: 'Order not found.' });
+      }
+
+      // Say plainly when no licence could be issued, rather than implying one
+      // is on its way.
+      res.json({
+        success: true,
+        order: outcome.order,
+        licenceIssued: outcome.licenceIssued,
+        message: outcome.licenceIssued
+          ? 'Payment recorded and licence issued.'
+          : outcome.order.fulfilmentStatus === 'awaiting-licence'
+            // Say that the licence still has to be issued. Never imply one is
+            // already on its way when the pool held none.
+            ? 'Payment recorded. This order still needs a licence: the team has been notified and will contact you once it is issued.'
+            : 'Payment recorded. The team will complete activation and contact you.'
+      });
+    } catch (err) {
+      failed(res, err, 'Failed to record payment');
+    }
+  });
+
+  app.get('/api/orders/:orderId', async (req: Request, res: Response) => {
+    try {
+      const order = await getOrder(String(req.params.orderId));
+      if (!order) return res.status(404).json({ error: 'Order not found.' });
+      res.json({ order });
+    } catch (err) {
+      failed(res, err, 'Failed to retrieve order');
+    }
+  });
+
+  // Software request
+  app.post('/api/requests/software', async (req: Request, res: Response) => {
     const { firstName, lastName, phone, email, softwareName, websiteUrl, notes } = req.body;
     if (!firstName || !lastName || !phone || !email || !softwareName) {
       return res.status(400).json({ error: 'Required fields missing.' });
     }
 
-    const submission = {
-      request_id: `SR-${Math.floor(100000 + Math.random() * 900000)}`,
-      first_name: firstName,
-      last_name: lastName,
-      phone,
-      email,
-      software_name: softwareName,
-      website_url: websiteUrl,
-      notes,
-      submitted_at: new Date().toISOString()
-    };
-
-    storeDatabase.softwareRequests.unshift(submission);
-    res.json({ success: true, request: submission });
+    try {
+      const request = await createRequest('software-request', {
+        customerName: `${firstName} ${lastName}`.trim(),
+        phone,
+        email,
+        notes,
+        details: { firstName, lastName, softwareName, websiteUrl }
+      });
+      res.json({ success: true, request });
+    } catch (err) {
+      failed(res, err, 'Failed to submit request');
+    }
   });
 
-  // Laptop Sourcing Request Submission
-  app.post('/api/requests/laptop', (req: Request, res: Response) => {
-    const { customerName, phone, email, location, budget, preferredBrand, storage, ram, specsNotes, purpose, condition, timeline, readiness, notes } = req.body;
+  // Laptop sourcing request
+  app.post('/api/requests/laptop', async (req: Request, res: Response) => {
+    const {
+      customerName, phone, email, location, budget, preferredBrand, storage, ram,
+      specsNotes, purpose, condition, timeline, readiness, notes
+    } = req.body;
     if (!customerName || !phone || !budget) {
       return res.status(400).json({ error: 'Name, phone, and budget are required.' });
     }
 
-    const submission = {
-      request_id: `LR-${Math.floor(100000 + Math.random() * 900000)}`,
-      customer_name: customerName,
-      phone,
-      email,
-      location,
-      budget,
-      preferred_brand: preferredBrand,
-      storage,
-      ram,
-      specs_notes: specsNotes,
-      purpose,
-      condition,
-      timeline,
-      readiness,
-      notes,
-      submitted_at: new Date().toISOString()
-    };
-
-    storeDatabase.laptopRequests.unshift(submission);
-    res.json({ success: true, request: submission });
+    try {
+      const request = await createRequest('laptop-request', {
+        customerName,
+        phone,
+        email,
+        notes,
+        details: {
+          location, budget, preferredBrand, storage, ram, specsNotes,
+          purpose, condition, timeline, readiness
+        }
+      });
+      res.json({ success: true, request });
+    } catch (err) {
+      failed(res, err, 'Failed to submit request');
+    }
   });
 
-  // Service Inquiry Submission
-  app.post('/api/services/submit', (req: Request, res: Response) => {
+  // Service enquiry
+  app.post('/api/services/submit', async (req: Request, res: Response) => {
     const { serviceId, serviceName, customerName, phone, email, deadline, summary, answers } = req.body;
     if (!serviceId || !customerName || !phone || !email) {
       return res.status(400).json({ error: 'Customer details are required.' });
     }
 
-    const submission = {
-      submission_id: `SVC-${Math.floor(100000 + Math.random() * 900000)}`,
-      service_id: serviceId,
-      service_name: serviceName,
-      customer_name: customerName,
-      phone,
-      email,
-      deadline,
-      summary: summary || '',
-      answers: answers || {},
-      submitted_at: new Date().toISOString()
-    };
-
-    storeDatabase.serviceSubmissions.unshift(submission);
-    res.json({ success: true, submission });
+    try {
+      const request = await createRequest('service-enquiry', {
+        customerName,
+        phone,
+        email,
+        notes: summary,
+        details: { serviceId, serviceName, deadline, answers: answers || {} }
+      });
+      res.json({ success: true, submission: request });
+    } catch (err) {
+      failed(res, err, 'Failed to submit enquiry');
+    }
   });
 
-  // Admin Diagnostics and Data View (Section 8)
-  // Returns orders, the licence key pool and customer PII, so it must never be
+  // Admin diagnostics.
+  // Returns orders, the licence pool and customer PII, so it must never be
   // open on a public URL. In production it stays disabled until ADMIN_TOKEN is
   // set, and then requires that value in the x-admin-token header. Local
   // development is unaffected.
-  app.get('/api/admin/data', (req: Request, res: Response) => {
+  app.get('/api/admin/data', async (req: Request, res: Response) => {
     if (process.env.NODE_ENV === 'production') {
       const adminToken = process.env.ADMIN_TOKEN;
       if (!adminToken) {
@@ -217,14 +245,16 @@ async function startServer() {
       }
     }
 
-    res.json({
-      orders: storeDatabase.orders,
-      licensePool: storeDatabase.licenseKeyPool,
-      softwareRequests: storeDatabase.softwareRequests,
-      laptopRequests: storeDatabase.laptopRequests,
-      serviceSubmissions: storeDatabase.serviceSubmissions,
-      pricingConfig: storeDatabase.pricingConfig
-    });
+    try {
+      const [orders, licencePool, requests] = await Promise.all([
+        listOrders(),
+        listLicencePool(),
+        listRequests()
+      ]);
+      res.json({ orders, licencePool, requests });
+    } catch (err) {
+      failed(res, err, 'Failed to retrieve admin data');
+    }
   });
 
   // Vite development middleware or production static asset server
@@ -253,4 +283,3 @@ startServer().catch(err => {
   console.error('[Hack-Key Tech Platform] Fatal server startup error:', err);
   process.exit(1);
 });
-

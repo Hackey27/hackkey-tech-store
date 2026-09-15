@@ -12,7 +12,7 @@ import { CartView, CartItem } from './components/CartView';
 import { BrandLogo } from './components/BrandLogo';
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { STORE_COPY } from './config/storeCopy';
-import { CatalogResponse, BusinessCategory, Product, ProductVariant } from './types';
+import { CatalogResponse, CatalogueItem, Variant } from './types';
 import {
   AlertCircle,
   RefreshCw,
@@ -27,7 +27,7 @@ import {
 
 export const App: React.FC = () => {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<BusinessCategory | 'all'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,8 +35,8 @@ export const App: React.FC = () => {
   // Active navigation tab: 'home' | 'find-order' | 'help' | 'request' | 'cart'
   const [activeTab, setActiveTab] = useState<'home' | 'find-order' | 'help' | 'request' | 'cart'>('home');
 
-  // Product detail modal state
-  const [activeDetailProduct, setActiveDetailProduct] = useState<Product | null>(null);
+  // CatalogueItem detail modal state
+  const [activeDetailProduct, setActiveDetailProduct] = useState<CatalogueItem | null>(null);
 
   // Cart state
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -46,7 +46,7 @@ export const App: React.FC = () => {
   const [showAllSoftware, setShowAllSoftware] = useState(false);
 
   // Fetch catalog from Phase 1 backend endpoint /api/catalog
-  const fetchCatalogData = async (cat?: BusinessCategory | 'all', search?: string) => {
+  const fetchCatalogData = async (cat?: string | 'all', search?: string) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -78,7 +78,7 @@ export const App: React.FC = () => {
   }, [selectedCategory, searchQuery]);
 
   // Category click handler
-  const handleCategorySelect = (catId: BusinessCategory) => {
+  const handleCategorySelect = (catId: string) => {
     if (selectedCategory === catId) {
       setSelectedCategory('all');
     } else {
@@ -88,10 +88,10 @@ export const App: React.FC = () => {
   };
 
   // Add to cart handler
-  const handleAddToCart = (product: Product, variant?: ProductVariant, selectedOs?: string) => {
+  const handleAddToCart = (product: CatalogueItem, variant?: Variant, selectedOs?: string) => {
     setCartItems((prev) => {
       const existingIdx = prev.findIndex(
-        (item) => item.product.id === product.id && item.variant?.id === variant?.id && item.selectedOs === selectedOs
+        (item) => item.product.itemId === product.itemId && item.variant?.variantId === variant?.variantId && item.selectedOs === selectedOs
       );
       if (existingIdx > -1) {
         const updated = [...prev];
@@ -101,7 +101,7 @@ export const App: React.FC = () => {
       return [
         ...prev,
         {
-          id: `${product.id}-${variant?.id || 'default'}-${selectedOs || 'std'}`,
+          id: `${product.itemId}-${variant?.variantId || 'default'}-${selectedOs || 'std'}`,
           product,
           variant,
           selectedOs,
@@ -111,9 +111,9 @@ export const App: React.FC = () => {
     });
   };
 
-  const handleBuyNowDirect = (product: Product) => {
+  const handleBuyNowDirect = (product: CatalogueItem) => {
     // For single-variant products, add to cart and open cart or show detail
-    handleAddToCart(product, product.variants?.[0], product.osCompatibility?.[0]);
+    handleAddToCart(product, product.variants?.[0], product.osList?.[0]);
     setActiveTab('cart');
   };
 
@@ -189,9 +189,9 @@ export const App: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                   {catalog?.categories.map((cat) => (
                     <CategoryCard
-                      key={cat.id}
+                      key={cat.categoryId}
                       category={cat}
-                      isSelected={selectedCategory === cat.id}
+                      isSelected={selectedCategory === cat.categoryId}
                       onSelect={handleCategorySelect}
                     />
                   ))}
@@ -204,7 +204,7 @@ export const App: React.FC = () => {
                   <div>
                     <h2 className="text-xl sm:text-2xl font-black text-[#014040] tracking-tight">
                       {selectedCategory !== 'all'
-                        ? catalog?.categories.find((c) => c.id === selectedCategory)?.name || 'Products'
+                        ? catalog?.categories.find((c) => c.categoryId === selectedCategory)?.name || 'Products'
                         : searchQuery
                         ? `Search Results for "${searchQuery}"`
                         : STORE_COPY.catalog.featuredSoftware}
@@ -303,7 +303,7 @@ export const App: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
                     {displayedProducts.map((product) => (
                       <ProductCard
-                        key={product.id}
+                        key={product.itemId}
                         product={product}
                         onSelect={(prod) => setActiveDetailProduct(prod)}
                         onBuyNowClick={handleBuyNowDirect}
@@ -364,7 +364,7 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Product Detail Modal */}
+      {/* Product detail Modal */}
       {activeDetailProduct && (
         <ProductDetailView
           product={activeDetailProduct}

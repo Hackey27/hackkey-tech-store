@@ -132,7 +132,7 @@ export const RequestView: React.FC = () => {
       if (!res.ok) {
         throw new Error('Failed to submit laptop sourcing request.');
       }
-      setLaptopRef(data.request?.request_id || 'LR-' + Math.floor(100000 + Math.random() * 900000));
+      setLaptopRef(data.request?.requestId || 'LR-' + Math.floor(100000 + Math.random() * 900000));
       setLaptopSubmitted(true);
     } catch (err: any) {
       setSubmitError(err.message || 'Error submitting request');

@@ -80,14 +80,34 @@ gcloud run services update "$SERVICE" --region "$REGION" \
   --set-env-vars NODE_ENV=production,ADMIN_TOKEN="$(openssl rand -hex 32)"
 ```
 
-## Known limitation: state is in memory
+## Firestore
 
-`server/storeDatabase.ts` is a plain in-memory instance. Orders, licence-key
-assignments, and software/laptop requests live only in the running container, so
-they are **lost whenever Cloud Run replaces an instance**, and two instances
-would each hold different data.
+The service reads and writes Firestore using Application Default Credentials,
+so the Cloud Run **runtime service account needs `roles/datastore.user`**:
 
-`--max-instances 1` is set for that reason: it prevents two instances from
-diverging, but does not prevent loss on restart. Before taking real orders,
-move that state to a managed store (Firestore or Cloud SQL) and then raise the
-instance ceiling.
+```bash
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:$(gcloud run services describe "$SERVICE" --region "$REGION" \
+    --format='value(spec.template.spec.serviceAccountName)')" \
+  --role=roles/datastore.user
+```
+
+Deploy the deny-all client rules once (the server's Admin SDK bypasses them):
+
+```bash
+gcloud firestore databases update --type=firestore-native
+firebase deploy --only firestore:rules   # uses firestore.rules
+```
+
+Any `GOOGLE_SERVICE_ACCOUNT_*` or `GOOGLE_SHEETS_*` variables still set on the
+service are obsolete and should be removed.
+
+Populate the catalogue with `scripts/migrate-sheet-to-firestore.ts`, run by
+hand from a machine with credentials — see `CLAUDE.md`.
+
+## Instance count
+
+`--max-instances 1` is no longer required for correctness: orders live in
+Firestore and survive instance replacement, and licence assignment is
+transactional, so several instances cannot hand out the same key. Raise the
+ceiling when traffic justifies it.

@@ -40,22 +40,22 @@ This phase is strictly **READ-ONLY**:
                                │ Domain query
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                server/catalogService.ts                     │
+│                   server/orders.ts                          │
 │    (Filtering, search, category management service)         │
 └──────────────────────────────┬──────────────────────────────┘
                                │ Data retrieval
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│               server/sheetsDataSource.ts                    │
-│      Google Sheets Data-Access Abstraction Layer            │
+│                  server/catalogue.ts                        │
+│         Firestore-backed catalogue assembly                 │
 │   (Falls back to labeled generic placeholders if unlinked)  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 - **Frontend**: React 18, TypeScript, Tailwind CSS with mobile-first responsive layout.
 - **Backend**: Express on Node.js 22 with TypeScript (`server.ts`).
-- **Data Access Layer**: Server-side abstraction (`server/sheetsDataSource.ts`) ready to connect to Google Sheets when credentials are provided.
-- **Catalogue Service**: Domain service (`server/catalogService.ts`) providing category filtering and catalog queries.
+- **Data Access Layer**: Firestore is the single source of truth (`server/catalogue.ts`, `server/orders.ts`). The spreadsheet was a one-off migration input and is not read at runtime — see `CLAUDE.md`.
+- **Catalogue Service**: `server/catalogue.ts` assembles and caches the catalogue, merging bundles, services and laptops in alongside products so every category renders.
 
 ---
 
@@ -97,7 +97,7 @@ npm run dev
 
 ### Building for Production
 ```bash
-# Builds Vite client to dist/ and bundles server.ts to dist/server.cjs
+# Builds Vite client to dist/ and bundles server.ts to dist-server/server.cjs
 npm run build
 
 # Start production server
@@ -109,8 +109,7 @@ Configure `.env` based on `.env.example`:
 ```env
 PORT=3000
 NODE_ENV=development
-GOOGLE_SHEETS_SPREADSHEET_ID=
-GOOGLE_SHEETS_API_KEY=
-GOOGLE_SERVICE_ACCOUNT_EMAIL=
-GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY=
+# Firestore uses Application Default Credentials; on Cloud Run the runtime
+# service account supplies them and no key file is needed.
+GOOGLE_CLOUD_PROJECT=
 ```

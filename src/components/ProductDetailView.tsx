@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Product, Variant, MachineCodeType } from '../types';
+import { CatalogueItem, Variant, MachineCodeType } from '../types';
 import {
   X,
   CheckCircle,
@@ -15,9 +15,9 @@ import { STORE_COPY } from '../config/storeCopy';
 import { formatCurrencyGHS } from '../utils/pricingEngine';
 
 interface ProductDetailViewProps {
-  product: Product;
+  product: CatalogueItem;
   onClose: () => void;
-  onAddToCart?: (product: Product, variant?: Variant, os?: string) => void;
+  onAddToCart?: (product: CatalogueItem, variant?: Variant, os?: string) => void;
 }
 
 export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
@@ -28,26 +28,22 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
   // Determine versions & selection state
   const variants = product.variants || [];
   const recommendedVariant =
-    variants.find((v) => v.latest || v.isRecommended) || variants[0];
+    variants.find((v) => v.latest) || variants[0];
   const [selectedVariant, setSelectedVariant] = useState<Variant | undefined>(
     recommendedVariant
   );
 
   // OS Selection based on Section 1.3
   const availableOsList: string[] = selectedVariant
-    ? selectedVariant.resolved_os_list || selectedVariant.osList || [selectedVariant.os || 'Windows']
-    : product.osCompatibility || ['Windows'];
+    ? selectedVariant.osList || [selectedVariant.os || 'Windows']
+    : product.osList || ['Windows'];
   const hasMultipleOs = availableOsList.length > 1;
   const [selectedOs, setSelectedOs] = useState<string>(availableOsList[0] || 'Windows');
 
   // Active price in GHS
   const currentPriceGhs =
-    selectedVariant?.payable_price_ghs ??
-    selectedVariant?.price_ghs ??
+    selectedVariant?.payablePriceGhs ??
     selectedVariant?.priceGhs ??
-    product.min_price_ghs ??
-    product.minPriceGhs ??
-    product.price_ghs ??
     product.priceGhs ??
     0;
 
@@ -55,7 +51,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
   const [progressDemoStep, setProgressDemoStep] = useState(1);
   const [addedNotice, setAddedNotice] = useState(false);
 
-  const productName = product.product_name || product.name || 'Software';
+  const productName = product.name || 'Software';
 
   const handleBuyClick = () => {
     if (onAddToCart) {
@@ -73,18 +69,13 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
     return (name || 'HK').slice(0, 2).toUpperCase();
   };
 
-  const recommendedId = recommendedVariant?.variant_id || recommendedVariant?.id;
+  const recommendedId = recommendedVariant?.variantId;
   const olderVersions = variants.filter(
-    (v) => (v.variant_id || v.id) !== recommendedId
+    (v) => (v.variantId) !== recommendedId
   );
 
   // Machine code type
-  const machineCodeType: MachineCodeType =
-    product.customer_input_type === 'Lock Code'
-      ? 'lock-code'
-      : product.customer_input_type === 'Hardware ID'
-      ? 'hardware-id'
-      : product.machineCodeType || 'none';
+  const machineCodeType: MachineCodeType = product.machineCodeType || 'none';
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-150">
@@ -93,7 +84,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
         <div className="px-5 py-4 bg-[#f8fbfa] border-b border-[#e2ecea] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold uppercase tracking-wider text-[#014040] bg-[#edf5f3] px-2.5 py-1 rounded-full border border-[#d0e4e0]">
-              {product.categoryName || product.category || 'Software'}
+              {product.categoryName || 'Software'}
             </span>
           </div>
           <button
@@ -176,13 +167,12 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                       onClick={() => {
                         setSelectedVariant(recommendedVariant);
                         const osList =
-                          recommendedVariant.resolved_os_list ||
                           recommendedVariant.osList || [recommendedVariant.os || 'Windows'];
                         setSelectedOs(osList[0]);
                       }}
                       className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between ${
-                        (selectedVariant?.variant_id || selectedVariant?.id) ===
-                        (recommendedVariant.variant_id || recommendedVariant.id)
+                        (selectedVariant?.variantId) ===
+                        (recommendedVariant.variantId)
                           ? 'bg-[#f0f9f7] border-[#014040] shadow-xs'
                           : 'bg-white border-slate-200 hover:border-slate-300'
                       }`}
@@ -190,21 +180,21 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                       <div className="flex items-center gap-2.5">
                         <div
                           className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                            (selectedVariant?.variant_id || selectedVariant?.id) ===
-                            (recommendedVariant.variant_id || recommendedVariant.id)
+                            (selectedVariant?.variantId) ===
+                            (recommendedVariant.variantId)
                               ? 'border-[#014040] bg-[#014040]'
                               : 'border-slate-300'
                           }`}
                         >
-                          {(selectedVariant?.variant_id || selectedVariant?.id) ===
-                            (recommendedVariant.variant_id || recommendedVariant.id) && (
+                          {(selectedVariant?.variantId) ===
+                            (recommendedVariant.variantId) && (
                             <div className="w-2 h-2 rounded-full bg-[#05ef28]" />
                           )}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-[#014040]">
-                              {recommendedVariant.version_or_plan || recommendedVariant.version}
+                              {recommendedVariant.versionOrPlan}
                             </span>
                             <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#05ef28] text-[#014040]">
                               {STORE_COPY.product.recommended}
@@ -215,8 +205,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                       <div className="text-right">
                         <span className="text-sm font-black text-[#014040]">
                           {formatCurrencyGHS(
-                            recommendedVariant.payable_price_ghs ??
-                              recommendedVariant.price_ghs ??
+                            recommendedVariant.payablePriceGhs ??
                               recommendedVariant.priceGhs ??
                               0
                           )}
@@ -230,12 +219,11 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                     <div className="space-y-2 pt-1">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {olderVersions.map((variant) => {
-                          const vKey = variant.variant_id || variant.id || 'var';
+                          const vKey = variant.variantId || 'var';
                           const isSelected =
-                            (selectedVariant?.variant_id || selectedVariant?.id) === vKey;
+                            (selectedVariant?.variantId) === vKey;
                           const vPrice =
-                            variant.payable_price_ghs ??
-                            variant.price_ghs ??
+                            variant.payablePriceGhs ??
                             variant.priceGhs ??
                             0;
 
@@ -245,7 +233,6 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                               onClick={() => {
                                 setSelectedVariant(variant);
                                 const osList =
-                                  variant.resolved_os_list ||
                                   variant.osList || [variant.os || 'Windows'];
                                 setSelectedOs(osList[0]);
                               }}
@@ -255,7 +242,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                                   : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
                               }`}
                             >
-                              <span>{variant.version_or_plan || variant.version}</span>
+                              <span>{variant.versionOrPlan}</span>
                               <span className="font-bold text-[#014040]">
                                 {formatCurrencyGHS(vPrice)}
                               </span>
@@ -340,34 +327,19 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
             </div>
           </div>
 
-          {/* Product Detail Tabs */}
+          {/* Product detail tabs */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-            {product.about && (
+            {product.description && (
               <div>
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 mb-1.5">
-                  About this Product
+                  About this product
                 </h4>
                 <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
-                  {product.about}
+                  {product.description}
                 </p>
               </div>
             )}
 
-            {product.features && product.features.length > 0 && (
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 mb-2">
-                  Key Features
-                </h4>
-                <ul className="space-y-1.5">
-                  {product.features.map((feat, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-xs text-slate-700">
-                      <CheckCircle className="w-3.5 h-3.5 text-[#05ef28] shrink-0 mt-0.5" />
-                      <span>{feat}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </div>
         </div>
 

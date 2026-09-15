@@ -23,9 +23,9 @@ export function formatCurrencyGHS(amount: number): string {
  * 3. Contains "win" -> Windows (choice required)
  * 4. Contains "web" or "cloud" -> Web / Cloud (no OS choice asked)
  * 5. Contains "linux" -> Linux (choice required)
- * 6. Blank, and fulfilment_type contains "account" -> Any device (no OS choice asked)
+ * 6. Blank, and fulfilmentType contains "account" -> Any device (no OS choice asked)
  * 7. Otherwise fall back on variant ID prefix: starts with MAC -> macOS, else Windows
- * Finally: if mac_via_parallels is true and macOS not in list, add macOS and require choice.
+ * Finally: if macViaParallels is true and macOS not in list, add macOS and require choice.
  */
 export function resolveVariantOperatingSystem(
   osRaw: string = '',
@@ -67,7 +67,7 @@ export function resolveVariantOperatingSystem(
     requiresChoice = true;
   }
 
-  // Section 1.3: If mac_via_parallels is true and macOS not in list, add macOS and require choice
+  // Section 1.3: If macViaParallels is true and macOS not in list, add macOS and require choice
   if (macViaParallels && !osList.includes('macOS')) {
     osList.push('macOS (via Parallels)');
     requiresChoice = true;
@@ -121,9 +121,9 @@ export function calculateVariantPricing(
   const sa = pricingConfig.silentAdjustment;
   if (sa && sa.active && sa.percent !== 0) {
     const applies =
-      sa.target_ids.length === 0 ||
-      sa.target_ids.includes(productId) ||
-      sa.target_ids.includes(variantId);
+      sa.targetIds.length === 0 ||
+      sa.targetIds.includes(productId) ||
+      sa.targetIds.includes(variantId);
     if (applies) {
       listPrice = Math.ceil(basePrice * (1 + sa.percent / 100));
     }
@@ -137,7 +137,7 @@ export function calculateVariantPricing(
   const isp = pricingConfig.itemSpecificPromotion;
   if (isp && isp.active && isp.percent > 0) {
     const applies =
-      isp.target_ids.includes(productId) || isp.target_ids.includes(variantId);
+      isp.targetIds.includes(productId) || isp.targetIds.includes(variantId);
     if (applies) {
       appliedPromo = isp;
     }
@@ -147,9 +147,9 @@ export function calculateVariantPricing(
     const gp = pricingConfig.globalPromotion;
     if (gp && gp.active && gp.percent > 0) {
       const applies =
-        gp.target_ids.length === 0 ||
-        gp.target_ids.includes(productId) ||
-        gp.target_ids.includes(variantId);
+        gp.targetIds.length === 0 ||
+        gp.targetIds.includes(productId) ||
+        gp.targetIds.includes(variantId);
       if (applies) {
         appliedPromo = gp;
       }
@@ -177,15 +177,15 @@ export function calculateVariantPricing(
 
 /**
  * Determine if a variant is sellable (Section 1.1)
- * "A variant is sellable only if available is TRUE and price_ghs is a non-empty, non-null value.
+ * "A variant is sellable only if available is TRUE and priceGhs is a non-empty, non-null value.
  *  A blank or null price means the variant is not sellable. It must never be treated as free (0.00)."
  */
 export function isVariantSellable(v: Variant): boolean {
   return (
     v.available === true &&
-    typeof v.price_ghs === 'number' &&
-    !isNaN(v.price_ghs) &&
-    v.price_ghs > 0
+    typeof v.priceGhs === 'number' &&
+    !isNaN(v.priceGhs) &&
+    v.priceGhs > 0
   );
 }
 

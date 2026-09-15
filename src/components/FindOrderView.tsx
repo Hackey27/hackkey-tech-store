@@ -79,15 +79,15 @@ export const FindOrderView: React.FC = () => {
   };
 
   const handleSubmitCustomerInput = async (order: Order) => {
-    const val = inputValues[order.order_id];
+    const val = inputValues[order.orderId];
     if (!val || !val.trim()) return;
 
-    setIsSubmittingInput((prev) => ({ ...prev, [order.order_id]: true }));
-    setActionErrorMessage((prev) => ({ ...prev, [order.order_id]: '' }));
-    setActionSuccessMessage((prev) => ({ ...prev, [order.order_id]: '' }));
+    setIsSubmittingInput((prev) => ({ ...prev, [order.orderId]: true }));
+    setActionErrorMessage((prev) => ({ ...prev, [order.orderId]: '' }));
+    setActionSuccessMessage((prev) => ({ ...prev, [order.orderId]: '' }));
 
     try {
-      const res = await fetch(`/api/orders/${order.order_id}/customer-input`, {
+      const res = await fetch(`/api/orders/${order.orderId}/customer-input`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inputValue: val.trim() })
@@ -98,27 +98,27 @@ export const FindOrderView: React.FC = () => {
         throw new Error(data.error || 'Failed to submit input.');
       }
 
-      setActionSuccessMessage((prev) => ({ ...prev, [order.order_id]: data.message }));
+      setActionSuccessMessage((prev) => ({ ...prev, [order.orderId]: data.message }));
       // Refresh order in list
       if (data.order) {
-        setOrders((prev) => prev.map((o) => (o.order_id === order.order_id ? data.order : o)));
+        setOrders((prev) => prev.map((o) => (o.orderId === order.orderId ? data.order : o)));
       }
     } catch (err: any) {
-      setActionErrorMessage((prev) => ({ ...prev, [order.order_id]: err.message }));
+      setActionErrorMessage((prev) => ({ ...prev, [order.orderId]: err.message }));
     } finally {
-      setIsSubmittingInput((prev) => ({ ...prev, [order.order_id]: false }));
+      setIsSubmittingInput((prev) => ({ ...prev, [order.orderId]: false }));
     }
   };
 
   const handleSaveLicenceCode = async (order: Order) => {
-    const val = returnedLicenceValues[order.order_id];
+    const val = returnedLicenceValues[order.orderId];
     if (!val || !val.trim()) return;
 
-    setActionErrorMessage((prev) => ({ ...prev, [order.order_id]: '' }));
-    setActionSuccessMessage((prev) => ({ ...prev, [order.order_id]: '' }));
+    setActionErrorMessage((prev) => ({ ...prev, [order.orderId]: '' }));
+    setActionSuccessMessage((prev) => ({ ...prev, [order.orderId]: '' }));
 
     try {
-      const res = await fetch(`/api/orders/${order.order_id}/save-licence`, {
+      const res = await fetch(`/api/orders/${order.orderId}/save-licence`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ licenceCode: val.trim() })
@@ -129,12 +129,12 @@ export const FindOrderView: React.FC = () => {
         throw new Error(data.error || 'Failed to save licence.');
       }
 
-      setActionSuccessMessage((prev) => ({ ...prev, [order.order_id]: data.message }));
+      setActionSuccessMessage((prev) => ({ ...prev, [order.orderId]: data.message }));
       if (data.order) {
-        setOrders((prev) => prev.map((o) => (o.order_id === order.order_id ? data.order : o)));
+        setOrders((prev) => prev.map((o) => (o.orderId === order.orderId ? data.order : o)));
       }
     } catch (err: any) {
-      setActionErrorMessage((prev) => ({ ...prev, [order.order_id]: err.message }));
+      setActionErrorMessage((prev) => ({ ...prev, [order.orderId]: err.message }));
     }
   };
 
@@ -143,7 +143,7 @@ export const FindOrderView: React.FC = () => {
       const res = await fetch(`/api/orders/${orderId}/pay`, { method: 'POST' });
       const data = await res.json();
       if (data.order) {
-        setOrders((prev) => prev.map((o) => (o.order_id === orderId ? data.order : o)));
+        setOrders((prev) => prev.map((o) => (o.orderId === orderId ? data.order : o)));
       }
     } catch (err) {
       console.error(err);
@@ -152,11 +152,11 @@ export const FindOrderView: React.FC = () => {
 
   // Maps order state to numeric step for progress bar
   const getOrderCurrentStep = (order: Order): number => {
-    if (order.payment_status !== 'Paid') return 2; // Step 2: Payment Received / Pending
-    if (order.fulfilment_status === 'Ready') return 5;
-    if (order.sales_code) return 4;
-    if (order.customer_input_value) return 4;
-    if (order.customer_input_type) return 3;
+    if (order.paymentStatus !== 'paid') return 2; // Step 2: Payment Received / Pending
+    if (order.fulfilmentStatus === 'ready') return 5;
+    if (order.salesCode) return 4;
+    if (order.customerInputValue) return 4;
+    if (order.customerInputType) return 3;
     return 3;
   };
 
@@ -218,35 +218,35 @@ export const FindOrderView: React.FC = () => {
         <div className="space-y-6">
           {orders.length > 0 ? (
             orders.map((order) => {
-              const inputType = order.customer_input_type || 'Lock Code';
+              const inputType = order.customerInputType || 'Lock Code';
               const isHardwareId = inputType === 'Hardware ID';
               const machineTypeForProgress = isHardwareId
                 ? 'hardware-id'
-                : order.customer_input_type
+                : order.customerInputType
                 ? 'lock-code'
                 : 'none';
               const currentStep = getOrderCurrentStep(order);
 
               return (
                 <div
-                  key={order.order_id}
+                  key={order.orderId}
                   className="bg-white rounded-2xl border border-[#d8e7e4] p-6 sm:p-8 shadow-sm space-y-6"
                 >
                   {/* Header / Customer Greeting */}
                   <div className="border-b border-[#edf4f3] pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                       <h2 className="text-xl font-black text-[#014040]">
-                        {STORE_COPY.findOrder.resultsGreeting(order.customer_name)}
+                        {STORE_COPY.findOrder.resultsGreeting(order.customerName)}
                       </h2>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Order #{order.order_id} · Placed on {order.order_date} · {order.delivery_os}
+                        Order #{order.orderId} · Placed on {order.orderDate} · {order.deliveryOs}
                       </p>
                     </div>
 
                     <div className="text-left sm:text-right">
                       <span className="text-xs font-bold text-slate-500 block">Total Amount</span>
                       <span className="text-base font-black text-[#014040]">
-                        {formatCurrencyGHS(order.amount_ghs)}
+                        {formatCurrencyGHS(order.amountGhs)}
                       </span>
                     </div>
                   </div>
@@ -255,31 +255,31 @@ export const FindOrderView: React.FC = () => {
                   <div className="flex flex-wrap items-center justify-between gap-2 bg-[#f8fbfa] p-4 rounded-xl border border-[#e1ece9]">
                     <div>
                       <h3 className="text-base font-bold text-[#014040]">
-                        {order.product_name}
+                        {order.productName}
                       </h3>
                       <span className="text-xs text-slate-600">
-                        {order.version_or_plan}
+                        {order.versionOrPlan}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2">
                       <span
                         className={`text-xs px-2.5 py-1 rounded-full font-bold ${
-                          order.payment_status === 'Paid'
+                          order.paymentStatus === 'paid'
                             ? 'bg-[#d9ffe0] text-[#0d6520]'
                             : 'bg-amber-100 text-amber-800'
                         }`}
                       >
-                        {order.payment_status === 'Paid' ? 'Paid' : 'Unpaid'}
+                        {order.paymentStatus === 'paid' ? 'paid' : 'Unpaid'}
                       </span>
                       <span
                         className={`text-xs px-2.5 py-1 rounded-full font-bold ${
-                          order.fulfilment_status === 'Ready'
+                          order.fulfilmentStatus === 'ready'
                             ? 'bg-[#014040] text-white'
                             : 'bg-slate-200 text-slate-700'
                         }`}
                       >
-                        {order.fulfilment_status}
+                        {order.fulfilmentStatus}
                       </span>
                     </div>
                   </div>
@@ -293,13 +293,13 @@ export const FindOrderView: React.FC = () => {
                   </div>
 
                   {/* STATE 1: UNPAID (Section 7) -> Show Pay button & MoMo transfer info */}
-                  {order.payment_status !== 'Paid' && (
+                  {order.paymentStatus !== 'paid' && (
                     <div className="p-5 rounded-2xl bg-[#fffaf0] border border-amber-200 space-y-3">
                       <div className="flex items-start gap-2.5">
                         <Clock className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
                         <div>
                           <h4 className="text-sm font-bold text-amber-900">
-                            Payment Pending: {formatCurrencyGHS(order.amount_ghs)}
+                            Payment Pending: {formatCurrencyGHS(order.amountGhs)}
                           </h4>
                           <p className="text-xs text-amber-800 mt-1 leading-relaxed">
                             This order is awaiting payment confirmation. You can pay securely online or transfer via MTN Mobile Money.
@@ -310,7 +310,7 @@ export const FindOrderView: React.FC = () => {
                       <div className="flex flex-wrap gap-3 pt-2">
                         <button
                           type="button"
-                          onClick={() => handleSimulatePayment(order.order_id)}
+                          onClick={() => handleSimulatePayment(order.orderId)}
                           className="px-5 py-2.5 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-xs shadow-xs transition-all cursor-pointer flex items-center gap-2"
                         >
                           <CreditCard className="w-4 h-4" />
@@ -321,9 +321,9 @@ export const FindOrderView: React.FC = () => {
                   )}
 
                   {/* STATE 2: PAID, AWAITING CUSTOMER INPUT (Lock Code / Hardware ID) (Section 4.3 & 7) */}
-                  {order.payment_status === 'Paid' &&
-                    order.customer_input_type &&
-                    !order.customer_input_value && (
+                  {order.paymentStatus === 'paid' &&
+                    order.customerInputType &&
+                    !order.customerInputValue && (
                       <div className="p-5 sm:p-6 rounded-2xl bg-[#fbfdfc] border-2 border-[#014040] space-y-4">
                         <div>
                           <h4 className="text-base font-bold text-[#014040]">
@@ -348,11 +348,11 @@ export const FindOrderView: React.FC = () => {
                           <div>
                             <input
                               type="text"
-                              value={inputValues[order.order_id] || ''}
+                              value={inputValues[order.orderId] || ''}
                               onChange={(e) =>
                                 setInputValues((prev) => ({
                                   ...prev,
-                                  [order.order_id]: e.target.value
+                                  [order.orderId]: e.target.value
                                 }))
                               }
                               placeholder={
@@ -378,10 +378,10 @@ export const FindOrderView: React.FC = () => {
 
                           <button
                             type="submit"
-                            disabled={isSubmittingInput[order.order_id]}
+                            disabled={isSubmittingInput[order.orderId]}
                             className="w-full py-3.5 px-4 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-xs sm:text-sm shadow-xs transition-all cursor-pointer disabled:opacity-50"
                           >
-                            {isSubmittingInput[order.order_id]
+                            {isSubmittingInput[order.orderId]
                               ? 'Submitting...'
                               : isHardwareId
                               ? STORE_COPY.findOrder.hardwareId.button
@@ -392,28 +392,28 @@ export const FindOrderView: React.FC = () => {
                     )}
 
                   {/* Confirmation / Error Alerts for Customer Input */}
-                  {actionSuccessMessage[order.order_id] && (
+                  {actionSuccessMessage[order.orderId] && (
                     <div className="p-4 bg-[#d9ffe0] border border-[#b2f0bf] text-[#0d6520] rounded-xl text-xs space-y-1">
                       <div className="font-bold">Input Confirmed</div>
-                      <div>{actionSuccessMessage[order.order_id]}</div>
+                      <div>{actionSuccessMessage[order.orderId]}</div>
                     </div>
                   )}
 
-                  {actionErrorMessage[order.order_id] && (
+                  {actionErrorMessage[order.orderId] && (
                     <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs space-y-1">
                       <div className="font-bold">Action Alert</div>
-                      <div>{actionErrorMessage[order.order_id]}</div>
+                      <div>{actionErrorMessage[order.orderId]}</div>
                     </div>
                   )}
 
                   {/* Display Submitted Customer Input (Section 4.3: cannot be changed) */}
-                  {order.customer_input_value && (
+                  {order.customerInputValue && (
                     <div className="p-4 bg-[#edf5f3] rounded-xl border border-[#cbe3dd] space-y-1">
                       <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
                         {STORE_COPY.findOrder.submittedStatus(inputType)}
                       </span>
                       <div className="font-mono font-bold text-sm text-[#014040] break-all">
-                        {order.customer_input_value}
+                        {order.customerInputValue}
                       </div>
                       <p className="text-xs text-slate-500 pt-1">
                         {STORE_COPY.findOrder.receivedWaiting}
@@ -422,7 +422,7 @@ export const FindOrderView: React.FC = () => {
                   )}
 
                   {/* STATE 3: SALES CODE ISSUED (Section 4 & 7) -> Sales code with Copy button, activation link, and input to save licence */}
-                  {order.sales_code && (
+                  {order.salesCode && (
                     <div className="p-5 sm:p-6 rounded-2xl bg-[#f0f7f6] border border-[#b8ded6] space-y-4">
                       <div>
                         <span className="text-xs font-bold uppercase tracking-wider text-[#014040]">
@@ -436,14 +436,14 @@ export const FindOrderView: React.FC = () => {
                       {/* Sales code display box with Copy */}
                       <div className="flex items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-[#cbdcd9]">
                         <span className="font-mono text-base font-black text-[#014040] tracking-wider">
-                          {order.sales_code}
+                          {order.salesCode}
                         </span>
                         <button
                           type="button"
-                          onClick={() => handleCopy(`sc-${order.order_id}`, order.sales_code!)}
+                          onClick={() => handleCopy(`sc-${order.orderId}`, order.salesCode!)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#edf5f3] hover:bg-[#dcefe9] text-xs font-bold text-[#014040] transition-colors cursor-pointer"
                         >
-                          {copiedKeys[`sc-${order.order_id}`] ? (
+                          {copiedKeys[`sc-${order.orderId}`] ? (
                             <>
                               <Check className="w-3.5 h-3.5 text-green-600" />
                               <span>Copied</span>
@@ -458,10 +458,10 @@ export const FindOrderView: React.FC = () => {
                       </div>
 
                       {/* Link to activation website */}
-                      {order.activation_website_url && (
+                      {order.activationWebsiteUrl && (
                         <div>
                           <a
-                            href={order.activation_website_url}
+                            href={order.activationWebsiteUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#014040] hover:bg-[#025656] text-white font-bold text-xs transition-colors shadow-2xs"
@@ -473,7 +473,7 @@ export const FindOrderView: React.FC = () => {
                       )}
 
                       {/* Field to save the licence returned by the vendor */}
-                      {!order.activation_code_or_key && (
+                      {!order.activationCodeOrKey && (
                         <div className="pt-3 border-t border-[#d8e7e4] space-y-2">
                           <label className="block text-xs font-bold text-[#014040]">
                             Paste the licence key returned by the activation website:
@@ -481,11 +481,11 @@ export const FindOrderView: React.FC = () => {
                           <div className="flex flex-col sm:flex-row gap-2">
                             <input
                               type="text"
-                              value={returnedLicenceValues[order.order_id] || ''}
+                              value={returnedLicenceValues[order.orderId] || ''}
                               onChange={(e) =>
                                 setReturnedLicenceValues((prev) => ({
                                   ...prev,
-                                  [order.order_id]: e.target.value
+                                  [order.orderId]: e.target.value
                                 }))
                               }
                               placeholder="e.g. 4A29-881F-E902-771B-943C"
@@ -505,7 +505,7 @@ export const FindOrderView: React.FC = () => {
                   )}
 
                   {/* STATE 4: READY (Section 4 & 7) -> Licence code with Copy button and Resource Links */}
-                  {order.fulfilment_status === 'Ready' && order.activation_code_or_key && (
+                  {order.fulfilmentStatus === 'ready' && order.activationCodeOrKey && (
                     <div className="space-y-4">
                       <div className="p-5 rounded-2xl bg-[#014040] text-white space-y-2 shadow-xs">
                         <div className="flex items-center justify-between">
@@ -515,11 +515,11 @@ export const FindOrderView: React.FC = () => {
                           <button
                             type="button"
                             onClick={() =>
-                              handleCopy(`lic-${order.order_id}`, order.activation_code_or_key!)
+                              handleCopy(`lic-${order.orderId}`, order.activationCodeOrKey!)
                             }
                             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition-colors cursor-pointer"
                           >
-                            {copiedKeys[`lic-${order.order_id}`] ? (
+                            {copiedKeys[`lic-${order.orderId}`] ? (
                               <>
                                 <Check className="w-3.5 h-3.5 text-[#05ef28]" />
                                 <span>Copied</span>
@@ -533,7 +533,7 @@ export const FindOrderView: React.FC = () => {
                           </button>
                         </div>
                         <div className="font-mono text-lg sm:text-xl font-black text-[#05ef28] break-all tracking-wider pt-1">
-                          {order.activation_code_or_key}
+                          {order.activationCodeOrKey}
                         </div>
                       </div>
 
@@ -543,10 +543,10 @@ export const FindOrderView: React.FC = () => {
                           Resource Links
                         </span>
                         <div className="flex flex-wrap gap-2 pt-1">
-                          {order.mac_via_parallels ? (
+                          {order.macViaParallels ? (
                             <>
                               <a
-                                href={order.windows_installer_url || '#'}
+                                href={order.windowsInstallerUrl || '#'}
                                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#cbdcd9] text-xs font-bold text-[#014040] hover:bg-[#edf5f3] shadow-2xs"
                               >
                                 <Download className="w-3.5 h-3.5 text-[#014040]" />
@@ -572,22 +572,22 @@ export const FindOrderView: React.FC = () => {
                           ) : (
                             <>
                               <a
-                                href={order.windows_installer_url || '#'}
+                                href={order.windowsInstallerUrl || '#'}
                                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#cbdcd9] text-xs font-bold text-[#014040] hover:bg-[#edf5f3] shadow-2xs"
                               >
                                 <Download className="w-3.5 h-3.5 text-[#014040]" />
                                 <span>Download Software</span>
                               </a>
                               <a
-                                href={order.guide_url || '#'}
+                                href={order.guideUrl || '#'}
                                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#cbdcd9] text-xs font-bold text-[#014040] hover:bg-[#edf5f3] shadow-2xs"
                               >
                                 <BookOpen className="w-3.5 h-3.5 text-[#014040]" />
                                 <span>Installation / Activation Instructions</span>
                               </a>
-                              {order.learning_resources_url && (
+                              {order.learningResourcesUrl && (
                                 <a
-                                  href={order.learning_resources_url}
+                                  href={order.learningResourcesUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#cbdcd9] text-xs font-bold text-[#014040] hover:bg-[#edf5f3] shadow-2xs"

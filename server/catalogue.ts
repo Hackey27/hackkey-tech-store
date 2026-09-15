@@ -1,0 +1,336 @@
+import { Firestore } from '@google-cloud/firestore';
+import {
+  Announcement,
+  Bundle,
+  CatalogResponse,
+  CatalogueItem,
+  Category,
+  Laptop,
+  MachineCodeType,
+  Product,
+  Service,
+  Variant
+} from '../src/types';
+import { COLLECTIONS, getFirestore, toIsoString } from './firestore';
+import { PRICING_CONFIG } from './pricingConfig';
+import {
+  calculateVariantPricing,
+  isProductSellable,
+  isVariantSellable,
+  resolveVariantOperatingSystem
+} from '../src/utils/pricingEngine';
+
+/** The catalogue changes rarely and every page load reads it. */
+const CACHE_TTL_MS = 60_000;
+
+interface CacheEntry {
+  response: CatalogResponse;
+  expiresAt: number;
+}
+
+let cache: CacheEntry | null = null;
+
+/** Exposed so tests and the admin portal can force a re-read. */
+export function invalidateCatalogueCache(): void {
+  cache = null;
+}
+
+async function readCollection<T>(db: Firestore, name: string): Promise<T[]> {
+  const snapshot = await db.collection(name).get();
+  return snapshot.docs.map((doc) => doc.data() as T);
+}
+
+/** Resolve pricing and OS options for one variant. */
+function hydrateVariant(variant: Variant, productId: string): Variant {
+  const pricing = calculateVariantPricing(
+    variant.priceGhs,
+    productId,
+    variant.variantId,
+    PRICING_CONFIG
+  );
+  const os = resolveVariantOperatingSystem(
+    variant.os,
+    variant.fulfilmentType,
+    variant.variantId,
+    variant.macViaParallels
+  );
+
+  return {
+    ...variant,
+    listPriceGhs: pricing.listPriceGhs,
+    payablePriceGhs: pricing.payablePriceGhs,
+    promoLabel: pricing.promoLabel,
+    promoPercent: pricing.promoPercent,
+    osList: os.osList,
+    requiresOsChoice: os.requiresChoice
+  };
+}
+
+/** What the customer must supply before this item can be activated. */
+function machineCodeType(variants: Variant[]): MachineCodeType {
+  const required = variants.find((v) => v.customerInputRequired)?.customerInputRequired;
+  if (!required) return 'none';
+  return required.toLowerCase().includes('hardware') ? 'hardware-id' : 'lock-code';
+}
+
+function productToCatalogueItem(product: Product): CatalogueItem {
+  const variants = (product.variants || []).map((v) => hydrateVariant(v, product.productId));
+  const sellable = variants.filter(isVariantSellable);
+
+  // The cheapest sellable variant is what the card advertises. A product with
+  // no sellable variant has no price rather than a price of zero.
+  const cheapest = sellable.reduce<Variant | undefined>(
+    (min, v) => (!min || (v.payablePriceGhs ?? 0) < (min.payablePriceGhs ?? 0) ? v : min),
+    undefined
+  );
+
+  const osSentence = variants.length
+    ? resolveVariantOperatingSystem(
+        variants[0].os,
+        variants[0].fulfilmentType,
+        variants[0].variantId,
+        variants[0].macViaParallels
+      ).sentence
+    : undefined;
+
+  return {
+    kind: 'product',
+    itemId: product.productId,
+    name: product.productName,
+    categoryId: product.categoryId,
+    imageUrl: product.imageUrl,
+    sortOrder: product.sortOrder ?? 0,
+    priceGhs: cheapest?.payablePriceGhs,
+    listPriceGhs: cheapest?.listPriceGhs,
+    promoLabel: cheapest?.promoLabel,
+    promoPercent: cheapest?.promoPercent,
+    availabilitySentence: osSentence,
+    osList: [...new Set(variants.flatMap((v) => v.osList || []))],
+    machineCodeType: machineCodeType(variants),
+    variants
+  };
+}
+
+function bundleToCatalogueItem(bundle: Bundle): CatalogueItem {
+  const pricing = calculateVariantPricing(
+    bundle.priceGhs,
+    bundle.bundleId,
+    bundle.bundleId,
+    PRICING_CONFIG
+  );
+
+  return {
+    kind: 'bundle',
+    itemId: bundle.bundleId,
+    name: bundle.name,
+    categoryId: bundle.categoryId,
+    description: bundle.description,
+    sortOrder: bundle.sortOrder ?? 0,
+    priceGhs: pricing.payablePriceGhs,
+    listPriceGhs: pricing.listPriceGhs,
+    promoLabel: pricing.promoLabel,
+    promoPercent: pricing.promoPercent,
+    bundle
+  };
+}
+
+function serviceToCatalogueItem(service: Service): CatalogueItem {
+  // Services are usually quoted rather than listed, so priceGhs is often
+  // absent. It must stay absent, not become 0.
+  const pricing =
+    typeof service.priceGhs === 'number' && service.priceGhs > 0
+      ? calculateVariantPricing(service.priceGhs, service.serviceId, service.serviceId, PRICING_CONFIG)
+      : undefined;
+
+  return {
+    kind: 'service',
+    itemId: service.serviceId,
+    name: service.name,
+    categoryId: service.categoryId,
+    description: service.description || service.tagline,
+    sortOrder: service.sortOrder ?? 0,
+    priceGhs: pricing?.payablePriceGhs,
+    listPriceGhs: pricing?.listPriceGhs,
+    promoLabel: pricing?.promoLabel,
+    promoPercent: pricing?.promoPercent,
+    service
+  };
+}
+
+function laptopToCatalogueItem(laptop: Laptop): CatalogueItem {
+  const pricing =
+    typeof laptop.priceGhs === 'number' && laptop.priceGhs > 0
+      ? calculateVariantPricing(laptop.priceGhs, laptop.laptopId, laptop.laptopId, PRICING_CONFIG)
+      : undefined;
+
+  const spec = [laptop.processor, laptop.ram, laptop.storage, laptop.screen]
+    .filter(Boolean)
+    .join(' · ');
+
+  return {
+    kind: 'laptop',
+    itemId: laptop.laptopId,
+    name: laptop.title,
+    categoryId: laptop.categoryId,
+    description: spec,
+    imageUrl: laptop.picturesUrl?.[0],
+    sortOrder: laptop.sortOrder ?? 0,
+    priceGhs: pricing?.payablePriceGhs,
+    listPriceGhs: pricing?.listPriceGhs,
+    promoLabel: pricing?.promoLabel,
+    promoPercent: pricing?.promoPercent,
+    availabilitySentence: laptop.availability,
+    laptop
+  };
+}
+
+/** Announcements are returned only while active and inside their window. */
+function selectAnnouncement(announcements: Announcement[], now: Date): Announcement | undefined {
+  return announcements
+    .filter((a) => {
+      if (!a.active) return false;
+      const startsAt = toIsoString(a.startsAt);
+      const endsAt = toIsoString(a.endsAt);
+      if (startsAt && new Date(startsAt) > now) return false;
+      if (endsAt && new Date(endsAt) < now) return false;
+      return true;
+    })
+    .sort((a, b) => (toIsoString(b.createdAt) || '').localeCompare(toIsoString(a.createdAt) || ''))[0];
+}
+
+function matchesSearch(item: CatalogueItem, query: string): boolean {
+  const haystack = [
+    item.name,
+    item.description,
+    item.categoryId,
+    ...(item.variants || []).map((v) => v.versionOrPlan)
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(query);
+}
+
+async function buildCatalogue(): Promise<CatalogResponse> {
+  const db = getFirestore();
+
+  const [categories, products, bundles, services, laptops, announcements] = await Promise.all([
+    readCollection<Category>(db, COLLECTIONS.categories),
+    readCollection<Product>(db, COLLECTIONS.products),
+    readCollection<Bundle>(db, COLLECTIONS.bundles),
+    readCollection<Service>(db, COLLECTIONS.services),
+    readCollection<Laptop>(db, COLLECTIONS.laptops),
+    readCollection<Announcement>(db, COLLECTIONS.announcements)
+  ]);
+
+  const activeProducts = products.filter((p) => p.active);
+  const activeBundles = bundles.filter((b) => b.active);
+  const activeServices = services.filter((s) => s.active);
+  const activeLaptops = laptops.filter((l) => l.active);
+
+  // Bundles, services and laptops join products in one catalogue, each tagged
+  // with its kind. Without this the Services, Bundles and Laptops categories
+  // render empty however much data Firestore holds.
+  const items: CatalogueItem[] = [
+    ...activeProducts.map(productToCatalogueItem).filter((item) =>
+      isProductSellable({
+        productId: item.itemId,
+        productName: item.name,
+        categoryId: item.categoryId,
+        active: true,
+        variants: item.variants || []
+      })
+    ),
+    ...activeBundles.map(bundleToCatalogueItem),
+    ...activeServices.map(serviceToCatalogueItem),
+    ...activeLaptops.map(laptopToCatalogueItem)
+  ].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+
+  const categoryNames = new Map(categories.map((c) => [c.categoryId, c.name]));
+  items.forEach((item) => {
+    item.categoryName = categoryNames.get(item.categoryId);
+  });
+
+  const activeCategories = categories
+    .filter((c) => c.active)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    .map((category) => ({
+      ...category,
+      // Derived, never stored: a stored copy goes stale as soon as the
+      // catalogue changes.
+      representativeItems: items
+        .filter((item) => item.categoryId === category.categoryId)
+        .slice(0, 8)
+        .map((item) => item.name)
+    }));
+
+  return {
+    categories: activeCategories,
+    products: items,
+    bundles: activeBundles,
+    services: activeServices,
+    laptops: activeLaptops,
+    totalProducts: items.length,
+    source: 'Firestore',
+    timestamp: new Date().toISOString(),
+    announcement: selectAnnouncement(announcements, new Date())
+  };
+}
+
+/**
+ * The catalogue response, cached in memory for 60 seconds.
+ *
+ * Filtering is applied to the cached copy rather than the query, so a search
+ * never costs a Firestore read.
+ */
+export async function getCatalogue(
+  categoryFilter?: string,
+  searchQuery?: string
+): Promise<CatalogResponse> {
+  const now = Date.now();
+  if (!cache || cache.expiresAt <= now) {
+    cache = { response: await buildCatalogue(), expiresAt: now + CACHE_TTL_MS };
+  }
+
+  const base = cache.response;
+  const category = categoryFilter?.trim();
+  const query = searchQuery?.trim().toLowerCase();
+
+  if (!category && !query) return base;
+
+  let items = base.products;
+  if (category && category !== 'all') {
+    items = items.filter((item) => item.categoryId === category);
+  }
+  if (query) {
+    items = items.filter((item) => matchesSearch(item, query));
+  }
+
+  const keptIds = new Set(items.map((item) => item.itemId));
+
+  return {
+    ...base,
+    products: items,
+    bundles: base.bundles.filter((b) => keptIds.has(b.bundleId)),
+    services: base.services.filter((s) => keptIds.has(s.serviceId)),
+    laptops: base.laptops.filter((l) => keptIds.has(l.laptopId)),
+    totalProducts: items.length,
+    timestamp: new Date().toISOString()
+  };
+}
+
+/** Look up one variant, with its product, for order placement. */
+export async function findVariant(
+  variantId: string
+): Promise<{ product: Product; variant: Variant } | null> {
+  const db = getFirestore();
+  const products = await readCollection<Product>(db, COLLECTIONS.products);
+
+  for (const product of products) {
+    const variant = (product.variants || []).find((v) => v.variantId === variantId);
+    if (variant) {
+      return { product, variant: hydrateVariant(variant, product.productId) };
+    }
+  }
+  return null;
+}

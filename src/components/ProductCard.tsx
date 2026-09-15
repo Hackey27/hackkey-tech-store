@@ -1,12 +1,12 @@
 import React from 'react';
-import { Product } from '../types';
+import { CatalogueItem } from '../types';
 import { Laptop, CheckCircle, ChevronRight, Sparkles } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 
 interface ProductCardProps {
-  product: Product;
-  onSelect: (product: Product) => void;
-  onBuyNowClick: (product: Product) => void;
+  product: CatalogueItem;
+  onSelect: (product: CatalogueItem) => void;
+  onBuyNowClick: (product: CatalogueItem) => void;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
@@ -16,17 +16,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const hasMultipleVariants = product.variants && product.variants.length > 1;
 
-  const productName = product.product_name || product.name || 'Software';
+  const productName = product.name || 'Software';
 
   // Format GHS price string: From ₵... or ₵...
   const firstVariant = product.variants?.[0];
-  const firstVariantPrice = firstVariant?.payable_price_ghs ?? firstVariant?.price_ghs ?? firstVariant?.priceGhs ?? 0;
-  const minPrice = product.min_price_ghs ?? product.minPriceGhs ?? (firstVariantPrice > 0 ? firstVariantPrice : 0);
+  const firstVariantPrice = firstVariant?.payablePriceGhs ?? firstVariant?.priceGhs ?? 0;
+  const minPrice = product.priceGhs ?? (firstVariantPrice > 0 ? firstVariantPrice : 0);
 
   const displayPrice = hasMultipleVariants && minPrice > 0
     ? STORE_COPY.product.fromPrice(`₵${minPrice.toLocaleString()}`)
-    : product.price_ghs || product.priceGhs
-    ? `₵${(product.price_ghs ?? product.priceGhs ?? 0).toLocaleString()}`
+    : product.priceGhs
+    ? `₵${(product.priceGhs ?? 0).toLocaleString()}`
     : firstVariantPrice > 0
     ? `₵${firstVariantPrice.toLocaleString()}`
     : '₵0.00';
@@ -45,11 +45,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   return (
     <div
-      id={`product-card-${product.id}`}
+      id={`product-card-${product.itemId}`}
       className="group flex flex-col justify-between rounded-2xl bg-white border border-[#d8e7e4] hover:border-[#014040]/70 hover:shadow-md transition-all duration-200 overflow-hidden text-slate-900"
     >
       <div className="p-5 sm:p-6">
-        {/* Top bar: Product Image/Logo Area + Category Label */}
+        {/* Top bar: CatalogueItem Image/Logo Area + Category Label */}
         <div className="flex items-start justify-between gap-3 mb-4">
           <div
             onClick={() => onSelect(product)}
@@ -66,7 +66,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
           <div className="text-right">
             <span className="inline-block text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#edf5f3] text-[#014040] border border-[#d0e4e0]">
-              {product.categoryName || product.category || 'Software'}
+              {product.categoryName || 'Software'}
             </span>
             {hasMultipleVariants && (
               <span className="block text-[10px] text-slate-500 mt-1 font-medium">
@@ -90,10 +90,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </p>
 
         {/* OS Compatibility badges */}
-        {product.osCompatibility && product.osCompatibility.length > 0 && (
+        {product.osList && product.osList.length > 0 && (
           <div className="mt-3.5 flex items-center gap-1.5 flex-wrap">
             <span className="text-[11px] text-slate-500 font-medium">Platform:</span>
-            {product.osCompatibility.map((os, idx) => (
+            {product.osList.map((os, idx) => (
               <span
                 key={idx}
                 className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-[#f1f6f5] text-slate-700 border border-[#dbe8e5]"
@@ -105,15 +105,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         )}
 
         {/* Highlighted recommended version if present */}
-        {product.variants && product.variants.some((v) => v.latest || v.isRecommended) && (
+        {product.variants && product.variants.some((v) => v.latest) && (
           <div className="mt-3 text-[11px] flex items-center gap-1.5 text-[#014040] font-medium bg-[#f0f8f6] px-2.5 py-1 rounded-lg border border-[#cbe5df]">
             <CheckCircle className="w-3.5 h-3.5 text-[#05ef28] shrink-0" />
             <span>
               {STORE_COPY.product.latest}:{' '}
               <strong>
                 {
-                  product.variants.find((v) => v.latest || v.isRecommended)?.version_or_plan ||
-                  product.variants.find((v) => v.latest || v.isRecommended)?.version
+                  product.variants.find((v) => v.latest)?.versionOrPlan
                 }
               </strong>{' '}
               ({STORE_COPY.product.recommended})
@@ -136,7 +135,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
         {/* Primary Action Button */}
         <button
-          id={`product-action-btn-${product.id}`}
+          id={`product-action-btn-${product.itemId}`}
           onClick={() => {
             if (hasMultipleVariants) {
               onSelect(product);

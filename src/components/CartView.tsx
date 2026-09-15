@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { Product, ProductVariant } from '../types';
+import { CatalogueItem, Variant } from '../types';
 import { ShoppingBag, Trash2, ChevronRight, Check } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
 import { STORE_COPY } from '../config/storeCopy';
 
 export interface CartItem {
   id: string;
-  product: Product;
-  variant?: ProductVariant;
+  product: CatalogueItem;
+  variant?: Variant;
   selectedOs?: string;
   quantity: number;
 }
@@ -36,7 +36,7 @@ export const CartView: React.FC<CartViewProps> = ({
   const [orderComplete, setOrderComplete] = useState(false);
 
   const totalGhs = items.reduce((sum, item) => {
-    const price = item.variant?.priceGhs ?? item.product.priceGhs ?? item.product.minPriceGhs ?? 0;
+    const price = item.variant?.priceGhs ?? item.product.priceGhs ?? 0;
     return sum + price * item.quantity;
   }, 0);
 
@@ -59,41 +59,36 @@ export const CartView: React.FC<CartViewProps> = ({
           phone: cPhone.trim(),
           email: cEmail.trim(),
           items: items.map((item) => {
-            const pName = item.product.product_name || item.product.name || 'Software';
-            const pId = item.product.product_id || item.product.id || 'PROD';
-            const vPlan = item.variant?.version_or_plan || item.variant?.version || 'Standard';
+            const pName = item.product.name || 'Software';
+            const pId = item.product.itemId;
+            const vPlan = item.variant?.versionOrPlan || 'Standard';
             const price =
-              item.variant?.payable_price_ghs ??
-              item.variant?.price_ghs ??
-              item.variant?.priceGhs ??
-              item.product.min_price_ghs ??
-              item.product.minPriceGhs ??
-              item.product.price_ghs ??
-              item.product.priceGhs ??
-              0;
+              item.variant?.payablePriceGhs ?? item.variant?.priceGhs ?? item.product.priceGhs ?? 0;
             const inputType =
-              item.product.customer_input_type ||
-              (item.product.machineCodeType === 'lock-code'
+              item.product.machineCodeType === 'lock-code'
                 ? 'Lock Code'
                 : item.product.machineCodeType === 'hardware-id'
-                ? 'Hardware ID'
-                : undefined);
+                  ? 'Hardware ID'
+                  : undefined;
             const isParallels =
-              Boolean(item.variant?.mac_via_parallels) ||
+              Boolean(item.variant?.macViaParallels) ||
               (item.selectedOs?.toLowerCase().includes('mac') &&
-                (item.variant?.os === 'Windows' || item.product.platform === 'Windows'));
+                (item.variant?.os === 'Windows' || item.product.osList?.join(", ") === 'Windows'));
 
             return {
+              // The server resolves the order from the variant, so this is the
+              // field checkout actually depends on.
+              variantId: item.variant?.variantId || item.product.variants?.[0]?.variantId,
               productId: pId,
               productName: pName,
               versionOrPlan: vPlan,
-              deliveryOs: item.selectedOs || item.variant?.os || item.product.platform || 'Windows',
+              deliveryOs: item.selectedOs || item.variant?.os || item.product.osList?.join(", ") || 'Windows',
               amountGhs: price,
               quantity: item.quantity,
               customerInputType: inputType,
-              installerUrl: item.variant?.windows_installer_url || item.product.installerUrl,
-              guideUrl: item.variant?.guide_url || item.product.guideUrl,
-              learningUrl: item.variant?.learning_resources_url || item.product.learningResourcesUrl,
+              installerUrl: item.variant?.windowsInstallerUrl || item.product.variants?.[0]?.windowsInstallerUrl,
+              guideUrl: item.variant?.guideUrl || item.product.variants?.[0]?.guideUrl,
+              learningUrl: item.variant?.learningResourcesUrl || item.product.variants?.[0]?.learningResourcesUrl,
               isParallels
             };
           })
@@ -105,7 +100,7 @@ export const CartView: React.FC<CartViewProps> = ({
         throw new Error(data.error || 'Failed to submit order');
       }
 
-      setCreatedOrderIds(data.orders?.map((o: any) => o.order_id) || []);
+      setCreatedOrderIds(data.orders?.map((o: any) => o.orderId) || []);
       setOrderComplete(true);
       onClearCart();
     } catch (err: any) {
@@ -154,7 +149,7 @@ export const CartView: React.FC<CartViewProps> = ({
           {/* Item List */}
           <div className="lg:col-span-8 space-y-3">
             {items.map((item) => {
-              const itemPrice = item.variant?.priceGhs ?? item.product.priceGhs ?? item.product.minPriceGhs ?? 0;
+              const itemPrice = item.variant?.priceGhs ?? item.product.priceGhs ?? 0;
               return (
                 <div
                   key={item.id}
@@ -162,16 +157,16 @@ export const CartView: React.FC<CartViewProps> = ({
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-[#edf5f3] text-[#014040] font-black flex items-center justify-center text-sm shrink-0 border border-[#cbe3dd]">
-                      {(item.product.product_name || item.product.name || 'SW').slice(0, 2).toUpperCase()}
+                      {(item.product.name || 'SW').slice(0, 2).toUpperCase()}
                     </div>
                     <div>
                       <h3 className="text-sm sm:text-base font-bold text-[#014040]">
-                        {item.product.product_name || item.product.name}
+                        {item.product.name}
                       </h3>
                       <div className="text-xs text-slate-600 flex flex-wrap gap-2 mt-0.5">
                         {item.variant && (
                           <span className="font-semibold text-slate-800">
-                            {item.variant.version_or_plan || item.variant.version}
+                            {item.variant.versionOrPlan}
                           </span>
                         )}
                         {item.selectedOs && (
