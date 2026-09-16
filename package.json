@@ -9,7 +9,8 @@
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist-server/server.cjs",
     "start": "node dist-server/server.cjs",
     "test": "tsx --test tests/*.test.ts",
-    "seed": "tsx scripts/migrate-sheet-to-firestore.ts --seed-turnitin"
+    "seed": "tsx scripts/migrate-sheet-to-firestore.ts --seed-turnitin",
+    "test:e2e": "tsx tests/payments-e2e.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^9.1.0",

@@ -11,10 +11,19 @@ import {
   listOrders,
   listRequests,
   lookupOrdersByPhone,
+  recordPaystackReference,
   saveServiceAnswers,
   submitCustomerInput
 } from './server/orders';
 import { findService } from './server/catalogue';
+import { applyVerifiedPayment } from './server/payments';
+import {
+  assertPaymentConfig,
+  initialiseTransaction,
+  paymentMode,
+  referenceForOrder,
+  verifyWebhookSignature
+} from './server/paystack';
 import {
   confirmUpload,
   createSignedDownload,
@@ -50,7 +59,64 @@ function failed(res: Response, err: unknown, message: string, status = 500) {
 }
 
 async function startServer() {
+  // Refuse to start in production without payment configuration, and log the
+  // mode (never the key).
+  assertPaymentConfig();
+
   const app = express();
+
+  // ---- Paystack webhook -------------------------------------------------
+  //
+  // Mounted BEFORE the global JSON parser and with a raw body parser, because
+  // the signature is computed over the exact bytes Paystack sent. Once
+  // express.json() has parsed and re-serialised the body the hash no longer
+  // matches, and the failure looks like a configuration problem rather than a
+  // parsing one.
+  app.post(
+    '/api/paystack/webhook',
+    express.raw({ type: 'application/json' }),
+    async (req: Request, res: Response) => {
+      const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(String(req.body || ''));
+
+      if (!verifyWebhookSignature(raw, req.header('x-paystack-signature'))) {
+        console.error('[webhook] Rejected: signature did not verify.');
+        return res.status(401).json({ error: 'Invalid signature.' });
+      }
+
+      let event: any;
+      try {
+        event = JSON.parse(raw.toString('utf8'));
+      } catch {
+        return res.status(400).json({ error: 'Malformed body.' });
+      }
+
+      // Acknowledge everything we do not handle. Paystack retries on non-2xx.
+      if (event?.event !== 'charge.success') {
+        return res.status(200).json({ received: true, ignored: event?.event });
+      }
+
+      // ONLY the reference is taken from the payload. Everything that matters —
+      // status, amount, currency — is re-verified against Paystack's API, so a
+      // replayed or tampered body cannot move an order even with a valid
+      // signature over it.
+      const reference = String(event?.data?.reference || '');
+      if (!reference) {
+        return res.status(200).json({ received: true, ignored: 'no reference' });
+      }
+
+      // Acknowledge first: a slow handler turns one payment into several
+      // retries. The work continues after the response.
+      res.status(200).json({ received: true });
+
+      try {
+        const outcome = await applyVerifiedPayment(reference);
+        console.log(`[webhook] ${reference}: ${outcome.result}`);
+      } catch (err) {
+        console.error(`[webhook] Failed to apply ${reference}:`, err);
+      }
+    }
+  );
+
   app.use(express.json());
 
   // Health endpoint
@@ -62,7 +128,10 @@ async function startServer() {
       environment: process.env.NODE_ENV || 'development',
       dataSource: 'Firestore',
       currency: 'GHS',
-      timezone: 'Africa/Accra'
+      timezone: 'Africa/Accra',
+      // Without this you will, at some point, believe live orders are test
+      // orders.
+      paymentMode: paymentMode()
     };
     res.json(healthData);
   });
@@ -126,10 +195,81 @@ async function startServer() {
     }
 
     try {
+      // Priced entirely from the catalogue. `items` names what was chosen —
+      // variant ids, option ids, quantities — never what it costs.
       const orders = await createOrders({ customerName, phone, email, items });
-      res.json({ success: true, orders, cartId: orders[0]?.cartId });
+      if (!orders.length) {
+        return res.status(400).json({ error: 'Nothing to pay for.' });
+      }
+
+      const totalPesewas = orders.reduce((sum, o) => sum + o.amountPesewas, 0);
+      const primary = orders[0];
+      const reference = referenceForOrder(primary.orderId);
+
+      try {
+        const init = await initialiseTransaction({
+          email: primary.email,
+          amountPesewas: totalPesewas,
+          reference,
+          orderId: primary.orderId
+        });
+
+        await recordPaystackReference(orders, init.reference);
+
+        res.json({
+          success: true,
+          orders,
+          cartId: primary.cartId,
+          reference: init.reference,
+          authorizationUrl: init.authorizationUrl
+        });
+      } catch (err) {
+        // The order stays Pending Payment. An orphaned pending order is
+        // diagnosable; a vanished one is not, so it is never deleted.
+        console.error('[checkout] Paystack initialise failed:', err);
+        res.status(502).json({
+          error: 'We could not start the payment. Please try again.',
+          orders,
+          reference
+        });
+      }
     } catch (err) {
       failed(res, err, 'Failed to place order', 400);
+    }
+  });
+
+  // ---- Payment return ---------------------------------------------------
+  //
+  // The customer's browser lands here after Paystack. A navigation is NOT
+  // proof of payment — the URL can be edited — so it is treated purely as a
+  // prompt to check, and the order is rendered from the database afterwards.
+  app.get('/api/payments/return', async (req: Request, res: Response) => {
+    // Paystack has historically sent both; read reference, fall back to trxref.
+    const reference = String(req.query.reference || req.query.trxref || '');
+    if (!reference) {
+      return res.status(400).json({ error: 'No payment reference was supplied.' });
+    }
+
+    try {
+      const outcome = await applyVerifiedPayment(reference);
+      // Rendered from the database, not from the query string and not from the
+      // verification response.
+      const order = await getOrder(reference);
+
+      if (!order) {
+        return res.status(404).json({ error: 'We could not find that order.', reference });
+      }
+
+      res.json({
+        reference,
+        order,
+        // Not "payment failed": the webhook frequently lands first, and a
+        // customer told their successful payment failed will pay twice.
+        confirmed: order.paymentStatus === 'paid',
+        pending: outcome.result === 'not-successful' && order.paymentStatus !== 'paid'
+      });
+    } catch (err) {
+      failed(res, err, 'Failed to confirm the payment');
     }
   });
 

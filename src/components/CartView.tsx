@@ -3,7 +3,7 @@ import { CatalogueItem, Variant, ServiceOption } from '../types';
 import { ShoppingBag, Trash2, ChevronRight, Check } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
 import { STORE_COPY } from '../config/storeCopy';
-import { formatPesewas, priceServiceLine } from '../utils/money';
+import { cedisToPesewas, formatPesewas, priceServiceLine } from '../utils/money';
 
 export interface CartItem {
   id: string;
@@ -39,7 +39,7 @@ export const CartView: React.FC<CartViewProps> = ({
   const [orderComplete, setOrderComplete] = useState(false);
 
   const totalGhs = items.reduce((sum, item) => {
-    const price = item.variant?.priceGhs ?? item.product.priceGhs ?? 0;
+    const price = cedisToPesewas(item.variant?.priceGhs ?? 0) ?? item.product.pricePesewas ?? 0;
     return sum + price * item.quantity;
   }, 0);
 
@@ -61,53 +61,21 @@ export const CartView: React.FC<CartViewProps> = ({
           customerName: `${cFirst.trim()} ${cLast.trim()}`,
           phone: cPhone.trim(),
           email: cEmail.trim(),
+          // The browser sends what was CHOSEN, never what it costs: the
+          // server prices every line from the catalogue. Anything else here
+          // would be a number a customer can edit.
           items: items.map((item) => {
-            const pName = item.product.name || 'Software';
-            const pId = item.product.itemId;
-            const vPlan = item.variant?.versionOrPlan || 'Standard';
-            const price = item.serviceOption
-              ? priceServiceLine(item.serviceOption, item.quantity).totalPesewas / 100
-              : item.variant?.payablePriceGhs ?? item.variant?.priceGhs ?? item.product.priceGhs ?? 0;
-            const inputType =
-              item.product.machineCodeType === 'lock-code'
-                ? 'Lock Code'
-                : item.product.machineCodeType === 'hardware-id'
-                  ? 'Hardware ID'
-                  : undefined;
-            const isParallels =
-              Boolean(item.variant?.macViaParallels) ||
-              (item.selectedOs?.toLowerCase().includes('mac') &&
-                (item.variant?.os === 'Windows' || item.product.osList?.join(", ") === 'Windows'));
-
-            // A service line is resolved from its service and option; the
-            // server prices it again rather than trusting the browser.
-            if (item.serviceOption) {
-              return {
-                serviceId: item.product.itemId,
-                optionId: item.serviceOption.optionId,
-                quantity: item.quantity,
-                productName: pName,
-                versionOrPlan: item.serviceOption.name,
-                amountGhs: price
-              };
-            }
-
-            return {
-              // The server resolves the order from the variant, so this is the
-              // field checkout actually depends on.
-              variantId: item.variant?.variantId || item.product.variants?.[0]?.variantId,
-              productId: pId,
-              productName: pName,
-              versionOrPlan: vPlan,
-              deliveryOs: item.selectedOs || item.variant?.os || item.product.osList?.join(", ") || 'Windows',
-              amountGhs: price,
-              quantity: item.quantity,
-              customerInputType: inputType,
-              installerUrl: item.variant?.windowsInstallerUrl || item.product.variants?.[0]?.windowsInstallerUrl,
-              guideUrl: item.variant?.guideUrl || item.product.variants?.[0]?.guideUrl,
-              learningUrl: item.variant?.learningResourcesUrl || item.product.variants?.[0]?.learningResourcesUrl,
-              isParallels
-            };
+            return item.serviceOption
+              ? {
+                  serviceId: item.product.itemId,
+                  optionId: item.serviceOption.optionId,
+                  quantity: item.quantity
+                }
+              : {
+                  variantId: item.variant?.variantId || item.product.variants?.[0]?.variantId,
+                  selectedOs: item.selectedOs || item.variant?.os || item.product.osList?.[0],
+                  quantity: item.quantity
+                };
           })
         })
       });
@@ -118,8 +86,17 @@ export const CartView: React.FC<CartViewProps> = ({
       }
 
       setCreatedOrderIds(data.orders?.map((o: any) => o.orderId) || []);
-      setOrderComplete(true);
       onClearCart();
+
+      // Hand the browser to Paystack. Payment is never recorded here: the
+      // order becomes paid only when the webhook or the return handler has
+      // verified the reference against Paystack's API.
+      if (data.authorizationUrl) {
+        window.location.href = data.authorizationUrl;
+        return;
+      }
+
+      setOrderComplete(true);
     } catch (err: any) {
       setCheckoutError(err.message || 'Error processing checkout');
     } finally {
@@ -166,7 +143,7 @@ export const CartView: React.FC<CartViewProps> = ({
           {/* Item List */}
           <div className="lg:col-span-8 space-y-3">
             {items.map((item) => {
-              const itemPrice = item.variant?.priceGhs ?? item.product.priceGhs ?? 0;
+              const itemPrice = cedisToPesewas(item.variant?.priceGhs ?? 0) ?? item.product.pricePesewas ?? 0;
               return (
                 <div
                   key={item.id}

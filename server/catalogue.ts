@@ -15,12 +15,11 @@ import { COLLECTIONS, getFirestore, toIsoString } from './firestore';
 import { PRICING_CONFIG } from './pricingConfig';
 import {
   applyPricingRules,
+  cedisToPesewas,
   cheapestOptionPesewas,
-  pesewasToCedis,
   serviceTargetIds
 } from '../src/utils/money';
 import {
-  calculateVariantPricing,
   isProductSellable,
   isVariantSellable,
   resolveVariantOperatingSystem
@@ -48,10 +47,11 @@ async function readCollection<T>(db: Firestore, name: string): Promise<T[]> {
 
 /** Resolve pricing and OS options for one variant. */
 function hydrateVariant(variant: Variant, productId: string): Variant {
-  const pricing = calculateVariantPricing(
-    variant.priceGhs,
-    productId,
-    variant.variantId,
+  // The workbook price is cedis; it becomes pesewas here, at the single
+  // boundary, and every calculation downstream is integer arithmetic.
+  const pricing = applyPricingRules(
+    cedisToPesewas(variant.priceGhs),
+    [productId, variant.variantId],
     PRICING_CONFIG
   );
   const os = resolveVariantOperatingSystem(
@@ -63,8 +63,8 @@ function hydrateVariant(variant: Variant, productId: string): Variant {
 
   return {
     ...variant,
-    listPriceGhs: pricing.listPriceGhs,
-    payablePriceGhs: pricing.payablePriceGhs,
+    listPricePesewas: pricing.listPesewas,
+    payablePricePesewas: pricing.payablePesewas,
     promoLabel: pricing.promoLabel,
     promoPercent: pricing.promoPercent,
     osList: os.osList,
@@ -86,7 +86,7 @@ function productToCatalogueItem(product: Product): CatalogueItem {
   // The cheapest sellable variant is what the card advertises. A product with
   // no sellable variant has no price rather than a price of zero.
   const cheapest = sellable.reduce<Variant | undefined>(
-    (min, v) => (!min || (v.payablePriceGhs ?? 0) < (min.payablePriceGhs ?? 0) ? v : min),
+    (min, v) => (!min || (v.payablePricePesewas ?? 0) < (min.payablePricePesewas ?? 0) ? v : min),
     undefined
   );
 
@@ -106,8 +106,8 @@ function productToCatalogueItem(product: Product): CatalogueItem {
     categoryId: product.categoryId,
     imageUrl: product.imageUrl,
     sortOrder: product.sortOrder ?? 0,
-    priceGhs: cheapest?.payablePriceGhs,
-    listPriceGhs: cheapest?.listPriceGhs,
+    pricePesewas: cheapest?.payablePricePesewas,
+    listPricePesewas: cheapest?.listPricePesewas,
     promoLabel: cheapest?.promoLabel,
     promoPercent: cheapest?.promoPercent,
     availabilitySentence: osSentence,
@@ -118,10 +118,9 @@ function productToCatalogueItem(product: Product): CatalogueItem {
 }
 
 function bundleToCatalogueItem(bundle: Bundle): CatalogueItem {
-  const pricing = calculateVariantPricing(
-    bundle.priceGhs,
-    bundle.bundleId,
-    bundle.bundleId,
+  const pricing = applyPricingRules(
+    cedisToPesewas(bundle.priceGhs),
+    [bundle.bundleId],
     PRICING_CONFIG
   );
 
@@ -132,8 +131,8 @@ function bundleToCatalogueItem(bundle: Bundle): CatalogueItem {
     categoryId: bundle.categoryId,
     description: bundle.description,
     sortOrder: bundle.sortOrder ?? 0,
-    priceGhs: pricing.payablePriceGhs,
-    listPriceGhs: pricing.listPriceGhs,
+    pricePesewas: pricing.payablePesewas,
+    listPricePesewas: pricing.listPesewas,
     promoLabel: pricing.promoLabel,
     promoPercent: pricing.promoPercent,
     bundle
@@ -157,8 +156,8 @@ function serviceToCatalogueItem(service: Service): CatalogueItem {
     categoryId: service.categoryId,
     description: service.description || service.tagline,
     sortOrder: service.sortOrder ?? 0,
-    priceGhs: pricing ? pesewasToCedis(pricing.payablePesewas) : undefined,
-    listPriceGhs: pricing ? pesewasToCedis(pricing.listPesewas) : undefined,
+    pricePesewas: pricing?.payablePesewas,
+    listPricePesewas: pricing?.listPesewas,
     promoLabel: pricing?.promoLabel,
     promoPercent: pricing?.promoPercent,
     // A service is never licence-delivered, so the fulfilment workflow must not
@@ -177,7 +176,7 @@ function serviceToCatalogueItem(service: Service): CatalogueItem {
 function laptopToCatalogueItem(laptop: Laptop): CatalogueItem {
   const pricing =
     typeof laptop.priceGhs === 'number' && laptop.priceGhs > 0
-      ? calculateVariantPricing(laptop.priceGhs, laptop.laptopId, laptop.laptopId, PRICING_CONFIG)
+      ? applyPricingRules(cedisToPesewas(laptop.priceGhs), [laptop.laptopId], PRICING_CONFIG)
       : undefined;
 
   const spec = [laptop.processor, laptop.ram, laptop.storage, laptop.screen]
@@ -192,8 +191,8 @@ function laptopToCatalogueItem(laptop: Laptop): CatalogueItem {
     description: spec,
     imageUrl: laptop.picturesUrl?.[0],
     sortOrder: laptop.sortOrder ?? 0,
-    priceGhs: pricing?.payablePriceGhs,
-    listPriceGhs: pricing?.listPriceGhs,
+    pricePesewas: pricing?.payablePesewas,
+    listPricePesewas: pricing?.listPesewas,
     promoLabel: pricing?.promoLabel,
     promoPercent: pricing?.promoPercent,
     availabilitySentence: laptop.availability,

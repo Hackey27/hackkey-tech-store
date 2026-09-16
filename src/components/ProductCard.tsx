@@ -20,13 +20,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   // Format GHS price string: From ₵... or ₵...
   const firstVariant = product.variants?.[0];
-  const firstVariantPrice = firstVariant?.payablePriceGhs ?? firstVariant?.priceGhs ?? 0;
-  const minPrice = product.priceGhs ?? (firstVariantPrice > 0 ? firstVariantPrice : 0);
+  const firstVariantPrice = firstVariant?.payablePricePesewas ?? firstVariant?.priceGhs ?? 0;
+  const minPrice = product.pricePesewas ?? (firstVariantPrice > 0 ? firstVariantPrice : 0);
 
   const displayPrice = hasMultipleVariants && minPrice > 0
     ? STORE_COPY.product.fromPrice(`₵${minPrice.toLocaleString()}`)
-    : product.priceGhs
-    ? `₵${(product.priceGhs ?? 0).toLocaleString()}`
+    : product.pricePesewas
+    ? `₵${(product.pricePesewas ?? 0).toLocaleString()}`
     : firstVariantPrice > 0
     ? `₵${firstVariantPrice.toLocaleString()}`
     : '₵0.00';

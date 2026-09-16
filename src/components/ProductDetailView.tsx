@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
 import { STORE_COPY } from '../config/storeCopy';
-import { formatCurrencyGHS } from '../utils/pricingEngine';
+import { cedisToPesewas, formatPesewas } from '../utils/money';
 import { ServicePurchasePanel } from './ServicePurchasePanel';
 
 interface ProductDetailViewProps {
@@ -49,9 +49,9 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
 
   // Active price in GHS
   const currentPriceGhs =
-    selectedVariant?.payablePriceGhs ??
-    selectedVariant?.priceGhs ??
-    product.priceGhs ??
+    selectedVariant?.payablePricePesewas ??
+    cedisToPesewas(selectedVariant?.priceGhs ?? 0) ??
+    product.pricePesewas ??
     0;
 
   // Active step for progress preview
@@ -229,8 +229,8 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                       </div>
                       <div className="text-right">
                         <span className="text-sm font-black text-[#014040]">
-                          {formatCurrencyGHS(
-                            recommendedVariant.payablePriceGhs ??
+                          {formatPesewas(
+                            recommendedVariant.payablePricePesewas ??
                               recommendedVariant.priceGhs ??
                               0
                           )}
@@ -248,8 +248,8 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                           const isSelected =
                             (selectedVariant?.variantId) === vKey;
                           const vPrice =
-                            variant.payablePriceGhs ??
-                            variant.priceGhs ??
+                            variant.payablePricePesewas ??
+                            cedisToPesewas(variant.priceGhs ?? 0) ??
                             0;
 
                           return (
@@ -269,7 +269,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                             >
                               <span>{variant.versionOrPlan}</span>
                               <span className="font-bold text-[#014040]">
-                                {formatCurrencyGHS(vPrice)}
+                                {formatPesewas(vPrice)}
                               </span>
                             </div>
                           );
@@ -296,7 +296,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                     Price
                   </span>
                   <div className="text-2xl font-black text-[#014040]">
-                    {formatCurrencyGHS(currentPriceGhs)}
+                    {formatPesewas(currentPriceGhs)}
                   </div>
                 </div>
 

@@ -11,7 +11,12 @@ import {
 } from '../src/types';
 import { COLLECTIONS, getFirestore } from './firestore';
 import { findService, findVariant } from './catalogue';
-import { applyPricingRules, pesewasToCedis, priceServiceLine, serviceTargetIds } from '../src/utils/money';
+import {
+  applyPricingRules,
+  cedisToPesewas,
+  priceServiceLine,
+  serviceTargetIds
+} from '../src/utils/money';
 import { PRICING_CONFIG } from './pricingConfig';
 
 /** Orders for a service are fulfilled by hand and never touch the licence pool. */
@@ -122,8 +127,8 @@ async function createServiceOrder(
     serviceOptionId: option.optionId,
     quantity,
     deliveryOs: '',
-    amountGhs: pesewasToCedis(applied.payablePesewas),
-    originalAmountGhs: pesewasToCedis(applied.listPesewas),
+    amountPesewas: applied.payablePesewas,
+    originalAmountPesewas: applied.listPesewas,
     paymentStatus: 'pending',
     fulfilmentStatus: 'pending-payment',
     fulfilmentType: SERVICE_FULFILMENT_TYPE,
@@ -170,8 +175,8 @@ export async function createOrders(request: CheckoutRequest): Promise<Order[]> {
         productName: product.productName,
         versionOrPlan: variant.versionOrPlan,
         deliveryOs: item.selectedOs || variant.osList?.[0] || variant.os || '',
-        amountGhs: variant.payablePriceGhs ?? variant.priceGhs,
-        originalAmountGhs: variant.listPriceGhs ?? variant.priceGhs,
+        amountPesewas: variant.payablePricePesewas ?? cedisToPesewas(variant.priceGhs),
+        originalAmountPesewas: variant.listPricePesewas ?? cedisToPesewas(variant.priceGhs),
         paymentStatus: 'pending',
         fulfilmentStatus: 'pending-payment',
         fulfilmentType: variant.fulfilmentType,
@@ -194,15 +199,48 @@ export async function createOrders(request: CheckoutRequest): Promise<Order[]> {
   return orders;
 }
 
+/**
+ * Store the Paystack reference on every order in the cart.
+ *
+ * One checkout is one Paystack transaction, so a multi-line cart shares a
+ * reference; the lookup in applyVerifiedPayment finds the order whose id is the
+ * reference, and the rest of the cart carries it for tracing.
+ */
+export async function recordPaystackReference(
+  orders: Order[],
+  reference: string
+): Promise<void> {
+  const db = getFirestore();
+  const batch = db.batch();
+  for (const order of orders) {
+    batch.update(db.collection(COLLECTIONS.orders).doc(order.orderId), {
+      paystackReference: reference,
+      lastUpdated: nowIso()
+    });
+    order.paystackReference = reference;
+  }
+  await batch.commit();
+}
+
 export interface FulfilmentOutcome {
   order: Order;
   /** True when a licence key was taken from the pool and attached. */
   licenceIssued: boolean;
+  /** True when the order was already paid when the transaction ran, so this
+   *  call changed nothing. The webhook and the customer's return race each
+   *  other; exactly one of them wins and only that one sends email. */
+  alreadyPaid: boolean;
 }
 
 /**
  * Mark an order paid and, where the variant is auto-fulfilled, take one licence
  * from the pool — atomically.
+ *
+ * NOT AN ENTRY POINT. The only caller is applyVerifiedPayment in
+ * server/payments.ts, which has already verified the reference against the
+ * Paystack API and checked the amount. Nothing else may call this, and no route
+ * reaches it: an endpoint that marks orders paid on request is the defect
+ * Phase 2 §0 deleted.
  *
  * The read of an available licence, its transition to `assigned`, and its
  * attachment to the order all happen inside one Firestore transaction.
@@ -215,7 +253,10 @@ export interface FulfilmentOutcome {
  * marks the order fulfilled, and never implies a licence is on its way when
  * none exists.
  */
-export async function markOrderPaidAndFulfil(orderId: string): Promise<FulfilmentOutcome | null> {
+export async function fulfilPaidOrder(
+  orderId: string,
+  payment: { paystackReference: string; paidAt?: string }
+): Promise<FulfilmentOutcome | null> {
   const db: Firestore = getFirestore();
   const orderRef = db.collection(COLLECTIONS.orders).doc(orderId);
 
@@ -235,13 +276,17 @@ export async function markOrderPaidAndFulfil(orderId: string): Promise<Fulfilmen
 
     const order = orderSnap.data() as Order;
 
-    // Already paid: report the current state rather than issuing a second key.
+    // Idempotency, inside the transaction. Without this check here, the
+    // webhook and the customer's return can both pass it and one payment
+    // issues two licences.
     if (order.paymentStatus === 'paid') {
-      return { order, licenceIssued: false };
+      return { order, licenceIssued: false, alreadyPaid: true };
     }
 
     const patch: Partial<Order> = {
       paymentStatus: 'paid',
+      paystackReference: payment.paystackReference,
+      paidAt: payment.paidAt || nowIso(),
       lastUpdated: nowIso()
     };
 
@@ -255,7 +300,7 @@ export async function markOrderPaidAndFulfil(orderId: string): Promise<Fulfilmen
         ? 'awaiting-seller-activation'
         : 'awaiting-document';
       tx.update(orderRef, patch);
-      return { order: { ...order, ...patch } as Order, licenceIssued: false };
+      return { order: { ...order, ...patch } as Order, licenceIssued: false, alreadyPaid: false };
     }
 
     if (!variant) {
@@ -264,7 +309,7 @@ export async function markOrderPaidAndFulfil(orderId: string): Promise<Fulfilmen
       patch.fulfilmentStatus = 'awaiting-seller-activation';
       patch.licenceIssueNote = `Variant ${order.variantId} is no longer in the catalogue; needs manual review.`;
       tx.update(orderRef, patch);
-      return { order: { ...order, ...patch } as Order, licenceIssued: false };
+      return { order: { ...order, ...patch } as Order, licenceIssued: false, alreadyPaid: false };
     }
 
     const baseStatus = statusAfterPayment(variant, order.customerInputValue);
@@ -272,7 +317,7 @@ export async function markOrderPaidAndFulfil(orderId: string): Promise<Fulfilmen
     if (!variant.autoFulfil) {
       patch.fulfilmentStatus = baseStatus;
       tx.update(orderRef, patch);
-      return { order: { ...order, ...patch } as Order, licenceIssued: false };
+      return { order: { ...order, ...patch } as Order, licenceIssued: false, alreadyPaid: false };
     }
 
     // Auto-fulfilled: try to claim exactly one available licence for this
@@ -291,7 +336,7 @@ export async function markOrderPaidAndFulfil(orderId: string): Promise<Fulfilmen
         `No licence key was available in the pool for variant ${order.variantId} ` +
         `at ${nowIso()}. The order is paid and owed a licence.`;
       tx.update(orderRef, patch);
-      return { order: { ...order, ...patch } as Order, licenceIssued: false };
+      return { order: { ...order, ...patch } as Order, licenceIssued: false, alreadyPaid: false };
     }
 
     const licenceDoc = licenceSnap.docs[0];
@@ -311,7 +356,7 @@ export async function markOrderPaidAndFulfil(orderId: string): Promise<Fulfilmen
     }
 
     tx.update(orderRef, patch);
-    return { order: { ...order, ...patch } as Order, licenceIssued: true };
+    return { order: { ...order, ...patch } as Order, licenceIssued: true, alreadyPaid: false };
   });
 }
 

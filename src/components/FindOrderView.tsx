@@ -17,7 +17,7 @@ import {
 import { OrderProgressBar } from './OrderProgressBar';
 import { Order } from '../types';
 import { STORE_COPY } from '../config/storeCopy';
-import { formatCurrencyGHS } from '../utils/pricingEngine';
+import { cedisToPesewas, formatPesewas } from '../utils/money';
 
 /** The stored statuses are kebab-case; these are what the customer reads. */
 const FULFILMENT_LABELS: Record<string, string> = {
@@ -256,7 +256,7 @@ export const FindOrderView: React.FC = () => {
                     <div className="text-left sm:text-right">
                       <span className="text-xs font-bold text-slate-500 block">Total Amount</span>
                       <span className="text-base font-black text-[#014040]">
-                        {formatCurrencyGHS(order.amountGhs)}
+                        {formatPesewas(order.amountPesewas)}
                       </span>
                     </div>
                   </div>
@@ -328,7 +328,7 @@ export const FindOrderView: React.FC = () => {
                         <Clock className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
                         <div>
                           <h4 className="text-sm font-bold text-amber-900">
-                            Payment Pending: {formatCurrencyGHS(order.amountGhs)}
+                            Payment Pending: {formatPesewas(order.amountPesewas)}
                           </h4>
                           <p className="text-xs text-amber-800 mt-1 leading-relaxed">
                             This order is awaiting payment confirmation. You can pay securely online or transfer via MTN Mobile Money.

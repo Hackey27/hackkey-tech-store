@@ -11,6 +11,7 @@ import { ProductDetailView } from './components/ProductDetailView';
 import { CartView, CartItem } from './components/CartView';
 import { BrandLogo } from './components/BrandLogo';
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
+import { PaymentReturnView } from './components/PaymentReturnView';
 import { STORE_COPY } from './config/storeCopy';
 import { CatalogResponse, CatalogueItem, ServiceOption, Variant } from './types';
 import {
@@ -27,6 +28,9 @@ import {
 
 export const App: React.FC = () => {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
+  const [isPaymentReturn, setIsPaymentReturn] = useState(
+    () => window.location.pathname === '/payment/return'
+  );
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -145,6 +149,21 @@ export const App: React.FC = () => {
     : allProducts.slice(0, 3);
 
   const totalCartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Paystack returns the customer to /payment/return. The SPA serves every
+  // path, so that route is handled here rather than by a router.
+  if (isPaymentReturn) {
+    return (
+      <div className="min-h-screen bg-[#f7faf9] text-slate-900">
+        <PaymentReturnView
+          onDone={() => {
+            window.history.replaceState({}, '', '/');
+            setIsPaymentReturn(false);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f7faf9] text-slate-900 selection:bg-[#05ef28] selection:text-[#014040]">

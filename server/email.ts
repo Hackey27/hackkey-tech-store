@@ -1,0 +1,122 @@
+import { Order } from '../src/types';
+import { STORE_COPY } from '../src/config/storeCopy';
+
+/**
+ * Seller alerts and customer receipts, over Resend's HTTP API.
+ *
+ * HTTP rather than SMTP, and deliberately not the Gmail API: an OAuth refresh
+ * failure at 2am is a silent, revenue-affecting outage, and nobody notices
+ * until a customer asks where their licence is.
+ *
+ * Every function here is allowed to fail. The caller records the failure on the
+ * order and carries on — the money has already arrived, and losing the payment
+ * because an email bounced would be the worse outcome by far.
+ */
+
+const API_BASE = process.env.MAIL_API_BASE || 'https://api.resend.com';
+
+function apiKey(): string | undefined {
+  return process.env.MAIL_PROVIDER_API_KEY || undefined;
+}
+
+function sellerAddress(): string | undefined {
+  return process.env.SELLER_ALERT_EMAIL || undefined;
+}
+
+function fromAddress(): string {
+  return process.env.MAIL_FROM || 'Hack-Key Tech <orders@hackeytech.com>';
+}
+
+/** Mail is configured only when both a key and a sender destination exist. */
+export function mailConfigured(): boolean {
+  return Boolean(apiKey());
+}
+
+async function send(to: string, subject: string, text: string): Promise<void> {
+  const key = apiKey();
+  if (!key) {
+    // Not configured is not a crash: log it so it is visible, and let the
+    // caller record it on the order.
+    throw new Error('MAIL_PROVIDER_API_KEY is not configured.');
+  }
+
+  const res = await fetch(`${API_BASE}/emails`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ from: fromAddress(), to: [to], subject, text })
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Mail send failed: ${res.status} ${body.slice(0, 200)}`);
+  }
+}
+
+export async function sendSellerAlert(alert: {
+  subject: string;
+  lines: string[];
+}): Promise<void> {
+  const to = sellerAddress();
+  if (!to) throw new Error('SELLER_ALERT_EMAIL is not configured.');
+  await send(to, alert.subject, alert.lines.join('\n'));
+}
+
+/** The WhatsApp deep link, with the order reference already in the message. */
+function whatsAppLink(order: Order): string {
+  const text = `Order ${order.orderId} — ${order.productName}. Here is my document.`;
+  return `${STORE_COPY.brand.whatsAppUrl}?text=${encodeURIComponent(text)}`;
+}
+
+/** Next steps that actually match where the order now sits. */
+function customerNextSteps(order: Order): string[] {
+  switch (order.fulfilmentStatus) {
+    case 'ready':
+      return ['Your licence is ready. The details are on the "Find my order" page.'];
+    case 'awaiting-licence':
+      return [
+        'Your licence is being issued by our team and we will contact you as soon',
+        'as it is ready. Quote your order reference if you get in touch.'
+      ];
+    case 'awaiting-customer-input':
+      return [
+        'We need one more thing from you before we can activate:',
+        `your ${order.customerInputType || 'device code'}.`,
+        'Open "Find my order", search your phone number, and send it there.'
+      ];
+    case 'awaiting-document':
+      return [
+        'Send us your document and we will get started:',
+        `  • Upload it: open "Find my order" and search your phone number`,
+        `  • Or WhatsApp it: ${whatsAppLink(order)}`
+      ];
+    case 'awaiting-seller-activation':
+      return ['Our team is preparing your order and will contact you shortly.'];
+    default:
+      return ['Our team will be in touch shortly.'];
+  }
+}
+
+export async function sendCustomerReceipt(order: Order): Promise<void> {
+  if (!order.email) throw new Error('The order has no email address.');
+
+  const quantity = order.quantity && order.quantity > 1 ? ` x${order.quantity}` : '';
+  const lines = [
+    `Thank you — we have received your payment.`,
+    ``,
+    `ORDER REFERENCE:  ${order.orderId}`,
+    ``,
+    `  ${order.productName} — ${order.versionOrPlan}${quantity}`,
+    `  Amount paid: GHS ${(order.amountPesewas / 100).toFixed(2)}`,
+    ``,
+    `WHAT HAPPENS NEXT`,
+    ...customerNextSteps(order),
+    ``,
+    `Keep your order reference — it is how we find your order.`,
+    `${STORE_COPY.brand.name} · ${STORE_COPY.brand.phone}`
+  ];
+
+  await send(order.email, `Your order ${order.orderId}`, lines.join('\n'));
+}

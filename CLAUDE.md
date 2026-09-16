@@ -8,7 +8,8 @@ from one process, with Firestore behind it.
 ```bash
 npm run dev     # Vite middleware + API on :3000
 npm run lint    # tsc --noEmit
-npm test        # node:test via tsx — money and submission rules
+npm test        # node:test via tsx — money, submission and signature rules
+npm run test:e2e # adversarial payment cases (needs the Firestore emulator)
 npm run build   # SPA -> dist/, server bundle -> dist-server/
 npm start       # node dist-server/server.cjs
 npm run seed    # seed services defined in code (Turnitin)
@@ -45,18 +46,19 @@ variants need querying independently of their product.
 - **One field per concept.** There are deliberately no alias pairs
   (`product_id` *and* `id`, `price_ghs` *and* `priceGhs`). The old model had
   them and the two halves drifted apart.
-- **Money is a number** in Ghana cedis, never a string. It is no longer always
-  a whole number: ₵47.50 exists, so see the pesewa rule below.
 - **Booleans are real booleans.** The sheet's `Yes`/`No`, `Published`/`Draft`
   and `Available`/`Unavailable` were converted at import, not at read time.
 - **Version numbers are always strings.** Excel coerced them to floats, so
   migration normalises `31.0` to `"31"` while leaving `"4.1.1.8"` untouched.
 - **A blank price is not a free item.** It means "ask for price": the field
   stays absent and the item is not sellable.
-- **Money is calculated in integer pesewas.** `src/utils/money.ts` is the only
-  place money arithmetic happens. Cedis are for storage and display; every
-  calculation converts to pesewas first. ₵47.50 is the first non-integer price
-  in the system and float cedis accumulate error.
+- **Money is integer pesewas.** `src/utils/money.ts` is the only place money
+  arithmetic happens. Orders store `amountPesewas`; there is no `amountGhs`,
+  and the compiler enforces that. Cedis survive only as the human-authored
+  figures in the workbook and in seeded service options, converted exactly once
+  by `cedisToPesewas`. The payment check compares the order amount against
+  Paystack's integer for **exact equality**, which a float cedi amount cannot
+  do — that is why this matters rather than being tidiness.
 
 ### Priced services
 
@@ -85,6 +87,48 @@ A seeded service whose `categoryId` matches no category document is invisible:
 it stays in the catalogue payload but renders under no category card. The seed
 checks for this and refuses to write, naming the category ids that do exist.
 
+## Payments
+
+**Nothing may mark an order paid except code that has verified a reference
+against the Paystack API.** The endpoint that once did it on request is gone
+(Phase 2 §0); `fulfilPaidOrder` is not an entry point and has exactly one
+caller, `applyVerifiedPayment`.
+
+Both the webhook and the customer's return call that one routine. Neither has
+its own copy, because two copies drift and one ends up missing the amount
+check.
+
+The webhook does **both** checks, never either:
+
+1. HMAC-SHA512 over the **raw** body, compared timing-safely. It is mounted
+   with `express.raw` **before** the global JSON parser — once `express.json()`
+   has re-serialised the body the hash cannot match, and the failure looks like
+   a configuration problem rather than a parsing one.
+2. Only the reference is taken from the payload; status, amount and currency
+   are re-verified against Paystack's API, so a replayed or tampered body
+   cannot move an order even with a valid signature.
+
+The amount check is the anti-tamper control: without it a customer who
+manipulates the initialise call pays ₵1 for a ₵500 licence and every signature
+check still passes. A mismatch blocks fulfilment, records
+`paymentMismatchNote`, and alerts the seller — it is never an automatic refusal
+to the customer, because the money may well have arrived and only a human can
+decide.
+
+Idempotency lives **inside** the Firestore transaction. The webhook retries and
+the return fires at roughly the same moment; without the paid-check in there,
+one payment issues two licences. `npm run test:e2e` proves it: three deliveries,
+one paid order, one licence.
+
+A payment return is a navigation, not proof of payment. It is a prompt to
+verify, and the page renders the order from the database. It never says
+"failed" merely because verification has not caught up — the webhook often
+lands first, and a customer told their successful payment failed will pay twice.
+
+Email is sent after the transaction commits and only by the call that actually
+moved the order. **An email failure never fails the payment**: it is recorded
+on the order and the seller is alerted. The money arrived; that is what matters.
+
 ## Server layout
 
 | File | Responsibility |
@@ -95,6 +139,9 @@ checks for this and refuses to write, naming the category ids that do exist.
 | `server/pricingConfig.ts` | Pricing rules — neutral by default; the admin portal owns them from Phase 2. |
 | `server/storage.ts` | Customer document uploads: signed URLs, server-side limits, form validation. |
 | `server/seed/turnitin.ts` | Services defined in code rather than migrated. |
+| `server/paystack.ts` | Paystack client, config and signature verification. Marks nothing paid. |
+| `server/payments.ts` | `applyVerifiedPayment` — the only code that may set `paymentStatus`. |
+| `server/email.ts` | Seller alerts and customer receipts. Allowed to fail. |
 
 The catalogue merges bundles, services and laptops in alongside products, each
 tagged with `kind`. That merge is what stops the Services, Bundles and Laptops
@@ -130,6 +177,13 @@ of reach of a browser.
 `/api/admin/data` returns that same sensitive data. In production it is
 disabled until `ADMIN_TOKEN` is set, and then requires it in an
 `x-admin-token` header.
+
+`PAYSTACK_SECRET_KEY` is server-only and never reaches `dist/`. In production
+the server **refuses to start** without it: a storefront that boots without
+payment configuration silently offers a free checkout. The key's prefix decides
+the mode, which is logged at boot (never the key) and reported on
+`/api/health` as `paymentMode` — otherwise you will, at some point, believe
+live orders are test orders.
 
 `storage.rules` denies all client access for the same reason. Customer
 documents are unpublished academic work: an upload URL is issued only against an

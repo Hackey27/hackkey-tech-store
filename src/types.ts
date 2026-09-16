@@ -71,9 +71,11 @@ export interface Variant {
   learningResourcesUrl?: string;
   notes?: string;
 
-  // Resolved at read time by the pricing engine and OS resolver.
-  listPriceGhs?: number;
-  payablePriceGhs?: number;
+  // Resolved at read time. Integer pesewas: `priceGhs` above is the
+  // human-authored figure from the workbook and is converted exactly once,
+  // here, by cedisToPesewas.
+  listPricePesewas?: number;
+  payablePricePesewas?: number;
   promoLabel?: string;
   promoPercent?: number;
   osList?: string[];
@@ -235,10 +237,11 @@ export interface CatalogueItem {
   description?: string;
   imageUrl?: string;
   sortOrder: number;
-  /** Absent means there is no single price to show — a service priced on
-   *  enquiry, or a laptop with a blank price. Never rendered as 0. */
-  priceGhs?: number;
-  listPriceGhs?: number;
+  /** Integer pesewas. Absent means there is no single price to show — a
+   *  service priced on enquiry, or a laptop with a blank price. Never
+   *  rendered as 0. */
+  pricePesewas?: number;
+  listPricePesewas?: number;
   promoLabel?: string;
   promoPercent?: number;
   availabilitySentence?: string;
@@ -325,9 +328,11 @@ export interface Order {
    *  option, so which check was purchased is unrecoverable from them —
    *  recording it from now on is a deliberate improvement. */
   serviceOptionId?: string;
-  /** Computed in integer pesewas, stored in cedis. See src/utils/money.ts. */
-  amountGhs: number;
-  originalAmountGhs?: number;
+  /** Integer pesewas — what Paystack is asked for and what its verification
+   *  response is compared against. Never cedis: a float cedi amount cannot be
+   *  compared for equality against Paystack's integer. */
+  amountPesewas: number;
+  originalAmountPesewas?: number;
   paymentStatus: PaymentStatus;
   fulfilmentStatus: FulfilmentStatus;
   fulfilmentType?: string;
@@ -341,7 +346,12 @@ export interface Order {
    *  is visible rather than silent. */
   licenceIssueNote?: string;
   activationWebsiteUrl?: string;
+  /** One order, one reference, so re-verification never has to guess. */
   paystackReference?: string;
+  /** Set when Paystack reports an amount or currency that does not match the
+   *  order. Fulfilment is blocked and the seller is alerted: it needs a human. */
+  paymentMismatchNote?: string;
+  paidAt?: string;
   receiptSent?: boolean;
   emailStatus?: string;
   fulfilledAt?: string;
@@ -460,4 +470,6 @@ export interface HealthResponse {
   dataSource: string;
   currency: 'GHS';
   timezone: 'Africa/Accra';
+  /** 'test' | 'live' | 'unconfigured', from the Paystack key's prefix. */
+  paymentMode: string;
 }

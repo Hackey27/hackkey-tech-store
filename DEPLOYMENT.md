@@ -142,6 +142,70 @@ npm run seed -- --dry-run
 npm run seed
 ```
 
+## Payments (Paystack)
+
+Store the secret key in Secret Manager and expose it to the service; it is
+never in `dist/` and never in the repo:
+
+```bash
+printf 'sk_test_xxx' | gcloud secrets create paystack-secret-key --data-file=-
+gcloud run services update "$SERVICE" --region "$REGION" \
+  --set-secrets=PAYSTACK_SECRET_KEY=paystack-secret-key:latest \
+  --set-env-vars PUBLIC_BASE_URL=https://store.hackeytech.com,SELLER_ALERT_EMAIL=you@hackeytech.com
+```
+
+The service **refuses to start** in production without `PAYSTACK_SECRET_KEY`.
+Confirm which mode you are in — this is the step people skip:
+
+```bash
+curl -s "$(gcloud run services describe "$SERVICE" --region "$REGION" \
+  --format='value(status.url)')/api/health" | grep -o '"paymentMode":"[a-z]*"'
+```
+
+Register the webhook at `https://store.hackeytech.com/api/paystack/webhook` in
+the Paystack dashboard. **Test and live have separate webhook settings** — set
+both, at the right time. Paystack cannot reach `localhost`, so the webhook can
+only be tested against a deployed URL.
+
+### Email DNS — do this BEFORE switching to live keys
+
+On `hackeytech.com` at Cloudflare. These are DNS-only records; the grey-cloud
+rule for the `store` CNAME does not apply to them.
+
+| Record | Where | Note |
+| --- | --- | --- |
+| SPF | `TXT` at the root | If one already exists, **edit it**. A second SPF record invalidates both. |
+| DKIM | `CNAME`/`TXT` as the provider gives them | From the Resend dashboard. |
+| DMARC | `TXT` at `_dmarc` | Start at `p=none`. |
+
+Verify in the provider's dashboard before relying on it.
+
+### Rollout order
+
+1. Deploy with `sk_test_`, register the **test** webhook against the deployed URL.
+2. Test-card a purchase end to end: order, redirect, return, webhook, licence,
+   both emails.
+3. Run `npm run test:e2e` against a Firestore emulator — the adversarial cases
+   (wrong signature, replay, hand-edited return, failed transaction, tampered
+   amount) must all pass.
+4. Confirm `POST /api/orders/{orderId}/pay` returns **404**. It is gone.
+5. Swap to `sk_live_`, update the webhook URL in the **live** dashboard,
+   confirm `/api/health` reports `"paymentMode":"live"`, and buy something
+   small and real.
+6. Only then load licences into the pool.
+
+### Converting existing order amounts
+
+Orders created before Phase 2 store `amountGhs`. Convert them once:
+
+```bash
+npx tsx scripts/migrate-amounts-to-pesewas.ts --dry-run
+npx tsx scripts/migrate-amounts-to-pesewas.ts
+```
+
+Idempotent, and it reports any fractional amounts it finds — those are the ones
+float cedis would have put at risk.
+
 ## Instance count
 
 `--max-instances 1` is no longer required for correctness: orders live in
