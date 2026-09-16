@@ -11,7 +11,6 @@ import {
   listOrders,
   listRequests,
   lookupOrdersByPhone,
-  markOrderPaidAndFulfil,
   saveServiceAnswers,
   submitCustomerInput
 } from './server/orders';
@@ -131,35 +130,6 @@ async function startServer() {
       res.json({ success: true, orders, cartId: orders[0]?.cartId });
     } catch (err) {
       failed(res, err, 'Failed to place order', 400);
-    }
-  });
-
-  // Mark an order paid (simulated payment, or a Paystack webhook)
-  app.post('/api/orders/:orderId/pay', async (req: Request, res: Response) => {
-    try {
-      const outcome = await markOrderPaidAndFulfil(String(req.params.orderId));
-      if (!outcome) {
-        return res.status(404).json({ error: 'Order not found.' });
-      }
-
-      // Say plainly when no licence could be issued, rather than implying one
-      // is on its way.
-      res.json({
-        success: true,
-        order: outcome.order,
-        licenceIssued: outcome.licenceIssued,
-        message: outcome.licenceIssued
-          ? 'Payment recorded and licence issued.'
-          : outcome.order.fulfilmentStatus === 'awaiting-licence'
-            // Say that the licence still has to be issued. Never imply one is
-            // already on its way when the pool held none.
-            ? 'Payment recorded. This order still needs a licence: the team has been notified and will contact you once it is issued.'
-            : outcome.order.fulfilmentStatus === 'awaiting-document'
-              ? 'Payment recorded. Send us your document and we will get started.'
-              : 'Payment recorded. The team will complete activation and contact you.'
-      });
-    } catch (err) {
-      failed(res, err, 'Failed to record payment');
     }
   });
 

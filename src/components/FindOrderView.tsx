@@ -160,18 +160,6 @@ export const FindOrderView: React.FC = () => {
     }
   };
 
-  const handleSimulatePayment = async (orderId: string) => {
-    try {
-      const res = await fetch(`/api/orders/${orderId}/pay`, { method: 'POST' });
-      const data = await res.json();
-      if (data.order) {
-        setOrders((prev) => prev.map((o) => (o.orderId === orderId ? data.order : o)));
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   // Maps order state to numeric step for progress bar
   const getOrderCurrentStep = (order: Order): number => {
     if (order.paymentStatus !== 'paid') return 2; // Step 2: Payment Received / Pending
@@ -348,16 +336,6 @@ export const FindOrderView: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => handleSimulatePayment(order.orderId)}
-                          className="px-5 py-2.5 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-xs shadow-xs transition-all cursor-pointer flex items-center gap-2"
-                        >
-                          <CreditCard className="w-4 h-4" />
-                          <span>Pay Now with Paystack / MoMo</span>
-                        </button>
-                      </div>
                     </div>
                   )}
 
