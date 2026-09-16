@@ -78,7 +78,12 @@ arrives, then move to `awaiting-seller-activation`.
 
 Turnitin is seeded from `server/seed/turnitin.ts` rather than migrated: it was
 never a row in the Services tab. Re-seed with `npm run seed`; never hand-enter
-it in the console.
+it in the console. **Deploying the code does not seed it** — the seed writes to
+Firestore and has to be run against the project, once, by hand.
+
+A seeded service whose `categoryId` matches no category document is invisible:
+it stays in the catalogue payload but renders under no category card. The seed
+checks for this and refuses to write, naming the category ids that do exist.
 
 ## Server layout
 

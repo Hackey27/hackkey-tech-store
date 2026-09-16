@@ -799,14 +799,44 @@ function firestoreClient(): Firestore {
  * document ids, so it is as idempotent as the rest of the import.
  */
 async function seedCodedServices(dryRun: boolean): Promise<void> {
+  const db = firestoreClient();
+
+  // A seeded service whose categoryId matches no category is invisible: it
+  // stays in the catalogue payload but renders under no category card, so the
+  // storefront simply never shows it. That is a silent failure, so it is
+  // checked before anything is written.
+  const categorySnap = await db.collection('categories').get();
+  const categoryIds = new Set(categorySnap.docs.map((d) => d.id));
+
   console.log('Seeded services (defined in code, not in the workbook):');
+
+  const orphans: string[] = [];
   for (const service of SEED_SERVICES) {
     const priced = service.options?.length
       ? `${service.options.length} option(s), from ${Math.min(
           ...service.options.map((o) => o.unitPriceGhs)
         ).toFixed(2)} GHS`
       : 'quote-only';
-    console.log(`  ${service.serviceId.padEnd(12)} ${service.name} — ${priced}`);
+
+    const existing = await db.collection('services').doc(service.serviceId).get();
+    const state = existing.exists ? 'already present, will be overwritten' : 'new';
+
+    console.log(`  ${service.serviceId.padEnd(12)} ${service.name} — ${priced} (${state})`);
+    console.log(`  ${''.padEnd(12)} category ${service.categoryId}: ${
+      categoryIds.has(service.categoryId) ? 'found' : 'NOT FOUND'
+    }`);
+
+    if (!categoryIds.has(service.categoryId)) orphans.push(service.serviceId);
+  }
+
+  if (orphans.length) {
+    console.error(
+      `\nBLOCKED — nothing written. ${orphans.join(', ')} name a categoryId that does not ` +
+        `exist in Firestore, so the storefront would never show them.\n` +
+        `  categories present: ${[...categoryIds].sort().join(', ') || '(none — run the migration first)'}\n` +
+        `  Set categoryId in server/seed/turnitin.ts to one of those, then run again.`
+    );
+    process.exit(1);
   }
 
   if (dryRun) {
@@ -814,7 +844,6 @@ async function seedCodedServices(dryRun: boolean): Promise<void> {
     return;
   }
 
-  const db = firestoreClient();
   await writeAll(
     db,
     SEED_SERVICES.map((s) => ({ collection: 'services', docId: s.serviceId, data: { ...s } }))
