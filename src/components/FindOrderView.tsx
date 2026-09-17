@@ -15,6 +15,7 @@ import {
   Clock
 } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
+import { WhatsAppIcon } from './WhatsAppIcon';
 import { CatalogueItem, Order } from '../types';
 import { ProductImage } from './ProductImage';
 import { STORE_COPY } from '../config/storeCopy';
@@ -311,9 +312,11 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[] }> = ({ ca
                         href={whatsAppSubmissionLink(order.orderId, order.productName)}
                         target="_blank"
                         rel="noopener noreferrer"
+                        aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#25d366] hover:bg-[#1fb855] text-white text-xs font-bold transition-colors"
                       >
-                        Send it on WhatsApp
+                        <WhatsAppIcon className="h-4 w-4" />
+                        {STORE_COPY.findOrder.sendOnWhatsApp}
                       </a>
                     </div>
                   )}

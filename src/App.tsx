@@ -24,10 +24,10 @@ import {
   ChevronRight,
   Sparkles,
   Search,
-  MessageSquare,
   ShieldCheck,
   PackageCheck
 } from 'lucide-react';
+import { WhatsAppIcon } from './components/WhatsAppIcon';
 
 type StoreRoute =
   | { view: 'home' }
@@ -418,13 +418,14 @@ export const App: React.FC = () => {
                   </div>
 
                   <a
-                    href="https://wa.me/233542638979"
+                    href={STORE_COPY.brand.whatsAppUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}
                     className="px-6 py-3 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-sm shadow-md transition-all flex items-center gap-2 shrink-0"
                   >
-                    <MessageSquare className="w-4 h-4 fill-current" />
-                    <span>Chat on WhatsApp</span>
+                    <WhatsAppIcon className="w-4 h-4" />
+                    <span>{STORE_COPY.brand.whatsAppCta}</span>
                   </a>
                 </div>
               </section>
@@ -453,7 +454,7 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Persistent WhatsApp shortcut (lower-left) */}
+      {/* Persistent WhatsApp shortcut */}
       <FloatingWhatsApp />
 
       {announcementOpen && catalog?.announcement && (

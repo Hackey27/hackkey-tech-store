@@ -1,9 +1,9 @@
 import React from 'react';
-import { MessageCircle } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
+import { WhatsAppIcon } from './WhatsAppIcon';
 
 /**
- * Persistent WhatsApp shortcut pinned to the lower-left corner.
+ * Persistent WhatsApp shortcut pinned to the lower-right corner.
  *
  * Sits above the mobile bottom navigation on small screens and drops to the
  * corner on desktop. The pulse is deliberately gentle and is disabled entirely
@@ -16,9 +16,9 @@ export const FloatingWhatsApp: React.FC = () => {
       href={STORE_COPY.brand.whatsAppUrl}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={`Chat with ${STORE_COPY.brand.name} on WhatsApp`}
-      title="Chat on WhatsApp"
-      className="group fixed bottom-20 left-4 md:bottom-6 md:left-6 z-[45] flex items-center gap-3"
+      aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}
+      title={STORE_COPY.brand.whatsAppCta}
+      className="group fixed bottom-24 right-4 md:bottom-6 md:right-6 z-[45] flex flex-row-reverse items-center gap-3"
     >
       <span className="relative flex h-14 w-14 items-center justify-center">
         {/* Expanding halo */}
@@ -29,13 +29,13 @@ export const FloatingWhatsApp: React.FC = () => {
 
         {/* Button face */}
         <span className="hk-whatsapp-fab relative inline-flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg shadow-[#25D366]/35 ring-1 ring-black/5 transition-colors group-hover:bg-[#1eb355]">
-          <MessageCircle className="h-7 w-7 fill-current stroke-[1.5]" />
+          <WhatsAppIcon className="h-7 w-7" />
         </span>
       </span>
 
       {/* Label reveals on pointer devices only */}
-      <span className="hidden md:inline-flex items-center rounded-full bg-[#014040] px-3.5 py-2 text-xs font-bold text-white shadow-md opacity-0 translate-x-[-6px] transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0 pointer-events-none">
-        Chat on WhatsApp
+      <span className="hidden md:inline-flex items-center rounded-full bg-[#014040] px-3.5 py-2 text-xs font-bold text-white shadow-md opacity-0 translate-x-1.5 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0 pointer-events-none">
+        {STORE_COPY.brand.whatsAppCta}
       </span>
     </a>
   );

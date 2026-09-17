@@ -14,6 +14,8 @@ export const STORE_COPY = {
     phoneRaw: '+233542638979',
     email: 'hack.keytech@gmail.com',
     whatsAppUrl: 'https://wa.me/233542638979',
+    whatsAppAccessibleLabel: 'Chat with us on WhatsApp',
+    whatsAppCta: 'Chat on WhatsApp',
     searchPlaceholder: 'Search store e.g. SmartPLS, Turnitin',
   },
 
@@ -153,6 +155,7 @@ export const STORE_COPY = {
     inputHelper: (inputType: string) => `Your licence will be added after your ${inputType} is submitted.`,
     submittedStatus: (inputType: string) => `${inputType} you submitted`,
     receivedWaiting: 'Received. Your licence will be added shortly.',
+    sendOnWhatsApp: 'Send it on WhatsApp',
 
     // Activation block
     activate: {

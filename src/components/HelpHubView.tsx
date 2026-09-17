@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  MessageSquare,
   Phone,
   Mail,
   Monitor,
@@ -9,6 +8,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
+import { WhatsAppIcon } from './WhatsAppIcon';
 
 export const HelpHubView: React.FC = () => {
   const windowsTeamViewerUrl = 'https://download.teamviewer.com/download/TeamViewerQS.exe';
@@ -48,10 +48,11 @@ export const HelpHubView: React.FC = () => {
                 href={STORE_COPY.brand.whatsAppUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}
                 className="flex items-center justify-between p-3.5 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-sm transition-all shadow-xs"
               >
                 <div className="flex items-center gap-2.5">
-                  <MessageSquare className="w-5 h-5 fill-current" />
+                  <WhatsAppIcon className="w-5 h-5" />
                   <span>{STORE_COPY.help.whatsAppHelpBtn}</span>
                 </div>
                 <ExternalLink className="w-4 h-4 stroke-[2.5]" />

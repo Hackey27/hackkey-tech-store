@@ -1,6 +1,7 @@
 import React from 'react';
-import { CreditCard, Clock, MessageSquare } from 'lucide-react';
+import { CreditCard, Clock } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
+import { WhatsAppIcon } from './WhatsAppIcon';
 
 interface HeroProps {
   onBrowseClick?: () => void;
@@ -44,9 +45,10 @@ export const Hero: React.FC<HeroProps> = ({ onFindOrderClick }) => {
               href={STORE_COPY.brand.whatsAppUrl}
               target="_blank"
               rel="noopener noreferrer"
+              aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}
               className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white border border-[#cbe0dc] shadow-xs hover:border-[#014040]/50 transition-colors"
             >
-              <MessageSquare className="w-4 h-4 text-[#05ef28]" />
+              <WhatsAppIcon className="w-4 h-4 text-[#05ef28]" />
               <span>{STORE_COPY.hero.trustChips[2]}</span>
             </a>
           </div>
