@@ -13,37 +13,28 @@ interface OrderProgressBarProps {
 export interface StepDefinition {
   id: string;
   label: string;
-  shortLabel: string;
 }
 
 export function getStepsForMachineCodeType(type?: MachineCodeType): StepDefinition[] {
+  let labels: readonly string[];
+
   switch (type) {
     case 'lock-code':
-      return STORE_COPY.orderProgress.amosSpss.map((label, idx) => ({
-        id: `step-${idx}`,
-        label,
-        shortLabel: idx === 3 ? 'Lock Code' : idx === 4 ? 'Delivery' : label.split(' ')[0],
-      }));
+      labels = STORE_COPY.orderProgress.amosSpss;
+      break;
     case 'hardware-id':
-      return STORE_COPY.orderProgress.maxqdaMplusEviews.map((label, idx) => ({
-        id: `step-${idx}`,
-        label,
-        shortLabel: idx === 3 ? 'Hardware ID' : idx === 4 ? 'Delivery' : label.split(' ')[0],
-      }));
+      labels = STORE_COPY.orderProgress.maxqdaMplusEviews;
+      break;
     case 'service':
-      return STORE_COPY.orderProgress.nonLicence.map((label, idx) => ({
-        id: `step-${idx}`,
-        label,
-        shortLabel: idx === 3 ? 'Delivery' : label.split(' ')[0],
-      }));
+      labels = STORE_COPY.orderProgress.nonLicence;
+      break;
     case 'none':
     default:
-      return STORE_COPY.orderProgress.standardSoftware.map((label, idx) => ({
-        id: `step-${idx}`,
-        label,
-        shortLabel: idx === 3 ? 'Delivery' : label.split(' ')[0],
-      }));
+      labels = STORE_COPY.orderProgress.standardSoftware;
+      break;
   }
+
+  return labels.map((label, idx) => ({ id: `step-${idx}`, label }));
 }
 
 export const OrderProgressBar: React.FC<OrderProgressBarProps> = ({
@@ -83,10 +74,11 @@ export const OrderProgressBar: React.FC<OrderProgressBarProps> = ({
               <div
                 key={step.id}
                 onClick={() => onStepClick && onStepClick(stepNum)}
-                className={`flex flex-col items-center cursor-pointer group select-none transition-all ${
+                className={`flex flex-col items-center cursor-pointer group select-none transition-transform ${
                   isCurrent ? 'scale-105' : ''
                 }`}
                 style={{ width: `${100 / totalSteps}%` }}
+                aria-current={isCurrent ? 'step' : undefined}
               >
                 {/* Step Circle */}
                 <div
@@ -106,7 +98,7 @@ export const OrderProgressBar: React.FC<OrderProgressBarProps> = ({
                 </div>
 
                 {/* Step Label */}
-                <div className="mt-2 text-center px-1">
+                <div className="mt-2 hidden text-center px-1 sm:block">
                   <span
                     className={`block text-[11px] sm:text-xs font-semibold leading-tight transition-colors ${
                       isCurrent
@@ -116,14 +108,21 @@ export const OrderProgressBar: React.FC<OrderProgressBarProps> = ({
                         : 'text-slate-400'
                     }`}
                   >
-                    <span className="hidden sm:inline">{step.label}</span>
-                    <span className="sm:hidden">{step.shortLabel}</span>
+                    {step.label}
                   </span>
                 </div>
               </div>
             );
           })}
         </div>
+
+        <p className="mt-3 text-center text-xs font-bold text-[#014040] sm:hidden" aria-live="polite">
+          {STORE_COPY.orderProgress.mobileSummary(
+            Math.min(Math.max(currentStep, 1), totalSteps),
+            totalSteps,
+            steps[Math.min(Math.max(currentStep, 1), totalSteps) - 1]!.label,
+          )}
+        </p>
       </div>
     </div>
   );

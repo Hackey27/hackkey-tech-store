@@ -107,6 +107,8 @@ export const STORE_COPY = {
     standardSoftware: ['Your Selection', 'Your Details', 'Payment', 'Licence Delivery'],
     // Exact 4-step for services / laptops:
     nonLicence: ['Your Selection', 'Your Details', 'Payment', 'Delivery'],
+    mobileSummary: (current: number, total: number, label: string) =>
+      `Step ${current} of ${total}: ${label}`,
   },
 
   // Device Lock Disclaimers
