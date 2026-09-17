@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
 import { CategoryCard } from './components/CategoryCard';
+import { CategoryPage } from './components/CategoryPage';
 import { ProductCard } from './components/ProductCard';
 import { BottomNav } from './components/BottomNav';
 import { FindOrderView } from './components/FindOrderView';
@@ -16,6 +17,7 @@ import { AnnouncementModal, shouldShowAnnouncement } from './components/Announce
 import { STORE_COPY } from './config/storeCopy';
 import { CatalogResponse, CatalogueItem, ServiceOption, Variant } from './types';
 import {
+  ArrowLeft,
   AlertCircle,
   RefreshCw,
   Layers,
@@ -27,21 +29,31 @@ import {
   PackageCheck
 } from 'lucide-react';
 
+type StoreRoute =
+  | { view: 'home' }
+  | { view: 'category'; categoryId: string }
+  | { view: 'product'; itemId: string }
+  | { view: 'payment-return' };
+
+function currentRoute(): StoreRoute {
+  const path = window.location.pathname;
+  if (path === '/payment/return') return { view: 'payment-return' };
+  const category = path.match(/^\/category\/([^/]+)\/?$/);
+  if (category) return { view: 'category', categoryId: decodeURIComponent(category[1]) };
+  const product = path.match(/^\/product\/([^/]+)\/?$/);
+  if (product) return { view: 'product', itemId: decodeURIComponent(product[1]) };
+  return { view: 'home' };
+}
+
 export const App: React.FC = () => {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
-  const [isPaymentReturn, setIsPaymentReturn] = useState(
-    () => window.location.pathname === '/payment/return'
-  );
-  const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all');
+  const [route, setRoute] = useState<StoreRoute>(() => currentRoute());
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Active navigation tab: 'home' | 'find-order' | 'help' | 'request' | 'cart'
   const [activeTab, setActiveTab] = useState<'home' | 'find-order' | 'help' | 'request' | 'cart'>('home');
-
-  // CatalogueItem detail modal state
-  const [activeDetailProduct, setActiveDetailProduct] = useState<CatalogueItem | null>(null);
 
   // Cart state
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -52,14 +64,11 @@ export const App: React.FC = () => {
   const [announcementOpen, setAnnouncementOpen] = useState(false);
 
   // Fetch catalog from Phase 1 backend endpoint /api/catalog
-  const fetchCatalogData = async (cat?: string | 'all', search?: string) => {
+  const fetchCatalogData = async (search?: string) => {
     setIsLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
-      if (cat && cat !== 'all') {
-        params.append('category', cat);
-      }
       if (search && search.trim().length > 0) {
         params.append('q', search.trim());
       }
@@ -83,17 +92,38 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchCatalogData(selectedCategory, searchQuery);
-  }, [selectedCategory, searchQuery]);
+    fetchCatalogData(searchQuery);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    window.history.scrollRestoration = 'manual';
+    window.history.replaceState({ ...(window.history.state || {}), hkScrollY: window.scrollY }, '');
+    const onPopState = (event: PopStateEvent) => {
+      setRoute(currentRoute());
+      window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+        window.scrollTo({ top: Number(event.state?.hkScrollY || 0) });
+      }));
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const navigate = (path: string) => {
+    window.history.replaceState({ ...(window.history.state || {}), hkScrollY: window.scrollY }, '');
+    window.history.pushState({ hkPushed: true, hkScrollY: 0 }, '', path);
+    setRoute(currentRoute());
+    window.scrollTo({ top: 0 });
+  };
+
+  const navigateBack = (fallback: string) => {
+    if (window.history.state?.hkPushed) window.history.back();
+    else navigate(fallback);
+  };
 
   // Category click handler
   const handleCategorySelect = (catId: string) => {
-    if (selectedCategory === catId) {
-      setSelectedCategory('all');
-    } else {
-      setSelectedCategory(catId);
-      setShowAllSoftware(true); // Automatically show products when filtering
-    }
+    setSearchQuery('');
+    navigate(`/category/${encodeURIComponent(catId)}`);
   };
 
   // Add to cart handler. A service line carries its chosen option and the
@@ -138,22 +168,11 @@ export const App: React.FC = () => {
     });
   };
 
-  const handleBuyNowDirect = (product: CatalogueItem) => {
-    // A purchasable service has to have its option chosen first: adding one
-    // straight to the cart produced a line with no option, priced at the card's
-    // "from" price and naming nothing the server could charge for. Open the
-    // panel instead so the customer picks.
-    if (product.kind === 'service' && (product.options?.length ?? 0) > 0) {
-      setActiveDetailProduct(product);
-      return;
-    }
-    handleAddToCart(product, product.variants?.[0], product.osList?.[0]);
-    setActiveTab('cart');
-  };
+  const openProduct = (product: CatalogueItem) => navigate(`/product/${encodeURIComponent(product.itemId)}`);
 
   // Featured software filtering logic
   const allProducts = catalog?.products || [];
-  const isFiltering = selectedCategory !== 'all' || searchQuery.trim().length > 0;
+  const isFiltering = searchQuery.trim().length > 0;
   
   // If not filtering and not viewing all, show a curated small number of featured products (e.g. 3)
   const displayedProducts = isFiltering || showAllSoftware
@@ -164,13 +183,13 @@ export const App: React.FC = () => {
 
   // Paystack returns the customer to /payment/return. The SPA serves every
   // path, so that route is handled here rather than by a router.
-  if (isPaymentReturn) {
+  if (route.view === 'payment-return') {
     return (
       <div className="min-h-screen bg-[#f7faf9] text-slate-900">
         <PaymentReturnView
           onDone={() => {
             window.history.replaceState({}, '', '/');
-            setIsPaymentReturn(false);
+            setRoute({ view: 'home' });
           }}
         />
       </div>
@@ -185,12 +204,14 @@ export const App: React.FC = () => {
         onSearchChange={(q) => {
           setSearchQuery(q);
           if (q.trim()) {
+            if (route.view !== 'home') navigate('/');
             setActiveTab('home');
             setShowAllSoftware(true);
           }
         }}
         activeTab={activeTab}
         onSelectTab={(tab) => {
+          if (route.view !== 'home') navigate('/');
           setActiveTab(tab);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
@@ -199,8 +220,38 @@ export const App: React.FC = () => {
 
       {/* Main Content Area */}
       <main className="flex-1 pb-20 md:pb-12">
+        {route.view === 'category' && (
+          isLoading ? (
+            <div className="mx-auto max-w-7xl px-4 py-16 text-center text-sm font-bold text-[#014040]">{STORE_COPY.catalog.loading}</div>
+          ) : error ? (
+            <div className="mx-auto max-w-xl px-4 py-16 text-center"><AlertCircle className="mx-auto h-10 w-10 text-rose-500" /><p className="mt-3 text-sm text-slate-700">{error}</p><button className="mt-4 rounded-xl bg-[#014040] px-4 py-2 text-xs font-bold text-white" onClick={() => fetchCatalogData()}>{STORE_COPY.catalog.retry}</button></div>
+          ) : (
+            <CategoryPage
+              category={catalog?.categories.find((category) => category.categoryId === route.categoryId)}
+              items={(catalog?.products || []).filter((item) => item.categoryId === route.categoryId)}
+              onBack={() => navigateBack('/')}
+              onSelectProduct={openProduct}
+              onBuyNow={openProduct}
+            />
+          )
+        )}
+
+        {route.view === 'product' && (
+          isLoading ? (
+            <div className="mx-auto max-w-7xl px-4 py-16 text-center text-sm font-bold text-[#014040]">{STORE_COPY.catalog.loading}</div>
+          ) : catalog?.products.find((item) => item.itemId === route.itemId) ? (
+            <ProductDetailView
+              product={catalog.products.find((item) => item.itemId === route.itemId)!}
+              onClose={() => navigateBack(`/category/${encodeURIComponent(catalog.products.find((item) => item.itemId === route.itemId)!.categoryId)}`)}
+              onAddToCart={handleAddToCart}
+            />
+          ) : (
+            <div className="mx-auto flex min-h-[55vh] max-w-xl flex-col items-center justify-center px-4 text-center"><AlertCircle className="h-12 w-12 text-[#025656]" /><h1 className="mt-4 text-2xl font-black text-[#014040]">{STORE_COPY.catalog.productNotFoundTitle}</h1><p className="mt-2 text-sm text-slate-600">{STORE_COPY.catalog.productNotFoundDescription}</p><button type="button" onClick={() => navigate('/')} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#014040] px-5 py-3 text-sm font-black text-white"><ArrowLeft className="h-4 w-4" />{STORE_COPY.catalog.backToBrowse}</button></div>
+          )
+        )}
+
         {/* Tab 1: Storefront Home */}
-        {activeTab === 'home' && (
+        {route.view === 'home' && activeTab === 'home' && (
           <div>
             {/* Hero Section */}
             <Hero
@@ -224,14 +275,6 @@ export const App: React.FC = () => {
                     </p>
                   </div>
 
-                  {selectedCategory !== 'all' && (
-                    <button
-                      onClick={() => setSelectedCategory('all')}
-                      className="text-xs font-bold text-[#014040] hover:underline cursor-pointer"
-                    >
-                      Clear Category Filter
-                    </button>
-                  )}
                 </div>
 
                 {/* Compact Rounded Category Cards (1-col mobile, 2-col tablet, 4-col desktop) */}
@@ -240,7 +283,7 @@ export const App: React.FC = () => {
                     <CategoryCard
                       key={cat.categoryId}
                       category={cat}
-                      isSelected={selectedCategory === cat.categoryId}
+                      isSelected={false}
                       onSelect={handleCategorySelect}
                     />
                   ))}
@@ -252,9 +295,7 @@ export const App: React.FC = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#d8e7e4] pb-3">
                   <div>
                     <h2 className="text-xl sm:text-2xl font-black text-[#014040] tracking-tight">
-                      {selectedCategory !== 'all'
-                        ? catalog?.categories.find((c) => c.categoryId === selectedCategory)?.name || 'Products'
-                        : searchQuery
+                      {searchQuery
                         ? `Search Results for "${searchQuery}"`
                         : STORE_COPY.catalog.featuredSoftware}
                     </h2>
@@ -308,7 +349,7 @@ export const App: React.FC = () => {
                     <h3 className="text-base font-bold text-slate-800">Unable to load catalogue items</h3>
                     <p className="text-xs text-slate-600 max-w-md mx-auto">{error}</p>
                     <button
-                      onClick={() => fetchCatalogData(selectedCategory, searchQuery)}
+                      onClick={() => fetchCatalogData(searchQuery)}
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#014040] text-white text-xs font-bold hover:bg-[#025656] transition-colors"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
@@ -331,7 +372,6 @@ export const App: React.FC = () => {
                       <button
                         onClick={() => {
                           setSearchQuery('');
-                          setSelectedCategory('all');
                         }}
                         className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200"
                       >
@@ -354,8 +394,8 @@ export const App: React.FC = () => {
                       <ProductCard
                         key={product.itemId}
                         product={product}
-                        onSelect={(prod) => setActiveDetailProduct(prod)}
-                        onBuyNowClick={handleBuyNowDirect}
+                        onSelect={openProduct}
+                        onBuyNowClick={openProduct}
                       />
                     ))}
                   </div>
@@ -393,16 +433,16 @@ export const App: React.FC = () => {
         )}
 
         {/* Tab 2: Find my order */}
-        {activeTab === 'find-order' && <FindOrderView />}
+        {route.view === 'home' && activeTab === 'find-order' && <FindOrderView catalogItems={catalog?.products || []} />}
 
         {/* Tab 3: Help support hub */}
-        {activeTab === 'help' && <HelpHubView />}
+        {route.view === 'home' && activeTab === 'help' && <HelpHubView />}
 
         {/* Tab 4: Request software or laptop */}
-        {activeTab === 'request' && <RequestView />}
+        {route.view === 'home' && activeTab === 'request' && <RequestView />}
 
         {/* Tab 5: Cart */}
-        {activeTab === 'cart' && (
+        {route.view === 'home' && activeTab === 'cart' && (
           <CartView
             items={cartItems}
             onRemoveItem={(id) => setCartItems(cartItems.filter((item) => item.id !== id))}
@@ -412,17 +452,6 @@ export const App: React.FC = () => {
           />
         )}
       </main>
-
-      {/* Product detail Modal */}
-      {activeDetailProduct && (
-        <ProductDetailView
-          product={activeDetailProduct}
-          onClose={() => setActiveDetailProduct(null)}
-          onAddToCart={(product, variant, os) => {
-            handleAddToCart(product, variant, os);
-          }}
-        />
-      )}
 
       {/* Persistent WhatsApp shortcut (lower-left) */}
       <FloatingWhatsApp />
@@ -435,6 +464,7 @@ export const App: React.FC = () => {
       <BottomNav
         activeTab={activeTab}
         onSelectTab={(tab) => {
+          if (route.view !== 'home') navigate('/');
           setActiveTab(tab);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}

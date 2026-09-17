@@ -23,6 +23,7 @@ import {
   verifyWebhookSignature
 } from './server/paystack';
 import {
+  catalogueImageFile,
   confirmUpload,
   createSignedUpload,
   documentObjectPath,
@@ -158,6 +159,26 @@ async function startServer() {
       res.json(await getCatalogue(categoryFilter, searchQuery));
     } catch (err) {
       failed(res, err, 'Failed to retrieve catalogue from Firestore');
+    }
+  });
+
+  // Catalogue artwork is public content but the bucket is not. Only objects in
+  // the dedicated prefix can be streamed; customer documents remain private.
+  app.get('/api/catalog/images', async (req: Request, res: Response) => {
+    const objectPath = String(req.query.path || '');
+    try {
+      const { file, contentType } = await catalogueImageFile(objectPath);
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      file.createReadStream()
+        .on('error', (err) => {
+          console.error('[catalogue-image] stream failed:', err);
+          if (!res.headersSent) res.status(404).end();
+          else res.destroy(err as Error);
+        })
+        .pipe(res);
+    } catch (err) {
+      failed(res, err, 'Catalogue image not found', 404);
     }
   });
 

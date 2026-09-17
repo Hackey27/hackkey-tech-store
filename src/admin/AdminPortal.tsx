@@ -11,6 +11,7 @@ import {
   Eye,
   FileText,
   KeyRound,
+  Images,
   LogOut,
   Plus,
   RefreshCw,
@@ -24,11 +25,12 @@ import { ADMIN_COPY } from '../config/storeCopy';
 import { Announcement, Order, Service, ServiceField, ServiceFieldType, ServiceOption } from '../types';
 import { formatPesewas } from '../utils/money';
 import { AnnouncementModal } from '../components/AnnouncementModal';
+import { ProductImage, renderableProductImageUrl } from '../components/ProductImage';
 import { adminAuth } from './firebase';
 import { AdminApiError, adminRequest, loadAdminData } from './api';
 import { AdminData, AdminLicence, ApiValidationError } from './types';
 
-type Section = 'orders' | 'licences' | 'services' | 'announcements';
+type Section = 'orders' | 'licences' | 'services' | 'announcements' | 'products';
 
 const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#014040] focus:ring-2 focus:ring-[#014040]/10';
 const labelClass = 'space-y-1 text-xs font-bold text-slate-700';
@@ -336,6 +338,109 @@ function AnnouncementsSection({ data, user, reload }: { data: AdminData; user: U
   return <div className="space-y-5"><div className="flex flex-wrap justify-between gap-3"><div><h2 className="text-2xl font-black text-[#014040]">{ADMIN_COPY.announcements.title}</h2><p className="text-sm text-slate-600">{ADMIN_COPY.announcements.subtitle}</p></div><button className={secondaryButton} onClick={() => setDraft(emptyAnnouncement())}><Plus className="h-4 w-4" />{ADMIN_COPY.announcements.new}</button></div><div className="grid gap-5 lg:grid-cols-[260px_1fr]"><aside className="h-fit rounded-2xl border bg-white p-2">{data.announcements.map((announcement) => <button key={announcement.announcementId} className={`w-full rounded-xl p-3 text-left ${draft.announcementId === announcement.announcementId ? 'bg-[#edf5f3]' : 'hover:bg-slate-50'}`} onClick={() => setDraft({ ...announcement })}><b className="block text-sm">{announcement.title}</b><small className={announcement.active ? 'text-emerald-700' : 'text-slate-500'}>{announcement.active ? 'Active' : 'Inactive'} · {announcement.updatedAt ? new Date(announcement.updatedAt).toLocaleDateString() : 'Not updated'}</small></button>)}</aside><section className="rounded-2xl border bg-white p-5"><div className="grid gap-4 sm:grid-cols-2"><label className={`${labelClass} sm:col-span-2`}>Title<input className={inputClass} value={draft.title} onChange={(e) => set('title', e.target.value)} /></label><label className={`${labelClass} sm:col-span-2`}>Message<textarea className={`${inputClass} min-h-32`} value={draft.message} onChange={(e) => set('message', e.target.value)} /></label><label className={labelClass}>Button text<input className={inputClass} value={draft.buttonText || ''} onChange={(e) => set('buttonText', e.target.value || undefined)} /></label><label className={labelClass}>Button URL<input className={inputClass} type="url" value={draft.buttonUrl || ''} onChange={(e) => set('buttonUrl', e.target.value || undefined)} /></label><label className={labelClass}>Starts at<input className={inputClass} type="datetime-local" value={dateInput(draft.startsAt)} onChange={(e) => set('startsAt', e.target.value || undefined)} /></label><label className={labelClass}>Ends at<input className={inputClass} type="datetime-local" value={dateInput(draft.endsAt)} onChange={(e) => set('endsAt', e.target.value || undefined)} /></label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={draft.showOnce} onChange={(e) => set('showOnce', e.target.checked)} />{ADMIN_COPY.announcements.showOnce}</label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={draft.active} onChange={(e) => set('active', e.target.checked)} />{ADMIN_COPY.announcements.active}</label></div><div className="mt-5 flex gap-2"><button className={secondaryButton} onClick={() => setPreview(true)}><Eye className="h-4 w-4" />{ADMIN_COPY.preview}</button><button className={primaryButton} disabled={busy || !draft.title.trim() || !draft.message.trim()} onClick={save}><Save className="h-4 w-4" />{busy ? ADMIN_COPY.saving : ADMIN_COPY.save}</button></div>{message && <p className="mt-4 rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}</section></div>{preview && <AnnouncementModal preview announcement={{ ...draft, announcementId: draft.announcementId || 'preview' }} onClose={() => setPreview(false)} />}</div>;
 }
 
+function productMediaUrl(value?: string): string | undefined {
+  if (!value) return undefined;
+  if (/^https?:\/\//i.test(value)) return renderableProductImageUrl(value);
+  if (value.startsWith('catalogue/')) return `/api/catalog/images?path=${encodeURIComponent(value)}`;
+  return undefined;
+}
+
+async function resizeProductImage(file: File, role: 'banner' | 'gallery'): Promise<Blob> {
+  const source = URL.createObjectURL(file);
+  try {
+    const image = new window.Image();
+    image.src = source;
+    await image.decode();
+    const maxWidth = role === 'banner' ? 1600 : 1400;
+    const maxHeight = role === 'banner' ? 1000 : 1050;
+    const scale = Math.min(1, maxWidth / image.naturalWidth, maxHeight / image.naturalHeight);
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error(ADMIN_COPY.products.resizeError);
+    context.drawImage(image, 0, 0, width, height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.82));
+    if (!blob) throw new Error(ADMIN_COPY.products.resizeError);
+    return blob;
+  } finally {
+    URL.revokeObjectURL(source);
+  }
+}
+
+function ProductMediaSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
+  const [productId, setProductId] = useState(data.products[0]?.productId || '');
+  const [busy, setBusy] = useState('');
+  const [message, setMessage] = useState('');
+  const product = data.products.find((item) => item.productId === productId) || data.products[0];
+
+  useEffect(() => {
+    if (productId && data.products.some((item) => item.productId === productId)) return;
+    setProductId(data.products[0]?.productId || '');
+  }, [data.products, productId]);
+
+  const upload = async (role: 'banner' | 'gallery', files?: FileList | null) => {
+    if (!product || !files?.length) return;
+    setBusy(role); setMessage('');
+    try {
+      const selected = role === 'banner' ? Array.from(files).slice(0, 1) : Array.from(files);
+      for (const file of selected) {
+        const blob = await resizeProductImage(file, role);
+        await adminRequest(user, `/products/${encodeURIComponent(product.productId)}/images?role=${role}`, {
+          method: 'POST', body: blob, headers: { 'Content-Type': blob.type }
+        });
+      }
+      setMessage(ADMIN_COPY.products.uploaded);
+      await reload();
+    } catch (err) {
+      setMessage(messageOf(err));
+    } finally { setBusy(''); }
+  };
+
+  const remove = async (objectPath: string) => {
+    if (!product || !window.confirm(ADMIN_COPY.products.confirmRemove)) return;
+    setBusy(objectPath); setMessage('');
+    try {
+      await adminRequest(user, `/products/${encodeURIComponent(product.productId)}/images`, {
+        method: 'DELETE', body: JSON.stringify({ objectPath })
+      });
+      setMessage(ADMIN_COPY.products.removed);
+      await reload();
+    } catch (err) { setMessage(messageOf(err)); }
+    finally { setBusy(''); }
+  };
+
+  if (!product) return <p className="rounded-2xl bg-white p-8 text-sm text-slate-500">{ADMIN_COPY.products.noGallery}</p>;
+  const bannerUrl = productMediaUrl(product.bannerImagePath);
+
+  return (
+    <div className="space-y-5">
+      <div><h2 className="text-2xl font-black text-[#014040]">{ADMIN_COPY.products.title}</h2><p className="text-sm text-slate-600">{ADMIN_COPY.products.subtitle}</p></div>
+      <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
+        <aside className="h-fit rounded-2xl border bg-white p-2">
+          {data.products.map((item) => <button key={item.productId} onClick={() => { setProductId(item.productId); setMessage(''); }} className={`flex w-full items-center gap-3 rounded-xl p-3 text-left text-sm ${product.productId === item.productId ? 'bg-[#edf5f3] font-black text-[#014040]' : 'hover:bg-slate-50'}`}><ProductImage name={item.productName} itemId={item.productId} imageUrl={item.imageUrl} size="sm" /><span>{item.productName}<small className="block font-mono text-[10px] text-slate-500">{item.productId}</small></span></button>)}
+        </aside>
+        <section className="space-y-7 rounded-2xl border bg-white p-5">
+          <div className="flex items-center gap-3"><ProductImage name={product.productName} itemId={product.productId} imageUrl={product.imageUrl} /><div><p className="text-xs font-bold uppercase tracking-wider text-slate-500">{ADMIN_COPY.products.iconSource}</p><h3 className="text-xl font-black text-[#014040]">{product.productName}</h3></div></div>
+
+          <div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h4 className="font-black text-[#014040]">{ADMIN_COPY.products.banner}</h4><label className={secondaryButton}>{busy === 'banner' ? ADMIN_COPY.products.uploading : ADMIN_COPY.products.chooseBanner}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={Boolean(busy)} onChange={(event) => { void upload('banner', event.target.files); event.currentTarget.value = ''; }} /></label></div>
+            {bannerUrl ? <div className="relative aspect-[16/7] overflow-hidden rounded-2xl bg-[#014040]"><img src={bannerUrl} alt="" width="1200" height="525" className="h-full w-full object-cover" />{product.bannerImagePath?.startsWith('catalogue/') && <button className="absolute right-3 top-3 rounded-xl bg-white/90 px-3 py-2 text-xs font-bold text-rose-700" disabled={Boolean(busy)} onClick={() => void remove(product.bannerImagePath!)}><Trash2 className="mr-1 inline h-3.5 w-3.5" />{ADMIN_COPY.products.remove}</button>}</div> : <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{ADMIN_COPY.products.noBanner}</p>}
+          </div>
+
+          <div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h4 className="font-black text-[#014040]">{ADMIN_COPY.products.gallery}</h4><label className={secondaryButton}>{busy === 'gallery' ? ADMIN_COPY.products.uploading : ADMIN_COPY.products.chooseGallery}<input type="file" multiple accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={Boolean(busy)} onChange={(event) => { void upload('gallery', event.target.files); event.currentTarget.value = ''; }} /></label></div>
+            {product.screenshots?.length ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3">{product.screenshots.map((image, index) => <div key={`${image}-${index}`} className="relative aspect-[4/3] overflow-hidden rounded-xl bg-slate-100"><img src={productMediaUrl(image)} alt="" width="480" height="360" loading="lazy" className="h-full w-full object-cover" />{image.startsWith('catalogue/') && <button className="absolute right-2 top-2 rounded-lg bg-white/90 p-2 text-rose-700" aria-label={ADMIN_COPY.products.remove} disabled={Boolean(busy)} onClick={() => void remove(image)}><Trash2 className="h-3.5 w-3.5" /></button>}</div>)}</div> : <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{ADMIN_COPY.products.noGallery}</p>}
+          </div>
+          {message && <p role="status" className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}
+        </section>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPortal() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
@@ -363,6 +468,6 @@ export default function AdminPortal() {
 
   if (checking) return <div className="min-h-screen bg-[#f7faf9] p-8 text-[#014040]">{ADMIN_COPY.loading}</div>;
   if (!user) return <SignIn />;
-  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'licences', icon: <Boxes /> }, { id: 'services', icon: <Settings2 /> }, { id: 'announcements', icon: <Bell /> }];
-  return <div className="min-h-screen bg-[#f7faf9] text-slate-900"><header className="border-b border-[#cbdcd9] bg-[#014040] text-white"><div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-4 sm:px-6"><div><p className="text-lg font-black">{ADMIN_COPY.brand}</p><p className="text-xs text-slate-300">{user.email}</p></div><div className="flex gap-2"><button className="rounded-xl border border-white/20 p-2 hover:bg-white/10" onClick={reload} aria-label={ADMIN_COPY.refresh}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button><button className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 text-xs font-bold hover:bg-white/10" onClick={() => signOut(adminAuth)}><LogOut className="h-4 w-4" />{ADMIN_COPY.signOut}</button></div></div></header><div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[210px_1fr]"><nav className="flex h-fit gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 lg:flex-col">{nav.map((item) => <button key={item.id} onClick={() => setSection(item.id)} className={`inline-flex min-w-fit items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black ${section === item.id ? 'bg-[#014040] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{React.cloneElement(item.icon as React.ReactElement, { className: 'h-4 w-4' })}{ADMIN_COPY.sections[item.id]}</button>)}</nav><main>{error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-sm font-bold text-rose-800">{error}</p>}{!data ? <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">{ADMIN_COPY.loading}</div> : section === 'orders' ? <OrdersSection data={data} user={user} reload={reload} /> : section === 'licences' ? <LicencesSection data={data} user={user} reload={reload} /> : section === 'services' ? <ServicesSection data={data} user={user} reload={reload} /> : <AnnouncementsSection data={data} user={user} reload={reload} />}</main></div></div>;
+  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'licences', icon: <Boxes /> }, { id: 'services', icon: <Settings2 /> }, { id: 'products', icon: <Images /> }, { id: 'announcements', icon: <Bell /> }];
+  return <div className="min-h-screen bg-[#f7faf9] text-slate-900"><header className="border-b border-[#cbdcd9] bg-[#014040] text-white"><div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-4 sm:px-6"><div><p className="text-lg font-black">{ADMIN_COPY.brand}</p><p className="text-xs text-slate-300">{user.email}</p></div><div className="flex gap-2"><button className="rounded-xl border border-white/20 p-2 hover:bg-white/10" onClick={reload} aria-label={ADMIN_COPY.refresh}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button><button className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 text-xs font-bold hover:bg-white/10" onClick={() => signOut(adminAuth)}><LogOut className="h-4 w-4" />{ADMIN_COPY.signOut}</button></div></div></header><div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[210px_1fr]"><nav className="flex h-fit gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 lg:flex-col">{nav.map((item) => <button key={item.id} onClick={() => setSection(item.id)} className={`inline-flex min-w-fit items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black ${section === item.id ? 'bg-[#014040] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{React.cloneElement(item.icon as React.ReactElement, { className: 'h-4 w-4' })}{ADMIN_COPY.sections[item.id]}</button>)}</nav><main>{error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-sm font-bold text-rose-800">{error}</p>}{!data ? <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">{ADMIN_COPY.loading}</div> : section === 'orders' ? <OrdersSection data={data} user={user} reload={reload} /> : section === 'licences' ? <LicencesSection data={data} user={user} reload={reload} /> : section === 'services' ? <ServicesSection data={data} user={user} reload={reload} /> : section === 'products' ? <ProductMediaSection data={data} user={user} reload={reload} /> : <AnnouncementsSection data={data} user={user} reload={reload} />}</main></div></div>;
 }

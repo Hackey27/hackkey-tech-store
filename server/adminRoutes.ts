@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { sendCustomerDelivery, sendCustomerReceipt } from './email';
 import { AdminRequest, requireAdmin } from './adminAuth';
 import { writeAdminAudit } from './adminAudit';
@@ -11,11 +11,20 @@ import {
   markFulfilled,
   revealLicence,
   saveAnnouncement,
-  saveService
+  saveService,
+  updateProductImages
 } from './adminData';
 import { getOrder } from './orders';
 import { applyOfflinePayment } from './payments';
-import { createSignedDownload } from './storage';
+import {
+  catalogueImageObjectPath,
+  deleteCatalogueImage,
+  isCatalogueImagePath,
+  MAX_CATALOGUE_IMAGE_BYTES,
+  saveCatalogueImage,
+  createSignedDownload,
+  validateCatalogueImage
+} from './storage';
 
 function actor(req: AdminRequest) {
   if (!req.adminActor) throw new Error('Missing authenticated admin actor.');
@@ -42,6 +51,68 @@ export function createAdminRouter(): Router {
       res.json(await adminBootstrap());
     } catch (err) {
       routeError(res, err, 'Failed to load the admin portal.');
+    }
+  });
+
+  router.post(
+    '/products/:productId/images',
+    express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: MAX_CATALOGUE_IMAGE_BYTES }),
+    async (req: AdminRequest, res) => {
+      const productId = String(req.params.productId || '').trim();
+      const role = req.query.role === 'banner' ? 'banner' : req.query.role === 'gallery' ? 'gallery' : null;
+      const contentType = String(req.header('content-type') || '').split(';')[0].trim();
+      const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+      if (!productId || !role) return res.status(400).json({ error: 'A product and image role are required.' });
+      const validation = validateCatalogueImage(contentType, bytes.length);
+      if (!validation.ok) return res.status(400).json({ error: validation.error });
+
+      const objectPath = catalogueImageObjectPath(productId, role, contentType);
+      let attached = false;
+      try {
+        await saveCatalogueImage(objectPath, bytes, contentType);
+        const updated = await updateProductImages(productId, { role, objectPath });
+        attached = true;
+        if (updated.replacedPath && updated.replacedPath !== objectPath) {
+          await deleteCatalogueImage(updated.replacedPath).catch((err) => {
+            console.error('[admin] Failed to remove replaced banner:', err);
+          });
+        }
+        await writeAdminAudit(actor(req), {
+          action: `product.${role}-upload`,
+          targetType: 'product',
+          targetId: productId,
+          details: { objectPath, sizeBytes: bytes.length }
+        });
+        res.json({ product: updated.product, objectPath });
+      } catch (err) {
+        if (!attached) await deleteCatalogueImage(objectPath).catch(() => undefined);
+        routeError(res, err, 'Failed to upload the product image.');
+      }
+    }
+  );
+
+  router.delete('/products/:productId/images', async (req: AdminRequest, res) => {
+    const productId = String(req.params.productId || '').trim();
+    const objectPath = String(req.body?.objectPath || '').trim();
+    if (!productId || !isCatalogueImagePath(objectPath)) {
+      return res.status(400).json({ error: 'A valid catalogue image is required.' });
+    }
+    try {
+      const expectedPrefix = `catalogue/${productId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80)}/`;
+      if (!objectPath.startsWith(expectedPrefix)) {
+        return res.status(400).json({ error: 'That image does not belong to this product.' });
+      }
+      const updated = await updateProductImages(productId, { role: 'remove', objectPath });
+      await deleteCatalogueImage(objectPath);
+      await writeAdminAudit(actor(req), {
+        action: 'product.image-remove',
+        targetType: 'product',
+        targetId: productId,
+        details: { objectPath }
+      });
+      res.json({ product: updated.product });
+    } catch (err) {
+      routeError(res, err, 'Failed to remove the product image.');
     }
   });
 

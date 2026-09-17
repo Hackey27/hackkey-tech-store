@@ -458,8 +458,14 @@ function buildProducts(
       productId,
       productName: str(row, 'Product_Name', 'Name') || productId,
       categoryId,
+      description: str(row, 'Description', 'Short_Description') || undefined,
       defaultContact: str(row, 'Default_Contact'),
       imageUrl: str(row, 'Image_URL', 'ImageURL'),
+      bannerImagePath: str(row, 'Banner_Image_URL', 'BannerImageURL') || undefined,
+      screenshots: str(row, 'Screenshots', 'Gallery_URLs', 'GalleryURLs')
+        .split(/[\n,]+/)
+        .map((value) => value.trim())
+        .filter(Boolean),
       active: bool(row, 'Active', 'Status'),
       sortOrder: num(row, 'Sort_Order', 'SortOrder') ?? 0,
       variants: variantsByProduct.get(productId) || []

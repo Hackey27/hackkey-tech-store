@@ -1,4 +1,5 @@
 import { Storage } from '@google-cloud/storage';
+import crypto from 'crypto';
 import { ServiceField } from '../src/types';
 
 /**
@@ -17,12 +18,19 @@ import { ServiceField } from '../src/types';
  */
 
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB
+export const MAX_CATALOGUE_IMAGE_BYTES = 2 * 1024 * 1024; // resized browser output
 
 /** PDF, DOC and DOCX only. */
 export const ALLOWED_UPLOAD_TYPES: Record<string, string> = {
   'application/pdf': 'pdf',
   'application/msword': 'doc',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx'
+};
+
+export const ALLOWED_CATALOGUE_IMAGE_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp'
 };
 
 const UPLOAD_URL_TTL_MS = 15 * 60 * 1000; // 15 minutes
@@ -37,6 +45,65 @@ function getStorage(): Storage {
     });
   }
   return storage;
+}
+
+export function validateCatalogueImage(contentType: string, sizeBytes: number): UploadValidation {
+  if (!ALLOWED_CATALOGUE_IMAGE_TYPES[contentType]) {
+    return { ok: false, error: 'Use a JPEG, PNG, or WebP image.' };
+  }
+  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+    return { ok: false, error: 'The image is empty.' };
+  }
+  if (sizeBytes > MAX_CATALOGUE_IMAGE_BYTES) {
+    return { ok: false, error: 'The resized image must be 2 MB or smaller.' };
+  }
+  return { ok: true };
+}
+
+function safeProductId(productId: string): string {
+  return productId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80) || 'product';
+}
+
+export function catalogueImageObjectPath(
+  productId: string,
+  role: 'banner' | 'gallery',
+  contentType: string
+): string {
+  const extension = ALLOWED_CATALOGUE_IMAGE_TYPES[contentType] || 'bin';
+  return `catalogue/${safeProductId(productId)}/${role}/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+}
+
+export function isCatalogueImagePath(objectPath: string): boolean {
+  return objectPath.startsWith('catalogue/') && !objectPath.includes('..');
+}
+
+export async function saveCatalogueImage(
+  objectPath: string,
+  bytes: Buffer,
+  contentType: string
+): Promise<void> {
+  if (!isCatalogueImagePath(objectPath)) throw new Error('Invalid catalogue image path.');
+  const validation = validateCatalogueImage(contentType, bytes.length);
+  if (!validation.ok) throw new Error(validation.error);
+  await getStorage().bucket(bucketName()).file(objectPath).save(bytes, {
+    resumable: false,
+    contentType,
+    metadata: { cacheControl: 'public, max-age=31536000, immutable' }
+  });
+}
+
+export async function deleteCatalogueImage(objectPath: string): Promise<void> {
+  if (!isCatalogueImagePath(objectPath)) throw new Error('Invalid catalogue image path.');
+  await getStorage().bucket(bucketName()).file(objectPath).delete({ ignoreNotFound: true });
+}
+
+export async function catalogueImageFile(objectPath: string) {
+  if (!isCatalogueImagePath(objectPath)) throw new Error('Invalid catalogue image path.');
+  const file = getStorage().bucket(bucketName()).file(objectPath);
+  const [metadata] = await file.getMetadata();
+  const contentType = String(metadata.contentType || 'application/octet-stream');
+  if (!ALLOWED_CATALOGUE_IMAGE_TYPES[contentType]) throw new Error('Stored object is not a catalogue image.');
+  return { file, contentType };
 }
 
 /** Defaults to the project's own bucket; override for a dedicated one. */

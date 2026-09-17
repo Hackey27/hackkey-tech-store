@@ -79,6 +79,15 @@ function machineCodeType(variants: Variant[]): MachineCodeType {
   return required.toLowerCase().includes('hardware') ? 'hardware-id' : 'lock-code';
 }
 
+/** Storage-backed catalogue images stay private in the bucket. The stable
+ *  application URL validates the prefix before streaming them to a customer. */
+function catalogueImageUrl(value?: string): string | undefined {
+  if (!value) return undefined;
+  if (/^https?:\/\//i.test(value)) return value;
+  if (!value.startsWith('catalogue/')) return undefined;
+  return `/api/catalog/images?path=${encodeURIComponent(value)}`;
+}
+
 function productToCatalogueItem(product: Product): CatalogueItem {
   const variants = (product.variants || []).map((v) => hydrateVariant(v, product.productId));
   const sellable = variants.filter(isVariantSellable);
@@ -104,7 +113,12 @@ function productToCatalogueItem(product: Product): CatalogueItem {
     itemId: product.productId,
     name: product.productName,
     categoryId: product.categoryId,
+    description: product.description,
     imageUrl: product.imageUrl,
+    bannerImageUrl: catalogueImageUrl(product.bannerImagePath),
+    screenshots: (product.screenshots || [])
+      .map((image) => catalogueImageUrl(image))
+      .filter((image): image is string => Boolean(image)),
     sortOrder: product.sortOrder ?? 0,
     pricePesewas: cheapest?.payablePricePesewas,
     listPricePesewas: cheapest?.listPricePesewas,

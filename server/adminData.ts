@@ -53,11 +53,12 @@ export async function listVariantSummaries(): Promise<VariantSummary[]> {
 
 export async function adminBootstrap() {
   const db = getFirestore();
-  const [ordersSnap, licencesSnap, servicesSnap, announcementsSnap, variants] = await Promise.all([
+  const [ordersSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, variants] = await Promise.all([
     db.collection(COLLECTIONS.orders).get(),
     db.collection(COLLECTIONS.licencePool).get(),
     db.collection(COLLECTIONS.services).get(),
     db.collection(COLLECTIONS.announcements).get(),
+    db.collection(COLLECTIONS.products).get(),
     listVariantSummaries()
   ]);
 
@@ -88,8 +89,44 @@ export async function adminBootstrap() {
   const announcements = announcementsSnap.docs
     .map((doc) => doc.data() as Announcement)
     .sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''));
+  const products = productsSnap.docs
+    .map((doc) => doc.data() as Product)
+    .sort((a, b) => a.productName.localeCompare(b.productName));
 
-  return { orders, licences, services, announcements, variants };
+  return { orders, licences, services, announcements, products, variants };
+}
+
+export async function updateProductImages(
+  productId: string,
+  change:
+    | { role: 'banner'; objectPath: string }
+    | { role: 'gallery'; objectPath: string }
+    | { role: 'remove'; objectPath: string }
+): Promise<{ product: Product; replacedPath?: string }> {
+  const ref = getFirestore().collection(COLLECTIONS.products).doc(productId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('Product not found.');
+  const product = snap.data() as Product;
+  let patch: Partial<Product>;
+  let replacedPath: string | undefined;
+
+  if (change.role === 'banner') {
+    replacedPath = product.bannerImagePath?.startsWith('catalogue/') ? product.bannerImagePath : undefined;
+    patch = { bannerImagePath: change.objectPath };
+  } else if (change.role === 'gallery') {
+    const screenshots = [...new Set([...(product.screenshots || []), change.objectPath])];
+    if (screenshots.length > 12) throw new Error('A product can have up to 12 gallery images.');
+    patch = { screenshots };
+  } else {
+    patch = {
+      bannerImagePath: product.bannerImagePath === change.objectPath ? '' : product.bannerImagePath,
+      screenshots: (product.screenshots || []).filter((image) => image !== change.objectPath)
+    };
+  }
+
+  await ref.update(patch);
+  invalidateCatalogueCache();
+  return { product: { ...product, ...patch }, replacedPath };
 }
 
 export async function revealLicence(licenceId: string): Promise<LicencePoolEntry | null> {

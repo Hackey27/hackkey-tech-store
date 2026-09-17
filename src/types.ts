@@ -86,8 +86,15 @@ export interface Product {
   productId: string;
   productName: string; // customer-facing, always wins
   categoryId: string;
+  description?: string;
   defaultContact?: string;
   imageUrl?: string;
+  /** Optional wide artwork. Admin uploads are stored as a private Cloud
+   *  Storage object path and exposed through the public catalogue image route. */
+  bannerImagePath?: string;
+  /** Installation images. Values may be migrated HTTPS URLs or private
+   *  `catalogue/` object paths created by the admin portal. */
+  screenshots?: string[];
   active: boolean;
   sortOrder?: number;
   variants: Variant[];
@@ -236,6 +243,8 @@ export interface CatalogueItem {
   categoryId: string;
   description?: string;
   imageUrl?: string;
+  bannerImageUrl?: string;
+  screenshots?: string[];
   sortOrder: number;
   /** Integer pesewas. Absent means there is no single price to show — a
    *  service priced on enquiry, or a laptop with a blank price. Never
@@ -453,7 +462,7 @@ export interface AdminAuditEntry {
   actorUid: string;
   actorEmail?: string;
   action: string;
-  targetType: 'order' | 'licence' | 'service' | 'announcement';
+  targetType: 'order' | 'licence' | 'service' | 'announcement' | 'product';
   targetId: string;
   orderId?: string;
   details?: Record<string, unknown>;

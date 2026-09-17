@@ -3,6 +3,7 @@ import { CatalogueItem, Variant, ServiceOption } from '../types';
 import { ShoppingBag, Trash2, ChevronRight, Check } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
 import { STORE_COPY } from '../config/storeCopy';
+import { ProductImage } from './ProductImage';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
 
 export interface CartItem {
@@ -174,9 +175,7 @@ export const CartView: React.FC<CartViewProps> = ({
                   className="bg-white rounded-2xl border border-[#d8e7e4] p-4 sm:p-5 flex items-center justify-between gap-4 shadow-2xs"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-[#edf5f3] text-[#014040] font-black flex items-center justify-center text-sm shrink-0 border border-[#cbe3dd]">
-                      {(item.product.name || 'SW').slice(0, 2).toUpperCase()}
-                    </div>
+                    <ProductImage name={item.product.name} itemId={item.product.itemId} imageUrl={item.product.imageUrl} kind={item.product.kind} size="sm" />
                     <div>
                       <h3 className="text-sm sm:text-base font-bold text-[#014040]">
                         {item.product.name}

@@ -1,19 +1,11 @@
-import React, { useState } from 'react';
-import { CatalogueItem, ServiceOption, Variant, MachineCodeType } from '../types';
-import {
-  X,
-  CheckCircle,
-  Monitor,
-  Laptop,
-  Sparkles,
-  ChevronRight,
-  AlertCircle,
-  Check
-} from 'lucide-react';
-import { OrderProgressBar } from './OrderProgressBar';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, AlertCircle, Check, ChevronRight, Monitor } from 'lucide-react';
+import { CatalogueItem, MachineCodeType, ServiceOption, Variant } from '../types';
 import { STORE_COPY } from '../config/storeCopy';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
 import { ServicePurchasePanel } from './ServicePurchasePanel';
+import { ProductGallery } from './ProductGallery';
+import { ProductImage, renderableProductImageUrl } from './ProductImage';
 
 interface ProductDetailViewProps {
   product: CatalogueItem;
@@ -27,377 +19,172 @@ interface ProductDetailViewProps {
   ) => void;
 }
 
-export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
-  product,
-  onClose,
-  onAddToCart
-}) => {
-  // Determine versions & selection state
+export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose, onAddToCart }) => {
   const variants = product.variants || [];
-  const recommendedVariant =
-    variants.find((v) => v.latest) || variants[0];
-  const [selectedVariant, setSelectedVariant] = useState<Variant | undefined>(
-    recommendedVariant
-  );
-
-  // OS Selection based on Section 1.3
-  const availableOsList: string[] = selectedVariant
-    ? selectedVariant.osList || [selectedVariant.os || 'Windows']
-    : product.osList || ['Windows'];
-  const hasMultipleOs = availableOsList.length > 1;
-  const [selectedOs, setSelectedOs] = useState<string>(availableOsList[0] || 'Windows');
-
-  // The one resolver, so a laptop or bundle — which has no variant — shows its
-  // own price instead of falling through a dead ?? chain to zero.
-  const currentPricePesewas = resolveLinePricePesewas({
-    item: product,
-    variant: selectedVariant,
-    quantity: 1
-  }).unitPesewas;
-
-  // Active step for progress preview
-  const [progressDemoStep, setProgressDemoStep] = useState(1);
+  const [selectedVariant, setSelectedVariant] = useState<Variant>();
+  const [selectedOs, setSelectedOs] = useState('');
   const [addedNotice, setAddedNotice] = useState(false);
-
-  const productName = product.name || 'Software';
-
-  const handleBuyClick = () => {
-    if (onAddToCart) {
-      onAddToCart(product, selectedVariant, selectedOs);
-    }
-    setAddedNotice(true);
-    setTimeout(() => setAddedNotice(false), 2500);
-  };
-
-  const getProductInitial = (name: string) => {
-    const parts = (name || '').trim().split(' ');
-    if (parts.length > 1 && parts[0] && parts[1]) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return (name || 'HK').slice(0, 2).toUpperCase();
-  };
-
-  const recommendedId = recommendedVariant?.variantId;
-  const olderVersions = variants.filter(
-    (v) => (v.variantId) !== recommendedId
-  );
-
-  // Machine code type
+  const [bannerFailed, setBannerFailed] = useState(false);
+  const productName = product.name || STORE_COPY.product.softwareFallback;
+  const recommendedId = variants.find((variant) => variant.latest)?.variantId;
+  const isPurchasableService = product.kind === 'service' && (product.options?.length ?? 0) > 0;
   const machineCodeType: MachineCodeType = product.machineCodeType || 'none';
 
-  // A service with options is bought, not enquired about: it gets the option
-  // picker, quantity selector and disclaimer instead of the version and OS
-  // controls, which mean nothing for it. Services without options are
-  // untouched and keep their quote-request behaviour.
-  const isPurchasableService = product.kind === 'service' && (product.options?.length ?? 0) > 0;
+  const availableOsList = useMemo(() => {
+    if (selectedVariant) return selectedVariant.osList || [selectedVariant.os || 'Windows'];
+    return product.osList || [];
+  }, [product.osList, selectedVariant]);
+
+  useEffect(() => {
+    setSelectedVariant(undefined);
+    setSelectedOs('');
+    setBannerFailed(false);
+  }, [product.itemId]);
+
+  useEffect(() => setBannerFailed(false), [product.bannerImageUrl]);
+
+  const price = resolveLinePricePesewas({ item: product, variant: selectedVariant, quantity: 1 }).unitPesewas;
+  const listPrice = selectedVariant?.listPricePesewas ?? product.listPricePesewas;
+  const promoLabel = selectedVariant?.promoLabel ?? product.promoLabel;
+  const promoPercent = selectedVariant?.promoPercent ?? product.promoPercent;
+  const bannerUrl = renderableProductImageUrl(product.bannerImageUrl);
+  const needsVariant = variants.length > 0;
+  const canBuy = !needsVariant || Boolean(selectedVariant?.available);
+
+  const showAdded = () => {
+    setAddedNotice(true);
+    window.setTimeout(() => setAddedNotice(false), 2500);
+  };
+
+  const handleBuyClick = () => {
+    if (!canBuy) return;
+    onAddToCart?.(product, selectedVariant, selectedOs || availableOsList[0]);
+    showAdded();
+  };
 
   const handleServiceAdd = (option: ServiceOption, quantity: number) => {
     onAddToCart?.(product, undefined, undefined, option, quantity);
-    setAddedNotice(true);
-    setTimeout(() => setAddedNotice(false), 2500);
+    showAdded();
+  };
+
+  const selectVariant = (variant: Variant) => {
+    if (!variant.available) return;
+    setSelectedVariant(variant);
+    setSelectedOs((variant.osList || [variant.os || 'Windows'])[0] || '');
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-150">
-      <div className="bg-white w-full max-w-4xl rounded-2xl sm:rounded-3xl shadow-2xl border border-[#d8e7e4] overflow-hidden my-auto flex flex-col max-h-[92vh]">
-        {/* Modal Top Bar */}
-        <div className="px-5 py-4 bg-[#f8fbfa] border-b border-[#e2ecea] flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#014040] bg-[#edf5f3] px-2.5 py-1 rounded-full border border-[#d0e4e0]">
-              {product.categoryName || 'Software'}
-            </span>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
-            title={STORE_COPY.product.close}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+      <button type="button" onClick={onClose} className="mb-5 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-[#014040] hover:bg-[#edf5f3]">
+        <ArrowLeft className="h-4 w-4" />
+        {STORE_COPY.product.back}
+      </button>
 
-        {/* Modal Scrollable Content */}
-        <div className="overflow-y-auto p-5 sm:p-8 space-y-8">
-          {/* Main Hero Header */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-            {/* Product Image / Logo Gallery Area */}
-            <div className="md:col-span-4 flex flex-col items-center">
-              <div className="w-full aspect-square max-w-[240px] rounded-2xl bg-gradient-to-br from-[#edf5f3] to-[#d4e7e4] border border-[#c4ded9] flex items-center justify-center text-4xl font-black text-[#014040] shadow-sm">
-                {product.categoryId === 'laptops' ? (
-                  <Laptop className="w-16 h-16 text-[#014040]" />
-                ) : product.categoryId === 'research-services' ? (
-                  <Sparkles className="w-16 h-16 text-[#014040]" />
-                ) : (
-                  <span>{getProductInitial(productName)}</span>
-                )}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(330px,0.75fr)]">
+        <section className="relative aspect-[16/10] min-h-[330px] overflow-hidden rounded-3xl bg-gradient-to-br from-[#025656] via-[#014040] to-[#002929] shadow-lg sm:min-h-[440px]">
+          {bannerUrl && !bannerFailed && <img src={bannerUrl} alt="" width="1200" height="750" loading="eager" decoding="async" className="absolute inset-0 h-full w-full object-cover" onError={() => setBannerFailed(true)} />}
+          <div className="absolute inset-0 bg-black/10" aria-hidden="true" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#014040] via-[#014040]/80 to-transparent" aria-hidden="true" />
+          <div className="absolute inset-x-0 bottom-0 p-5 text-white sm:p-8">
+            <div className="mb-4 flex items-end gap-4">
+              <ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} size="lg" eager />
+              <div className="min-w-0">
+                <p className="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-[#d9ffe0]">{product.categoryName}</p>
+                <h1 className="text-2xl font-black leading-tight tracking-tight sm:text-4xl">{productName}</h1>
               </div>
             </div>
+            <div key={`${selectedVariant?.variantId || 'from'}-${price}`} className="hk-price-change flex flex-wrap items-end gap-x-3 gap-y-1">
+              {!selectedVariant && variants.length > 0 && <span className="pb-1 text-sm font-bold uppercase tracking-wider text-[#d9ffe0]">{STORE_COPY.product.fromPrefix}</span>}
+              <span className="text-3xl font-black sm:text-4xl">{price > 0 ? formatPesewas(price) : STORE_COPY.product.askForPrice}</span>
+              {listPrice && listPrice > price && <span className="pb-1 text-sm font-bold text-white/70 line-through">{formatPesewas(listPrice)}</span>}
+              {(promoLabel || promoPercent) && <span className="mb-1 rounded-full bg-[#05ef28] px-2.5 py-1 text-xs font-black text-[#014040]">{promoLabel || STORE_COPY.product.promotion(promoPercent)}</span>}
+            </div>
+          </div>
+        </section>
 
-            {/* Product Info & Selection Experience */}
-            <div className="md:col-span-8 space-y-5">
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-black text-[#014040] tracking-tight">
-                  {productName}
-                </h1>
-                <p className="text-sm text-slate-600 mt-1 leading-relaxed">
-                  {product.description}
-                </p>
+        <aside className="rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-24">
+          {isPurchasableService ? (
+            <ServicePurchasePanel item={product} onAddToCart={handleServiceAdd} />
+          ) : variants.length > 0 ? (
+            <div>
+              <div className="mb-4">
+                <h2 className="text-lg font-black text-[#014040]">{STORE_COPY.product.chooseVersion}</h2>
+                <p className="mt-1 text-xs text-slate-500">{STORE_COPY.product.selectVersion}</p>
+              </div>
+              <div className="space-y-2">
+                {variants.map((variant) => {
+                  const selected = selectedVariant?.variantId === variant.variantId;
+                  const variantPrice = resolveLinePricePesewas({ item: product, variant, quantity: 1 }).unitPesewas;
+                  return (
+                    <button
+                      key={variant.variantId}
+                      type="button"
+                      disabled={!variant.available}
+                      onClick={() => selectVariant(variant)}
+                      className={`w-full rounded-2xl border-2 p-4 text-left transition-colors motion-reduce:transition-none ${selected ? 'border-[#014040] bg-[#f0f9f7]' : variant.available ? 'border-slate-200 hover:border-[#7aa39b]' : 'cursor-not-allowed border-slate-100 bg-slate-50 opacity-60'}`}
+                    >
+                      <span className="flex items-start justify-between gap-3">
+                        <span>
+                          <span className="flex flex-wrap items-center gap-2 text-sm font-black text-[#014040]">
+                            {variant.versionOrPlan}
+                            {variant.variantId === recommendedId && <span className="rounded-full bg-[#05ef28] px-2 py-0.5 text-[10px] uppercase tracking-wider">{STORE_COPY.product.recommended}</span>}
+                          </span>
+                          {!variant.available && <span className="mt-1 block text-xs font-bold text-slate-500">{STORE_COPY.product.unavailable}</span>}
+                          {selected && <span className="mt-1 block text-xs font-bold text-[#025656]">{STORE_COPY.product.selected}</span>}
+                        </span>
+                        <span className="text-sm font-black text-[#014040]">{formatPesewas(variantPrice)}</span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
 
-              {isPurchasableService && (
-                <ServicePurchasePanel item={product} onAddToCart={handleServiceAdd} />
-              )}
-
-              {/* OS Compatibility */}
-              {!isPurchasableService && (
-              <div>
-                <span className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                  {STORE_COPY.product.chooseOperatingSystem}
-                </span>
-                {hasMultipleOs ? (
-                  <div className="flex gap-2">
-                    {availableOsList.map((os: string) => (
-                      <button
-                        key={os}
-                        type="button"
-                        onClick={() => setSelectedOs(os)}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                          selectedOs === os
-                            ? 'bg-[#014040] text-white shadow-xs'
-                            : 'bg-[#f0f5f4] text-slate-700 hover:bg-[#e2ecea]'
-                        }`}
-                      >
-                        {os}
+              {selectedVariant && availableOsList.length > 0 && (
+                <div className="mt-5 border-t border-[#e2ecea] pt-5">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-600">{STORE_COPY.product.chooseOperatingSystem}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {availableOsList.map((os) => (
+                      <button key={os} type="button" onClick={() => setSelectedOs(os)} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold ${selectedOs === os ? 'bg-[#014040] text-white' : 'bg-[#edf5f3] text-[#014040]'}`}>
+                        <Monitor className="h-3.5 w-3.5" />{os}
                       </button>
                     ))}
                   </div>
-                ) : (
-                  <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-lg bg-[#f0f5f4] text-slate-800 border border-[#d8e7e4]">
-                    <Monitor className="w-3.5 h-3.5 text-[#014040]" />
-                    <span>{availableOsList[0] || 'Windows'}</span>
-                  </div>
-                )}
-              </div>
-              )}
-
-              {/* Version Selection Experience */}
-              {!isPurchasableService && variants.length > 0 && (
-                <div className="space-y-3">
-                  <span className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                    {STORE_COPY.product.chooseVersion}
-                  </span>
-
-                  {/* Recommended Version */}
-                  {recommendedVariant && (
-                    <div
-                      onClick={() => {
-                        setSelectedVariant(recommendedVariant);
-                        const osList =
-                          recommendedVariant.osList || [recommendedVariant.os || 'Windows'];
-                        setSelectedOs(osList[0]);
-                      }}
-                      className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between ${
-                        (selectedVariant?.variantId) ===
-                        (recommendedVariant.variantId)
-                          ? 'bg-[#f0f9f7] border-[#014040] shadow-xs'
-                          : 'bg-white border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                            (selectedVariant?.variantId) ===
-                            (recommendedVariant.variantId)
-                              ? 'border-[#014040] bg-[#014040]'
-                              : 'border-slate-300'
-                          }`}
-                        >
-                          {(selectedVariant?.variantId) ===
-                            (recommendedVariant.variantId) && (
-                            <div className="w-2 h-2 rounded-full bg-[#05ef28]" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-[#014040]">
-                              {recommendedVariant.versionOrPlan}
-                            </span>
-                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#05ef28] text-[#014040]">
-                              {STORE_COPY.product.recommended}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-sm font-black text-[#014040]">
-                          {formatPesewas(
-                            resolveLinePricePesewas({
-                              item: product,
-                              variant: recommendedVariant,
-                              quantity: 1
-                            }).unitPesewas
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Other Versions if any */}
-                  {olderVersions.length > 0 && (
-                    <div className="space-y-2 pt-1">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {olderVersions.map((variant) => {
-                          const vKey = variant.variantId || 'var';
-                          const isSelected =
-                            (selectedVariant?.variantId) === vKey;
-                          const vPrice = resolveLinePricePesewas({
-                            item: product,
-                            variant,
-                            quantity: 1
-                          }).unitPesewas;
-
-                          return (
-                            <div
-                              key={vKey}
-                              onClick={() => {
-                                setSelectedVariant(variant);
-                                const osList =
-                                  variant.osList || [variant.os || 'Windows'];
-                                setSelectedOs(osList[0]);
-                              }}
-                              className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between text-xs ${
-                                isSelected
-                                  ? 'bg-[#f0f9f7] border-[#014040] font-bold'
-                                  : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
-                              }`}
-                            >
-                              <span>{variant.versionOrPlan}</span>
-                              <span className="font-bold text-[#014040]">
-                                {formatPesewas(vPrice)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
-              {/* Device lock warning for licensed software (Section 9.3) */}
-              {machineCodeType !== 'service' && machineCodeType !== 'none' && (
-                <div className="p-3.5 bg-[#fffaf0] border-l-4 border-[#e0a800] rounded-r-xl text-xs text-[#8a5b00] leading-relaxed flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-[#8a5b00] shrink-0 mt-0.5" />
-                  <span>{STORE_COPY.deviceLock.before}</span>
-                </div>
-              )}
-
-              {/* Price & Action Box */}
-              {!isPurchasableService && (
-              <div className="p-4 rounded-2xl bg-[#f7faf9] border border-[#d8e7e4] flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold block">
-                    Price
-                  </span>
-                  <div className="text-2xl font-black text-[#014040]">
-                    {formatPesewas(currentPricePesewas)}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleBuyClick}
-                    className="px-6 py-3 rounded-xl bg-[#05ef28] hover:bg-[#04d824] active:scale-98 text-[#014040] font-black text-sm shadow-xs hover:shadow-md transition-all flex items-center gap-2 cursor-pointer"
-                  >
-                    <span>{STORE_COPY.product.buyNow}</span>
-                    <ChevronRight className="w-4 h-4 stroke-[3]" />
-                  </button>
-                </div>
-              </div>
-              )}
-
-              {addedNotice && (
-                <div className="p-3 rounded-xl bg-[#d9ffe0] border border-[#b2f0bf] text-xs font-bold text-[#0d6520] flex items-center gap-2 animate-in fade-in">
-                  <Check className="w-4 h-4 text-[#0d6520]" />
-                  <span>{STORE_COPY.product.addedToCartTitle}</span>
-                </div>
-              )}
+              <button type="button" disabled={!selectedVariant} onClick={handleBuyClick} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-5 py-3.5 text-sm font-black text-[#014040] shadow-xs hover:bg-[#04d824] disabled:cursor-not-allowed disabled:opacity-50">
+                {STORE_COPY.product.addToCart}<ChevronRight className="h-4 w-4 stroke-[3]" />
+              </button>
             </div>
-          </div>
-
-          {/* Section: Reusable Order Progress UI Component */}
-          <div className="p-5 sm:p-6 rounded-2xl bg-[#f8fbfa] border border-[#d8e7e4] space-y-3">
-            <h3 className="text-sm font-bold text-[#014040]">
-              Fulfilment & Delivery Workflow
-            </h3>
-
-            <OrderProgressBar
-              machineCodeType={machineCodeType}
-              currentStep={progressDemoStep}
-              onStepClick={(step) => setProgressDemoStep(step)}
-            />
-
-            <div className="flex justify-end gap-1.5 pt-1">
-              <span className="text-[10px] text-slate-400 self-center mr-2">Preview step:</span>
-              {[1, 2, 3, 4, 5]
-                .slice(0, machineCodeType === 'service' || machineCodeType === 'none' ? 4 : 5)
-                .map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setProgressDemoStep(s)}
-                    className={`px-2 py-0.5 text-[10px] font-bold rounded-md cursor-pointer ${
-                      progressDemoStep === s
-                        ? 'bg-[#014040] text-[#05ef28]'
-                        : 'bg-white border border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    Step {s}
-                  </button>
-                ))}
+          ) : (
+            <div className="space-y-5">
+              {availableOsList.length > 0 && <p className="inline-flex items-center gap-2 rounded-xl bg-[#edf5f3] px-3 py-2 text-xs font-bold text-[#014040]"><Monitor className="h-4 w-4" />{availableOsList.join(' · ')}</p>}
+              <button type="button" onClick={handleBuyClick} disabled={price <= 0} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-5 py-3.5 text-sm font-black text-[#014040] hover:bg-[#04d824] disabled:cursor-not-allowed disabled:opacity-50">
+                {price > 0 ? STORE_COPY.product.addToCart : STORE_COPY.product.askForPrice}<ChevronRight className="h-4 w-4 stroke-[3]" />
+              </button>
             </div>
-          </div>
-
-          {/* Product detail tabs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-            {product.description && (
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 mb-1.5">
-                  About this product
-                </h4>
-                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
-                  {product.description}
-                </p>
-              </div>
-            )}
-
-          </div>
-        </div>
-
-        {/* Modal Bottom Action Bar */}
-        <div className="px-5 py-4 bg-[#f8fbfa] border-t border-[#e2ecea] flex items-center justify-between">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
-          >
-            {STORE_COPY.product.close}
-          </button>
-
-          {/* A priced service is added from its own panel, which knows the
-              chosen option and quantity. This button would add a line with
-              neither. */}
-          {!isPurchasableService && (
-            <button
-              type="button"
-              onClick={handleBuyClick}
-              className="px-6 py-2.5 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-xs sm:text-sm shadow-xs transition-all flex items-center gap-2 cursor-pointer"
-            >
-              <span>{STORE_COPY.product.buyNow}</span>
-              <ChevronRight className="w-4 h-4 stroke-[3]" />
-            </button>
           )}
-        </div>
+
+          {addedNotice && <p role="status" className="mt-4 flex items-center gap-2 rounded-xl border border-[#b2f0bf] bg-[#d9ffe0] p-3 text-xs font-bold text-[#0d6520]"><Check className="h-4 w-4" />{STORE_COPY.product.addedToCartTitle}</p>}
+        </aside>
+      </div>
+
+      <div className="mt-8 space-y-10">
+        {product.description && (
+          <section className="max-w-3xl">
+            <h2 className="text-xl font-black text-[#014040]">{STORE_COPY.product.about}</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-700 sm:text-base">{product.description}</p>
+          </section>
+        )}
+
+        {machineCodeType !== 'service' && machineCodeType !== 'none' && (
+          <div className="flex max-w-3xl items-start gap-2 rounded-2xl border-l-4 border-[#e0a800] bg-[#fffaf0] p-4 text-xs leading-relaxed text-[#8a5b00]">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{STORE_COPY.deviceLock.before}</span>
+          </div>
+        )}
+
+        <ProductGallery images={product.screenshots || []} productName={productName} />
       </div>
     </div>
   );

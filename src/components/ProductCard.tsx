@@ -1,31 +1,32 @@
 import React from 'react';
 import { CatalogueItem } from '../types';
-import { Laptop, CheckCircle, ChevronRight, Sparkles } from 'lucide-react';
+import { CheckCircle, ChevronRight } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
+import { ProductImage } from './ProductImage';
 
 interface ProductCardProps {
   product: CatalogueItem;
   onSelect: (product: CatalogueItem) => void;
   onBuyNowClick: (product: CatalogueItem) => void;
+  showCategoryLabel?: boolean;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   onSelect,
-  onBuyNowClick
+  onBuyNowClick,
+  showCategoryLabel = true
 }) => {
   const hasMultipleVariants = product.variants && product.variants.length > 1;
 
-  const productName = product.name || 'Software';
+  const productName = product.name || STORE_COPY.product.softwareFallback;
 
   // Format GHS price string: From ₵... or ₵...
-  const firstVariant = product.variants?.[0];
   // One resolution for every kind, and one formatter — a card must never build
   // a currency string by hand, which is how pesewas came to render as cedis.
   const { unitPesewas: minPrice } = resolveLinePricePesewas({
     item: product,
-    variant: firstVariant,
     quantity: 1
   });
 
@@ -39,43 +40,32 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   // Primary action button label (Buy now vs View options)
   const actionLabel = hasMultipleVariants ? STORE_COPY.product.viewOptions : STORE_COPY.product.buyNow;
 
-  // Fallback initial/icon for logo image area
-  const getProductInitial = (name: string) => {
-    const parts = (name || '').trim().split(' ');
-    if (parts.length > 1 && parts[0] && parts[1]) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return (name || 'HK').slice(0, 2).toUpperCase();
-  };
-
   return (
     <div
       id={`product-card-${product.itemId}`}
       className="group flex flex-col justify-between rounded-2xl bg-white border border-[#d8e7e4] hover:border-[#014040]/70 hover:shadow-md transition-all duration-200 overflow-hidden text-slate-900"
     >
       <div className="p-5 sm:p-6">
-        {/* Top bar: CatalogueItem Image/Logo Area + Category Label */}
+        {/* Top bar: real catalogue image + optional category context. */}
         <div className="flex items-start justify-between gap-3 mb-4">
-          <div
+          <button
+            type="button"
             onClick={() => onSelect(product)}
-            className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#edf5f3] to-[#d8e9e6] border border-[#c6deda] flex items-center justify-center font-black text-lg text-[#014040] shadow-2xs group-hover:scale-105 transition-transform cursor-pointer"
+            className="rounded-2xl group-hover:scale-105 transition-transform motion-reduce:transition-none"
+            aria-label={productName}
           >
-            {product.categoryId === 'laptops' ? (
-              <Laptop className="w-7 h-7 text-[#014040]" />
-            ) : product.categoryId === 'research-services' ? (
-              <Sparkles className="w-7 h-7 text-[#014040]" />
-            ) : (
-              <span>{getProductInitial(productName)}</span>
-            )}
-          </div>
+            <ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} />
+          </button>
 
           <div className="text-right">
-            <span className="inline-block text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#edf5f3] text-[#014040] border border-[#d0e4e0]">
-              {product.categoryName || 'Software'}
-            </span>
+            {showCategoryLabel && (
+              <span className="inline-block text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#edf5f3] text-[#014040] border border-[#d0e4e0]">
+                {product.categoryName || STORE_COPY.product.softwareFallback}
+              </span>
+            )}
             {hasMultipleVariants && (
               <span className="block text-[10px] text-slate-500 mt-1 font-medium">
-                {product.variants?.length} editions available
+                {STORE_COPY.product.versionsAvailable(product.variants?.length || 0)}
               </span>
             )}
           </div>
@@ -89,15 +79,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {productName}
         </h3>
 
-        {/* Short Description */}
-        <p className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed">
-          {product.description}
-        </p>
-
         {/* OS Compatibility badges */}
         {product.osList && product.osList.length > 0 && (
           <div className="mt-3.5 flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] text-slate-500 font-medium">Platform:</span>
+            <span className="text-[11px] text-slate-500 font-medium">{STORE_COPY.product.platform}</span>
             {product.osList.map((os, idx) => (
               <span
                 key={idx}
@@ -131,7 +116,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         {/* Price in GHS only */}
         <div>
           <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold block">
-            Price (GHS)
+            {STORE_COPY.product.priceLabel}
           </span>
           <span className="text-base sm:text-lg font-black text-[#014040]">
             {displayPrice}

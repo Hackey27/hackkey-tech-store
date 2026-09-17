@@ -14,11 +14,12 @@ export class AdminApiError extends Error {
 
 export async function adminRequest<T>(user: User, path: string, init: RequestInit = {}): Promise<T> {
   const token = await user.getIdToken();
+  const binaryBody = typeof Blob !== 'undefined' && init.body instanceof Blob;
   const response = await fetch(`/api/admin${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      ...(binaryBody ? {} : { 'Content-Type': 'application/json' }),
       ...(init.headers || {})
     }
   });

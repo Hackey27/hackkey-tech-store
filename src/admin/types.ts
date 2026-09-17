@@ -1,4 +1,4 @@
-import { Announcement, LicencePoolEntry, Order, Service } from '../types';
+import { Announcement, LicencePoolEntry, Order, Product, Service } from '../types';
 
 export interface AdminLicence extends Omit<LicencePoolEntry, 'licenceCode'> {
   maskedCode: string;
@@ -16,6 +16,7 @@ export interface AdminData {
   licences: AdminLicence[];
   services: Service[];
   announcements: Announcement[];
+  products: Product[];
   variants: VariantSummary[];
 }
 

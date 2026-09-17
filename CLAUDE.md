@@ -26,7 +26,7 @@ Collections (all camelCase, in Firestore and in TypeScript):
 | Collection | Contents |
 | --- | --- |
 | `categories/{categoryId}` | The five browsable departments. |
-| `products/{productId}` | Variants are **embedded** as `variants[]`, not a subcollection. |
+| `products/{productId}` | Variants are **embedded** as `variants[]`; `imageUrl` is the icon, while `bannerImagePath` and `screenshots[]` hold product-page media. |
 | `bundles/{bundleId}` | Items embedded as `items[]`; `altGroup`/`altLabel` mean "choose one of these". |
 | `services/{serviceId}` | `fields[]` is the parsed enquiry form. `options[]` present => purchasable. |
 | `laptops/{laptopId}` | `picturesUrl` is a `string[]`. |
@@ -137,7 +137,7 @@ on the order and the seller is alerted. The money arrived; that is what matters.
 | `server/catalogue.ts` | Assembles and caches the catalogue response. |
 | `server/orders.ts` | Checkout, order lookup, licence assignment. |
 | `server/pricingConfig.ts` | Pricing rules — neutral by default; the admin portal owns them from Phase 2. |
-| `server/storage.ts` | Customer document uploads: signed URLs, server-side limits, form validation. |
+| `server/storage.ts` | Customer document uploads plus size-limited admin catalogue images in the private upload bucket. |
 | `server/seed/turnitin.ts` | Services defined in code rather than migrated. |
 | `server/paystack.ts` | Paystack client, config and signature verification. Marks nothing paid. |
 | `server/payments.ts` | `applyVerifiedPayment` — the only code that may set `paymentStatus`. |

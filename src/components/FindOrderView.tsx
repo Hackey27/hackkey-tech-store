@@ -15,7 +15,8 @@ import {
   Clock
 } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
-import { Order } from '../types';
+import { CatalogueItem, Order } from '../types';
+import { ProductImage } from './ProductImage';
 import { STORE_COPY } from '../config/storeCopy';
 import { cedisToPesewas, formatPesewas } from '../utils/money';
 
@@ -41,7 +42,7 @@ function whatsAppSubmissionLink(orderId: string, productName: string): string {
   return `${STORE_COPY.brand.whatsAppUrl}?text=${encodeURIComponent(text)}`;
 }
 
-export const FindOrderView: React.FC = () => {
+export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[] }> = ({ catalogItems = [] }) => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -228,6 +229,7 @@ export const FindOrderView: React.FC = () => {
         <div className="space-y-6">
           {orders.length > 0 ? (
             orders.map((order) => {
+              const catalogueItem = catalogItems.find((item) => item.itemId === order.productId || item.name === order.productName);
               const inputType = order.customerInputType || 'Lock Code';
               const isHardwareId = inputType === 'Hardware ID';
               const machineTypeForProgress = isHardwareId
@@ -263,13 +265,16 @@ export const FindOrderView: React.FC = () => {
 
                   {/* Product Title */}
                   <div className="flex flex-wrap items-center justify-between gap-2 bg-[#f8fbfa] p-4 rounded-xl border border-[#e1ece9]">
-                    <div>
-                      <h3 className="text-base font-bold text-[#014040]">
-                        {order.productName}
-                      </h3>
-                      <span className="text-xs text-slate-600">
-                        {order.versionOrPlan}
-                      </span>
+                    <div className="flex items-center gap-3">
+                      <ProductImage name={order.productName} itemId={order.productId || order.productName} imageUrl={catalogueItem?.imageUrl} kind={catalogueItem?.kind} size="sm" />
+                      <div>
+                        <h3 className="text-base font-bold text-[#014040]">
+                          {order.productName}
+                        </h3>
+                        <span className="text-xs text-slate-600">
+                          {order.versionOrPlan}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-2">

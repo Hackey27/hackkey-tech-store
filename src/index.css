@@ -67,6 +67,17 @@
   .hk-modal-enter { animation: none; }
 }
 
+@keyframes hk-price-change {
+  from { opacity: 0.55; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.hk-price-change { animation: hk-price-change 180ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hk-price-change { animation: none; }
+}
+
 /* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
