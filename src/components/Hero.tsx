@@ -6,11 +6,17 @@ import { WhatsAppIcon } from './WhatsAppIcon';
 interface HeroProps {
   onBrowseClick?: () => void;
   onFindOrderClick?: () => void;
+  desktopImageUrl?: string;
+  mobileImageUrl?: string;
 }
 
-export const Hero: React.FC<HeroProps> = ({ onFindOrderClick }) => {
+export const Hero: React.FC<HeroProps> = ({ onFindOrderClick, desktopImageUrl, mobileImageUrl }) => {
+  const style = {
+    '--landing-desktop-image': `url("${desktopImageUrl || '/landing-workspace.webp'}")`,
+    '--landing-mobile-image': `url("${mobileImageUrl || '/landing-workspace-mobile.webp'}")`
+  } as React.CSSProperties;
   return (
-    <section className="hk-landing-region relative border-b border-white/20 py-12 sm:py-20">
+    <section style={style} className="hk-landing-region relative border-b border-white/20 py-12 sm:py-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto text-center space-y-4">
           {/* Main Title */}
@@ -48,7 +54,7 @@ export const Hero: React.FC<HeroProps> = ({ onFindOrderClick }) => {
               aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}
               className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/90 border border-white/60 shadow-xs backdrop-blur-sm hover:bg-white transition-colors"
             >
-              <WhatsAppIcon className="w-4 h-4 text-[#05ef28]" />
+              <WhatsAppIcon className="w-4 h-4 text-[#014040]" />
               <span>{STORE_COPY.hero.trustChips[2]}</span>
             </a>
           </div>

@@ -5,6 +5,7 @@ import {
   CatalogResponse,
   CatalogueItem,
   Category,
+  LandingSettings,
   Laptop,
   MachineCodeType,
   Product,
@@ -114,12 +115,13 @@ function productToCatalogueItem(product: Product): CatalogueItem {
     name: product.productName,
     categoryId: product.categoryId,
     description: product.description,
-    imageUrl: product.imageUrl,
+    imageUrl: catalogueImageUrl(product.imagePath) || product.imageUrl,
     bannerImageUrl: catalogueImageUrl(product.bannerImagePath),
     screenshots: (product.screenshots || [])
       .map((image) => catalogueImageUrl(image))
       .filter((image): image is string => Boolean(image)),
     sortOrder: product.sortOrder ?? 0,
+    featuredOrder: product.featuredOrder,
     pricePesewas: cheapest?.payablePricePesewas,
     listPricePesewas: cheapest?.listPricePesewas,
     promoLabel: cheapest?.promoLabel,
@@ -131,12 +133,26 @@ function productToCatalogueItem(product: Product): CatalogueItem {
   };
 }
 
-function bundleToCatalogueItem(bundle: Bundle): CatalogueItem {
+function bundleToCatalogueItem(bundle: Bundle, products: Product[]): CatalogueItem {
   const pricing = applyPricingRules(
     cedisToPesewas(bundle.priceGhs),
     [bundle.bundleId],
     PRICING_CONFIG
   );
+
+  const productMap = new Map(products.map((product) => [product.productId, product]));
+  const bundleContents = (bundle.items || [])
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((item) => {
+      const product = productMap.get(item.productId);
+      const variant = product?.variants?.find((candidate) => candidate.variantId === item.variantId);
+      return {
+        ...item,
+        productName: product?.productName || item.productId,
+        versionOrPlan: variant?.versionOrPlan || item.variantId
+      };
+    });
 
   return {
     kind: 'bundle',
@@ -144,11 +160,15 @@ function bundleToCatalogueItem(bundle: Bundle): CatalogueItem {
     name: bundle.name,
     categoryId: bundle.categoryId,
     description: bundle.description,
+    imageUrl: catalogueImageUrl(bundle.imagePath),
+    bannerImageUrl: catalogueImageUrl(bundle.bannerImagePath),
+    screenshots: (bundle.screenshots || []).map(catalogueImageUrl).filter((value): value is string => Boolean(value)),
     sortOrder: bundle.sortOrder ?? 0,
     pricePesewas: pricing.payablePesewas,
     listPricePesewas: pricing.listPesewas,
     promoLabel: pricing.promoLabel,
     promoPercent: pricing.promoPercent,
+    bundleContents,
     bundle
   };
 }
@@ -169,6 +189,9 @@ function serviceToCatalogueItem(service: Service): CatalogueItem {
     name: service.name,
     categoryId: service.categoryId,
     description: service.description || service.tagline,
+    imageUrl: catalogueImageUrl(service.imagePath),
+    bannerImageUrl: catalogueImageUrl(service.bannerImagePath),
+    screenshots: (service.screenshots || []).map(catalogueImageUrl).filter((value): value is string => Boolean(value)),
     sortOrder: service.sortOrder ?? 0,
     pricePesewas: pricing?.payablePesewas,
     listPricePesewas: pricing?.listPesewas,
@@ -203,7 +226,12 @@ function laptopToCatalogueItem(laptop: Laptop): CatalogueItem {
     name: laptop.title,
     categoryId: laptop.categoryId,
     description: spec,
-    imageUrl: laptop.picturesUrl?.[0],
+    imageUrl: catalogueImageUrl(laptop.imagePath) || laptop.picturesUrl?.[0],
+    bannerImageUrl: catalogueImageUrl(laptop.bannerImagePath),
+    screenshots: [
+      ...(laptop.screenshots || []).map(catalogueImageUrl),
+      ...(laptop.picturesUrl || [])
+    ].filter((value): value is string => Boolean(value)),
     sortOrder: laptop.sortOrder ?? 0,
     pricePesewas: pricing?.payablePesewas,
     listPricePesewas: pricing?.listPesewas,
@@ -248,13 +276,14 @@ function matchesSearch(item: CatalogueItem, query: string): boolean {
 async function buildCatalogue(): Promise<CatalogResponse> {
   const db = getFirestore();
 
-  const [categories, products, bundles, services, laptops, announcements] = await Promise.all([
+  const [categories, products, bundles, services, laptops, announcements, landingSnap] = await Promise.all([
     readCollection<Category>(db, COLLECTIONS.categories),
     readCollection<Product>(db, COLLECTIONS.products),
     readCollection<Bundle>(db, COLLECTIONS.bundles),
     readCollection<Service>(db, COLLECTIONS.services),
     readCollection<Laptop>(db, COLLECTIONS.laptops),
-    readCollection<Announcement>(db, COLLECTIONS.announcements)
+    readCollection<Announcement>(db, COLLECTIONS.announcements),
+    db.collection(COLLECTIONS.storeSettings).doc('landing').get()
   ]);
 
   const activeProducts = products.filter((p) => p.active);
@@ -275,7 +304,7 @@ async function buildCatalogue(): Promise<CatalogResponse> {
         variants: item.variants || []
       })
     ),
-    ...activeBundles.map(bundleToCatalogueItem),
+    ...activeBundles.map((bundle) => bundleToCatalogueItem(bundle, activeProducts)),
     ...activeServices.map(serviceToCatalogueItem),
     ...activeLaptops.map(laptopToCatalogueItem)
   ].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
@@ -290,6 +319,7 @@ async function buildCatalogue(): Promise<CatalogResponse> {
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
     .map((category) => ({
       ...category,
+      imageUrl: catalogueImageUrl(category.imagePath),
       // Derived, never stored: a stored copy goes stale as soon as the
       // catalogue changes.
       representativeItems: items
@@ -307,7 +337,13 @@ async function buildCatalogue(): Promise<CatalogResponse> {
     totalProducts: items.length,
     source: 'Firestore',
     timestamp: new Date().toISOString(),
-    announcement: selectAnnouncement(announcements, new Date())
+    announcement: selectAnnouncement(announcements, new Date()),
+    landing: landingSnap.exists
+      ? {
+          desktopImageUrl: catalogueImageUrl((landingSnap.data() as LandingSettings).desktopImagePath),
+          mobileImageUrl: catalogueImageUrl((landingSnap.data() as LandingSettings).mobileImagePath)
+        }
+      : undefined
   };
 }
 

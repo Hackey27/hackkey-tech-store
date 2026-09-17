@@ -5,6 +5,7 @@ import { OrderProgressBar } from './OrderProgressBar';
 import { STORE_COPY } from '../config/storeCopy';
 import { ProductImage } from './ProductImage';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
+import { cartItemToCheckoutItem } from '../utils/checkout';
 
 export interface CartItem {
   id: string;
@@ -14,6 +15,8 @@ export interface CartItem {
   quantity: number;
   /** Set when the line is a purchasable service rather than software. */
   serviceOption?: ServiceOption;
+  /** One selected variant id for every alternative group in a bundle. */
+  bundleSelections?: Record<string, string>;
 }
 
 interface CartViewProps {
@@ -69,34 +72,7 @@ export const CartView: React.FC<CartViewProps> = ({
           // The browser sends what was CHOSEN, never what it costs: the
           // server prices every line from the catalogue. Anything else here
           // would be a number a customer can edit.
-          items: items.map((item) => {
-            // Name the thing by its kind. A bundle and a laptop have no
-            // variant, and sending an undefined variantId is what made
-            // "Failed to place order" the only possible outcome for them.
-            // A service is always resolved by serviceId and optionId. Falling
-            // back to the first option matters: the card's "Buy now" adds a
-            // line without one, and without this the payload named nothing the
-            // server could price, which is why Turnitin could not be bought.
-            if (item.product.kind === 'service' || item.serviceOption) {
-              return {
-                serviceId: item.product.itemId,
-                optionId:
-                  item.serviceOption?.optionId ?? item.product.options?.[0]?.optionId,
-                quantity: item.quantity
-              };
-            }
-            if (item.product.kind === 'bundle') {
-              return { bundleId: item.product.itemId, quantity: item.quantity };
-            }
-            if (item.product.kind === 'laptop') {
-              return { laptopId: item.product.itemId, quantity: item.quantity };
-            }
-            return {
-              variantId: item.variant?.variantId || item.product.variants?.[0]?.variantId,
-              selectedOs: item.selectedOs || item.variant?.os || item.product.osList?.[0],
-              quantity: item.quantity
-            };
-          })
+          items: items.map(cartItemToCheckoutItem)
         })
       });
 

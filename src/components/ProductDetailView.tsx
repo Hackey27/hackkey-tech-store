@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, AlertCircle, Check, ChevronRight, Monitor } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Check, CreditCard, Monitor, ShoppingCart } from 'lucide-react';
 import { CatalogueItem, MachineCodeType, ServiceOption, Variant } from '../types';
 import { STORE_COPY } from '../config/storeCopy';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
 import { ServicePurchasePanel } from './ServicePurchasePanel';
 import { ProductGallery } from './ProductGallery';
 import { ProductImage, renderableProductImageUrl } from './ProductImage';
+import { QuoteRequestForm } from './QuoteRequestForm';
 
 interface ProductDetailViewProps {
   product: CatalogueItem;
@@ -15,31 +16,58 @@ interface ProductDetailViewProps {
     variant?: Variant,
     os?: string,
     serviceOption?: ServiceOption,
-    quantity?: number
+    quantity?: number,
+    bundleSelections?: Record<string, string>
+  ) => void;
+  onBuyNow?: (
+    product: CatalogueItem,
+    variant?: Variant,
+    os?: string,
+    serviceOption?: ServiceOption,
+    quantity?: number,
+    bundleSelections?: Record<string, string>
   ) => void;
 }
 
-export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose, onAddToCart }) => {
+export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose, onAddToCart, onBuyNow }) => {
   const variants = product.variants || [];
   const [selectedVariant, setSelectedVariant] = useState<Variant>();
   const [selectedOs, setSelectedOs] = useState('');
+  const [bundleSelections, setBundleSelections] = useState<Record<string, string>>({});
   const [addedNotice, setAddedNotice] = useState(false);
   const [bannerFailed, setBannerFailed] = useState(false);
   const productName = product.name || STORE_COPY.product.softwareFallback;
   const recommendedId = variants.find((variant) => variant.latest)?.variantId;
   const isPurchasableService = product.kind === 'service' && (product.options?.length ?? 0) > 0;
+  const isQuoteOnly = product.kind === 'laptop' || (product.kind === 'service' && !isPurchasableService);
   const machineCodeType: MachineCodeType = product.machineCodeType || 'none';
 
+  const versionGroups = useMemo(() => {
+    const groups = new Map<string, Variant[]>();
+    variants.forEach((variant) => groups.set(variant.versionOrPlan, [...(groups.get(variant.versionOrPlan) || []), variant]));
+    return [...groups.entries()];
+  }, [variants]);
+  const selectedVersion = selectedVariant?.versionOrPlan;
   const availableOsList = useMemo(() => {
-    if (selectedVariant) return selectedVariant.osList || [selectedVariant.os || 'Windows'];
-    return product.osList || [];
-  }, [product.osList, selectedVariant]);
+    const group = versionGroups.find(([version]) => version === selectedVersion)?.[1] || [];
+    return [...new Set(group.flatMap((variant) => variant.osList || [variant.os || 'Windows']))];
+  }, [selectedVersion, versionGroups]);
+  const alternativeGroups = useMemo(() => {
+    const groups = new Map<string, NonNullable<CatalogueItem['bundleContents']>>();
+    (product.bundleContents || []).forEach((entry) => {
+      if (entry.altGroup) groups.set(entry.altGroup, [...(groups.get(entry.altGroup) || []), entry]);
+    });
+    return [...groups.entries()];
+  }, [product.bundleContents]);
 
   useEffect(() => {
     setSelectedVariant(undefined);
     setSelectedOs('');
+    const defaults: Record<string, string> = {};
+    alternativeGroups.forEach(([group, choices]) => { if (choices[0]) defaults[group] = choices[0].variantId; });
+    setBundleSelections(defaults);
     setBannerFailed(false);
-  }, [product.itemId]);
+  }, [product.itemId, alternativeGroups]);
 
   useEffect(() => setBannerFailed(false), [product.bannerImageUrl]);
 
@@ -56,10 +84,15 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
     window.setTimeout(() => setAddedNotice(false), 2500);
   };
 
+  const handleAddClick = () => {
+    if (!canBuy) return;
+    onAddToCart?.(product, selectedVariant, selectedOs || availableOsList[0], undefined, 1, bundleSelections);
+    showAdded();
+  };
+
   const handleBuyClick = () => {
     if (!canBuy) return;
-    onAddToCart?.(product, selectedVariant, selectedOs || availableOsList[0]);
-    showAdded();
+    onBuyNow?.(product, selectedVariant, selectedOs || availableOsList[0], undefined, 1, bundleSelections);
   };
 
   const handleServiceAdd = (option: ServiceOption, quantity: number) => {
@@ -67,10 +100,22 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
     showAdded();
   };
 
+  const handleServiceBuy = (option: ServiceOption, quantity: number) => {
+    onBuyNow?.(product, undefined, undefined, option, quantity);
+  };
+
   const selectVariant = (variant: Variant) => {
     if (!variant.available) return;
     setSelectedVariant(variant);
     setSelectedOs((variant.osList || [variant.os || 'Windows'])[0] || '');
+  };
+
+  const selectOs = (os: string) => {
+    const group = versionGroups.find(([version]) => version === selectedVersion)?.[1] || [];
+    const exact = group.find((variant) => variant.os.toLowerCase() === os.toLowerCase());
+    const matching = exact || group.find((variant) => (variant.osList || []).includes(os));
+    if (matching) setSelectedVariant(matching);
+    setSelectedOs(os);
   };
 
   return (
@@ -103,8 +148,10 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
         </section>
 
         <aside className="rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-24">
-          {isPurchasableService ? (
-            <ServicePurchasePanel item={product} onAddToCart={handleServiceAdd} />
+          {isQuoteOnly ? (
+            <QuoteRequestForm item={product} />
+          ) : isPurchasableService ? (
+            <ServicePurchasePanel item={product} onAddToCart={handleServiceAdd} onBuyNow={handleServiceBuy} />
           ) : variants.length > 0 ? (
             <div>
               <div className="mb-4">
@@ -112,12 +159,13 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
                 <p className="mt-1 text-xs text-slate-500">{STORE_COPY.product.selectVersion}</p>
               </div>
               <div className="space-y-2">
-                {variants.map((variant) => {
-                  const selected = selectedVariant?.variantId === variant.variantId;
+                {versionGroups.map(([version, group]) => {
+                  const variant = group.find((candidate) => candidate.latest) || group[0];
+                  const selected = selectedVersion === version;
                   const variantPrice = resolveLinePricePesewas({ item: product, variant, quantity: 1 }).unitPesewas;
                   return (
                     <button
-                      key={variant.variantId}
+                      key={version}
                       type="button"
                       disabled={!variant.available}
                       onClick={() => selectVariant(variant)}
@@ -126,8 +174,8 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
                       <span className="flex items-start justify-between gap-3">
                         <span>
                           <span className="flex flex-wrap items-center gap-2 text-sm font-black text-[#014040]">
-                            {variant.versionOrPlan}
-                            {variant.variantId === recommendedId && <span className="rounded-full bg-[#05ef28] px-2 py-0.5 text-[10px] uppercase tracking-wider">{STORE_COPY.product.recommended}</span>}
+                            {version}
+                            {group.some((candidate) => candidate.variantId === recommendedId) && <span className="rounded-full bg-[#05ef28] px-2 py-0.5 text-[10px] uppercase tracking-wider">{STORE_COPY.product.recommended}</span>}
                           </span>
                           {!variant.available && <span className="mt-1 block text-xs font-bold text-slate-500">{STORE_COPY.product.unavailable}</span>}
                           {selected && <span className="mt-1 block text-xs font-bold text-[#025656]">{STORE_COPY.product.selected}</span>}
@@ -144,7 +192,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
                   <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-600">{STORE_COPY.product.chooseOperatingSystem}</p>
                   <div className="flex flex-wrap gap-2">
                     {availableOsList.map((os) => (
-                      <button key={os} type="button" onClick={() => setSelectedOs(os)} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold ${selectedOs === os ? 'bg-[#014040] text-white' : 'bg-[#edf5f3] text-[#014040]'}`}>
+                      <button key={os} type="button" onClick={() => selectOs(os)} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold ${selectedOs === os ? 'bg-[#014040] text-white' : 'bg-[#edf5f3] text-[#014040]'}`}>
                         <Monitor className="h-3.5 w-3.5" />{os}
                       </button>
                     ))}
@@ -152,16 +200,14 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
                 </div>
               )}
 
-              <button type="button" disabled={!selectedVariant} onClick={handleBuyClick} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-5 py-3.5 text-sm font-black text-[#014040] shadow-xs hover:bg-[#04d824] disabled:cursor-not-allowed disabled:opacity-50">
-                {STORE_COPY.product.addToCart}<ChevronRight className="h-4 w-4 stroke-[3]" />
-              </button>
+              <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" disabled={!selectedVariant} onClick={handleBuyClick} className="flex items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-3 py-3.5 text-sm font-black text-[#014040] disabled:opacity-50"><CreditCard className="h-4 w-4" />Buy now</button><button type="button" disabled={!selectedVariant} onClick={handleAddClick} className="flex items-center justify-center gap-2 rounded-xl bg-[#014040] px-3 py-3.5 text-sm font-black text-white disabled:opacity-50"><ShoppingCart className="h-4 w-4" />Add to cart</button></div>
             </div>
+          ) : product.kind === 'bundle' ? (
+            <div className="space-y-5"><div><h2 className="text-lg font-black text-[#014040]">What is included</h2><p className="mt-1 text-xs text-slate-500">Fixed items are included automatically. Choose one option where alternatives are shown.</p></div><div className="space-y-3">{(product.bundleContents || []).filter((entry) => !entry.altGroup).map((entry) => <div key={entry.itemId} className="rounded-xl bg-[#edf5f3] p-3"><b className="text-sm text-[#014040]">{entry.productName}</b><span className="ml-2 text-xs text-slate-600">{entry.versionOrPlan}</span></div>)}{alternativeGroups.map(([group, choices]) => <fieldset key={group} className="rounded-xl border border-slate-200 p-3"><legend className="px-1 text-xs font-black uppercase tracking-wider text-slate-600">{choices[0]?.altLabel || `Choose ${group}`}</legend>{choices.map((choice) => <label key={choice.itemId} className="mt-2 flex cursor-pointer items-center gap-2 text-sm"><input type="radio" name={group} checked={bundleSelections[group] === choice.variantId} onChange={() => setBundleSelections((old) => ({ ...old, [group]: choice.variantId }))} /><span><b>{choice.productName}</b> · {choice.versionOrPlan}</span></label>)}</fieldset>)}</div><div className="grid grid-cols-2 gap-2"><button type="button" onClick={handleBuyClick} className="flex items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-3 py-3.5 text-sm font-black text-[#014040]"><CreditCard className="h-4 w-4" />Buy now</button><button type="button" onClick={handleAddClick} className="flex items-center justify-center gap-2 rounded-xl bg-[#014040] px-3 py-3.5 text-sm font-black text-white"><ShoppingCart className="h-4 w-4" />Add to cart</button></div></div>
           ) : (
             <div className="space-y-5">
               {availableOsList.length > 0 && <p className="inline-flex items-center gap-2 rounded-xl bg-[#edf5f3] px-3 py-2 text-xs font-bold text-[#014040]"><Monitor className="h-4 w-4" />{availableOsList.join(' · ')}</p>}
-              <button type="button" onClick={handleBuyClick} disabled={price <= 0} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-5 py-3.5 text-sm font-black text-[#014040] hover:bg-[#04d824] disabled:cursor-not-allowed disabled:opacity-50">
-                {price > 0 ? STORE_COPY.product.addToCart : STORE_COPY.product.askForPrice}<ChevronRight className="h-4 w-4 stroke-[3]" />
-              </button>
+              <div className="grid grid-cols-2 gap-2"><button type="button" onClick={handleBuyClick} disabled={price <= 0} className="flex items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-3 py-3.5 text-sm font-black text-[#014040] disabled:opacity-50"><CreditCard className="h-4 w-4" />Buy now</button><button type="button" onClick={handleAddClick} disabled={price <= 0} className="flex items-center justify-center gap-2 rounded-xl bg-[#014040] px-3 py-3.5 text-sm font-black text-white disabled:opacity-50"><ShoppingCart className="h-4 w-4" />Add to cart</button></div>
             </div>
           )}
 
@@ -184,7 +230,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
           </div>
         )}
 
-        <ProductGallery images={product.screenshots || []} productName={productName} />
+        <ProductGallery images={product.screenshots || []} productName={productName} kind={product.kind} />
       </div>
     </div>
   );

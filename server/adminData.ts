@@ -1,11 +1,16 @@
 import { Firestore } from '@google-cloud/firestore';
 import {
   Announcement,
+  Bundle,
+  Category,
   FulfilmentStatus,
   LicencePoolEntry,
   Order,
   Product,
-  Service
+  Service,
+  Laptop,
+  LandingSettings,
+  CatalogueItemKind
 } from '../src/types';
 import { invalidateCatalogueCache } from './catalogue';
 import { AdminActor } from './adminAuth';
@@ -53,12 +58,16 @@ export async function listVariantSummaries(): Promise<VariantSummary[]> {
 
 export async function adminBootstrap() {
   const db = getFirestore();
-  const [ordersSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, variants] = await Promise.all([
+  const [ordersSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, bundlesSnap, laptopsSnap, categoriesSnap, landingSnap, variants] = await Promise.all([
     db.collection(COLLECTIONS.orders).get(),
     db.collection(COLLECTIONS.licencePool).get(),
     db.collection(COLLECTIONS.services).get(),
     db.collection(COLLECTIONS.announcements).get(),
     db.collection(COLLECTIONS.products).get(),
+    db.collection(COLLECTIONS.bundles).get(),
+    db.collection(COLLECTIONS.laptops).get(),
+    db.collection(COLLECTIONS.categories).get(),
+    db.collection(COLLECTIONS.storeSettings).doc('landing').get(),
     listVariantSummaries()
   ]);
 
@@ -93,7 +102,87 @@ export async function adminBootstrap() {
     .map((doc) => doc.data() as Product)
     .sort((a, b) => a.productName.localeCompare(b.productName));
 
-  return { orders, licences, services, announcements, products, variants };
+  const bundles = bundlesSnap.docs.map((doc) => doc.data() as Bundle);
+  const laptops = laptopsSnap.docs.map((doc) => doc.data() as Laptop);
+  const categories = categoriesSnap.docs.map((doc) => doc.data() as Category);
+  const mediaItems = [
+    ...products.map((item) => ({ kind: 'product' as const, itemId: item.productId, name: item.productName, categoryId: item.categoryId, imageUrl: item.imageUrl, imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder, featuredOrder: item.featuredOrder })),
+    ...bundles.map((item) => ({ kind: 'bundle' as const, itemId: item.bundleId, name: item.name, categoryId: item.categoryId, imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
+    ...services.map((item) => ({ kind: 'service' as const, itemId: item.serviceId, name: item.name, categoryId: item.categoryId, imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
+    ...laptops.map((item) => ({ kind: 'laptop' as const, itemId: item.laptopId, name: item.title, categoryId: item.categoryId, imageUrl: item.picturesUrl?.[0], imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
+    ...categories.map((item) => ({ kind: 'category' as const, itemId: item.categoryId, name: item.name, imagePath: item.imagePath, sortOrder: item.sortOrder }))
+  ].sort((a, b) => a.name.localeCompare(b.name));
+
+  return { orders, licences, services, announcements, products, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {} };
+}
+
+const mediaCollection: Record<CatalogueItemKind | 'category', string> = {
+  product: COLLECTIONS.products,
+  bundle: COLLECTIONS.bundles,
+  service: COLLECTIONS.services,
+  laptop: COLLECTIONS.laptops,
+  category: COLLECTIONS.categories
+};
+
+export async function updateCatalogueMedia(
+  kind: CatalogueItemKind | 'category',
+  itemId: string,
+  change: { role: 'icon' | 'card' | 'banner' | 'gallery' | 'remove'; objectPath: string }
+) {
+  const ref = getFirestore().collection(mediaCollection[kind]).doc(itemId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('Catalogue item not found.');
+  const current = snap.data() as { imagePath?: string; bannerImagePath?: string; screenshots?: string[] };
+  let patch: Record<string, unknown> = {};
+  let replacedPath: string | undefined;
+  if (change.role === 'icon' || change.role === 'card') {
+    replacedPath = current.imagePath?.startsWith('catalogue/') ? current.imagePath : undefined;
+    patch = { imagePath: change.objectPath };
+  } else if (change.role === 'banner') {
+    replacedPath = current.bannerImagePath?.startsWith('catalogue/') ? current.bannerImagePath : undefined;
+    patch = { bannerImagePath: change.objectPath };
+  } else if (change.role === 'gallery') {
+    const screenshots = [...new Set([...(current.screenshots || []), change.objectPath])];
+    if (screenshots.length > 12) throw new Error('An item can have up to 12 gallery images.');
+    patch = { screenshots };
+  } else {
+    patch = {
+      imagePath: current.imagePath === change.objectPath ? '' : current.imagePath,
+      bannerImagePath: current.bannerImagePath === change.objectPath ? '' : current.bannerImagePath,
+      screenshots: (current.screenshots || []).filter((value) => value !== change.objectPath)
+    };
+  }
+  await ref.update(patch);
+  invalidateCatalogueCache();
+  return { item: { ...current, ...patch }, replacedPath };
+}
+
+export async function updateLandingImage(role: 'desktop' | 'mobile' | 'remove', objectPath: string) {
+  const ref = getFirestore().collection(COLLECTIONS.storeSettings).doc('landing');
+  const snap = await ref.get();
+  const current = (snap.data() || {}) as LandingSettings;
+  const field = role === 'mobile' ? 'mobileImagePath' : 'desktopImagePath';
+  const replacedPath = role === 'remove'
+    ? undefined
+    : current[field]?.startsWith('catalogue/') ? current[field] : undefined;
+  const patch = role === 'remove'
+    ? { desktopImagePath: current.desktopImagePath === objectPath ? '' : current.desktopImagePath, mobileImagePath: current.mobileImagePath === objectPath ? '' : current.mobileImagePath }
+    : { [field]: objectPath };
+  await ref.set(patch, { merge: true });
+  invalidateCatalogueCache();
+  return { landing: { ...current, ...patch }, replacedPath };
+}
+
+export async function updateCatalogueOrder(updates: Array<{ kind: CatalogueItemKind; itemId: string; sortOrder: number; featuredOrder?: number | null }>) {
+  const db = getFirestore();
+  const batch = db.batch();
+  updates.forEach((entry) => {
+    const patch: Record<string, unknown> = { sortOrder: Math.max(0, Math.floor(entry.sortOrder || 0)) };
+    if (entry.kind === 'product') patch.featuredOrder = entry.featuredOrder == null ? null : Math.max(0, Math.floor(entry.featuredOrder));
+    batch.update(db.collection(mediaCollection[entry.kind]).doc(entry.itemId), patch);
+  });
+  await batch.commit();
+  invalidateCatalogueCache();
 }
 
 export async function updateProductImages(

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { AlertCircle, Check, Minus, Plus } from 'lucide-react';
+import { AlertCircle, Check, CreditCard, Minus, Plus, ShoppingCart } from 'lucide-react';
 import { CatalogueItem, ServiceOption } from '../types';
 import { formatPesewas, priceServiceLine } from '../utils/money';
 
 interface ServicePurchasePanelProps {
   item: CatalogueItem;
   onAddToCart: (option: ServiceOption, quantity: number) => void;
+  onBuyNow: (option: ServiceOption, quantity: number) => void;
 }
 
 /**
@@ -15,7 +16,7 @@ interface ServicePurchasePanelProps {
  * Services without options never reach this panel and keep their existing
  * quote-request behaviour.
  */
-export const ServicePurchasePanel: React.FC<ServicePurchasePanelProps> = ({ item, onAddToCart }) => {
+export const ServicePurchasePanel: React.FC<ServicePurchasePanelProps> = ({ item, onAddToCart, onBuyNow }) => {
   const options = item.options || [];
   // The first option is the one customers actually buy, so it starts selected.
   const [selected, setSelected] = useState<ServiceOption>(options[0]);
@@ -125,12 +126,10 @@ export const ServicePurchasePanel: React.FC<ServicePurchasePanelProps> = ({ item
         </div>
       )}
 
-      <button
-        onClick={() => onAddToCart(selected, quantity)}
-        className="w-full py-3 rounded-xl bg-[#014040] hover:bg-[#025656] text-white font-bold text-sm transition-colors cursor-pointer"
-      >
-        Add to cart — {formatPesewas(pricing.totalPesewas)}
-      </button>
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={() => onBuyNow(selected, quantity)} className="flex items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-3 py-3 text-sm font-black text-[#014040]"><CreditCard className="h-4 w-4" />Buy now</button>
+        <button onClick={() => onAddToCart(selected, quantity)} className="flex items-center justify-center gap-2 rounded-xl bg-[#014040] px-3 py-3 text-sm font-black text-white"><ShoppingCart className="h-4 w-4" />Add to cart</button>
+      </div>
     </div>
   );
 };

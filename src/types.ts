@@ -29,6 +29,10 @@ export interface Category {
   icon: string;
   sortOrder: number;
   active: boolean;
+  /** Optional admin-uploaded artwork shown behind the category card. */
+  imagePath?: string;
+  /** Public, server-mediated URL derived from imagePath. */
+  imageUrl?: string;
   /** Derived at read time from the catalogue entries in this category.
    *  Never stored — it would go stale the moment a product is added. */
   representativeItems?: string[];
@@ -89,6 +93,7 @@ export interface Product {
   description?: string;
   defaultContact?: string;
   imageUrl?: string;
+  imagePath?: string;
   /** Optional wide artwork. Admin uploads are stored as a private Cloud
    *  Storage object path and exposed through the public catalogue image route. */
   bannerImagePath?: string;
@@ -97,6 +102,8 @@ export interface Product {
   screenshots?: string[];
   active: boolean;
   sortOrder?: number;
+  /** Lower numbers appear first in the featured software section. */
+  featuredOrder?: number;
   variants: Variant[];
 }
 
@@ -124,6 +131,9 @@ export interface Bundle {
   categoryId: string;
   sortOrder: number;
   active: boolean;
+  imagePath?: string;
+  bannerImagePath?: string;
+  screenshots?: string[];
   items: BundleItem[];
 }
 
@@ -196,6 +206,9 @@ export interface Service {
   disclaimer?: string;
   active: boolean; // Status: 'Published' -> true
   sortOrder: number;
+  imagePath?: string;
+  bannerImagePath?: string;
+  screenshots?: string[];
 }
 
 // ==========================================
@@ -225,6 +238,26 @@ export interface Laptop {
   notes?: string;
   active: boolean; // Status: 'Published' -> true
   sortOrder: number;
+  imagePath?: string;
+  bannerImagePath?: string;
+  screenshots?: string[];
+}
+
+export interface BundleContentOption {
+  itemId: string;
+  productId: string;
+  productName: string;
+  variantId: string;
+  versionOrPlan: string;
+  altGroup?: string;
+  altLabel?: string;
+  sortOrder: number;
+  notes?: string;
+}
+
+export interface LandingSettings {
+  desktopImagePath?: string;
+  mobileImagePath?: string;
 }
 
 // ==========================================
@@ -246,6 +279,7 @@ export interface CatalogueItem {
   bannerImageUrl?: string;
   screenshots?: string[];
   sortOrder: number;
+  featuredOrder?: number;
   /** Integer pesewas. Absent means there is no single price to show — a
    *  service priced on enquiry, or a laptop with a blank price. Never
    *  rendered as 0. */
@@ -268,6 +302,7 @@ export interface CatalogueItem {
   disclaimer?: string;
   /** Products only. */
   variants?: Variant[];
+  bundleContents?: BundleContentOption[];
   bundle?: Bundle;
   service?: Service;
   laptop?: Laptop;
@@ -462,7 +497,7 @@ export interface AdminAuditEntry {
   actorUid: string;
   actorEmail?: string;
   action: string;
-  targetType: 'order' | 'licence' | 'service' | 'announcement' | 'product';
+  targetType: 'order' | 'licence' | 'service' | 'announcement' | 'product' | 'bundle' | 'laptop' | 'category' | 'settings';
   targetId: string;
   orderId?: string;
   details?: Record<string, unknown>;
@@ -500,6 +535,10 @@ export interface CatalogResponse {
   source: string;
   timestamp: string;
   announcement?: Announcement;
+  landing?: {
+    desktopImageUrl?: string;
+    mobileImageUrl?: string;
+  };
 }
 
 export interface HealthResponse {

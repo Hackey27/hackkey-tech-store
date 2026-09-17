@@ -458,6 +458,22 @@ async function startServer() {
     }
   });
 
+  app.post('/api/requests/laptop-enquiry', async (req: Request, res: Response) => {
+    const { customerName, phone, email, laptopId, laptopName, location, notes } = req.body;
+    if (!customerName || !phone || !email || !laptopId) {
+      return res.status(400).json({ error: 'Name, phone, email, and laptop are required.' });
+    }
+    try {
+      const request = await createRequest('laptop-enquiry', {
+        customerName, phone, email, notes,
+        details: { laptopId, laptopName, location }
+      });
+      res.json({ success: true, request });
+    } catch (err) {
+      failed(res, err, 'Failed to submit laptop enquiry');
+    }
+  });
+
   // Service enquiry
   app.post('/api/services/submit', async (req: Request, res: Response) => {
     const { serviceId, serviceName, customerName, phone, email, deadline, summary, answers } = req.body;

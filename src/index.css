@@ -39,7 +39,7 @@
 .hk-landing-region::before {
   z-index: -2;
   background-color: #014040;
-  background-image: url('/landing-workspace.webp');
+  background-image: var(--landing-desktop-image, url('/landing-workspace.webp'));
   background-position: center;
   background-size: cover;
 }
@@ -52,7 +52,7 @@
 @media (max-width: 639px) {
   :root { --store-header-height: 116px; }
   .hk-landing-region::before {
-    background-image: url('/landing-workspace-mobile.webp');
+    background-image: var(--landing-mobile-image, url('/landing-workspace-mobile.webp'));
     background-position: center 35%;
   }
 }

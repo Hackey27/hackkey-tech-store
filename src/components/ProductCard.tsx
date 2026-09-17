@@ -1,6 +1,6 @@
 import React from 'react';
 import { CatalogueItem } from '../types';
-import { CheckCircle, ChevronRight } from 'lucide-react';
+import { CheckCircle, CreditCard, MessageSquareQuote, ShoppingCart } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
 import { ProductImage } from './ProductImage';
@@ -9,6 +9,7 @@ interface ProductCardProps {
   product: CatalogueItem;
   onSelect: (product: CatalogueItem) => void;
   onBuyNowClick: (product: CatalogueItem) => void;
+  onAddToCart?: (product: CatalogueItem) => void;
   showCategoryLabel?: boolean;
 }
 
@@ -16,6 +17,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   onSelect,
   onBuyNowClick,
+  onAddToCart,
   showCategoryLabel = true
 }) => {
   const hasMultipleVariants = product.variants && product.variants.length > 1;
@@ -37,25 +39,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         : formatPesewas(minPrice)
       : STORE_COPY.product.askForPrice;
 
-  // Primary action button label (Buy now vs View options)
-  const actionLabel = hasMultipleVariants ? STORE_COPY.product.viewOptions : STORE_COPY.product.buyNow;
+  const payable = product.kind === 'product' || product.kind === 'bundle' || (product.kind === 'service' && Boolean(product.options?.length));
 
   return (
-    <div
+    <article
       id={`product-card-${product.itemId}`}
-      className="group flex flex-col justify-between rounded-2xl bg-white border border-[#d8e7e4] hover:border-[#014040]/70 hover:shadow-md transition-all duration-200 overflow-hidden text-slate-900"
+      role="button" tabIndex={0} onClick={() => onSelect(product)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(product); } }}
+      className="group flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-[#d8e7e4] bg-white text-slate-900 transition-all duration-200 hover:border-[#014040]/70 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#014040]"
     >
       <div className="p-5 sm:p-6">
         {/* Top bar: real catalogue image + optional category context. */}
         <div className="flex items-start justify-between gap-3 mb-4">
-          <button
-            type="button"
-            onClick={() => onSelect(product)}
-            className="rounded-2xl group-hover:scale-105 transition-transform motion-reduce:transition-none"
-            aria-label={productName}
-          >
+          <div className="rounded-2xl transition-transform group-hover:scale-105 motion-reduce:transition-none">
             <ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} />
-          </button>
+          </div>
 
           <div className="text-right">
             {showCategoryLabel && (
@@ -73,8 +70,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
         {/* Product Name */}
         <h3
-          onClick={() => onSelect(product)}
-          className="text-base sm:text-lg font-bold text-[#014040] tracking-tight hover:text-[#025656] cursor-pointer transition-colors leading-snug"
+          className="text-base sm:text-lg font-bold text-[#014040] tracking-tight group-hover:text-[#025656] transition-colors leading-snug"
         >
           {productName}
         </h3>
@@ -123,22 +119,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </span>
         </div>
 
-        {/* Primary Action Button */}
-        <button
-          id={`product-action-btn-${product.itemId}`}
-          onClick={() => {
-            if (hasMultipleVariants) {
-              onSelect(product);
-            } else {
-              onBuyNowClick(product);
-            }
-          }}
-          className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-[#05ef28] hover:bg-[#04d824] active:scale-98 text-[#014040] font-black text-xs sm:text-sm shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
-        >
-          <span>{actionLabel}</span>
-          <ChevronRight className="w-3.5 h-3.5 stroke-[3]" />
-        </button>
+        {payable ? <div className="flex gap-2"><button id={`product-buy-btn-${product.itemId}`} onClick={(event) => { event.stopPropagation(); onBuyNowClick(product); }} className="flex items-center gap-1.5 rounded-xl bg-[#05ef28] px-3 py-2.5 text-xs font-black text-[#014040] hover:bg-[#04d824]"><CreditCard className="h-3.5 w-3.5" />Buy now</button><button id={`product-cart-btn-${product.itemId}`} onClick={(event) => { event.stopPropagation(); onAddToCart?.(product); }} className="flex items-center gap-1.5 rounded-xl bg-[#014040] px-3 py-2.5 text-xs font-black text-white hover:bg-[#025656]"><ShoppingCart className="h-3.5 w-3.5" />Add</button></div> : <button onClick={(event) => { event.stopPropagation(); onSelect(product); }} className="flex items-center gap-1.5 rounded-xl bg-[#014040] px-4 py-2.5 text-xs font-black text-white"><MessageSquareQuote className="h-3.5 w-3.5" />Get a quote</button>}
       </div>
-    </div>
+    </article>
   );
 };

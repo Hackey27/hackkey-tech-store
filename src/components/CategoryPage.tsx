@@ -10,6 +10,7 @@ interface CategoryPageProps {
   onBack: () => void;
   onSelectProduct: (product: CatalogueItem) => void;
   onBuyNow: (product: CatalogueItem) => void;
+  onAddToCart: (product: CatalogueItem) => void;
 }
 
 export const CategoryPage: React.FC<CategoryPageProps> = ({
@@ -17,7 +18,8 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({
   items,
   onBack,
   onSelectProduct,
-  onBuyNow
+  onBuyNow,
+  onAddToCart
 }) => {
   if (!category) {
     return (
@@ -45,9 +47,9 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({
       </header>
 
       {items.length > 0 ? (
-        <div className="mt-7 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 sm:gap-6">
+        <div className="mt-7 grid gap-5 sm:gap-6 [grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))]">
           {items.map((item) => (
-            <ProductCard key={item.itemId} product={item} showCategoryLabel={false} onSelect={onSelectProduct} onBuyNowClick={onBuyNow} />
+            <ProductCard key={item.itemId} product={item} showCategoryLabel={false} onSelect={onSelectProduct} onBuyNowClick={onBuyNow} onAddToCart={onAddToCart} />
           ))}
         </div>
       ) : (

@@ -1,6 +1,7 @@
 import { Firestore } from '@google-cloud/firestore';
 import {
   CustomerInputType,
+  BundleItem,
   CustomerRequest,
   FulfilmentStatus,
   LicencePoolEntry,
@@ -48,6 +49,8 @@ export interface CheckoutItem {
   optionId?: string;
   bundleId?: string;
   laptopId?: string;
+  /** Maps an alternative group to the one variant the customer selected. */
+  bundleSelections?: Record<string, string>;
 }
 
 export interface CheckoutRequest {
@@ -55,6 +58,25 @@ export interface CheckoutRequest {
   phone: string;
   email: string;
   items: CheckoutItem[];
+}
+
+/** Keep every fixed bundle row and exactly one row from each alternative group. */
+export function resolveBundleItems(items: BundleItem[], selections: Record<string, string> = {}): BundleItem[] {
+  const fixedItems = items.filter((entry) => !entry.altGroup);
+  const alternativeGroups = new Map<string, BundleItem[]>();
+  for (const entry of items) {
+    if (!entry.altGroup) continue;
+    alternativeGroups.set(entry.altGroup, [...(alternativeGroups.get(entry.altGroup) || []), entry]);
+  }
+  const selectedAlternatives = [...alternativeGroups.entries()].map(([group, choices]) => {
+    const requested = selections[group];
+    const selected = requested
+      ? choices.find((choice) => choice.variantId === requested)
+      : choices.slice().sort((a, b) => a.sortOrder - b.sortOrder)[0];
+    if (!selected) throw new Error(`Invalid selection for bundle option ${group}.`);
+    return selected;
+  });
+  return [...fixedItems, ...selectedAlternatives].sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
 /**
@@ -165,10 +187,12 @@ async function createBundleOrders(
   );
   const totalPesewas = applied.payablePesewas * quantity;
 
+  const selectedBundleItems = resolveBundleItems(bundle.items || [], item.bundleSelections);
+
   // Resolve each included item so the allocation can be weighted by real list
   // prices rather than split blindly.
   const resolved = await Promise.all(
-    (bundle.items || []).map(async (bundleItem) => {
+    selectedBundleItems.map(async (bundleItem) => {
       const found = bundleItem.variantId ? await findVariant(bundleItem.variantId) : null;
       return { bundleItem, found };
     })

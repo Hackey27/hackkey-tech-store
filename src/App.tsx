@@ -10,6 +10,7 @@ import { HelpHubView } from './components/HelpHubView';
 import { RequestView } from './components/RequestView';
 import { ProductDetailView } from './components/ProductDetailView';
 import { CartView, CartItem } from './components/CartView';
+import { DirectCheckoutModal } from './components/DirectCheckoutModal';
 import { BrandLogo } from './components/BrandLogo';
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { PaymentReturnView } from './components/PaymentReturnView';
@@ -57,6 +58,7 @@ export const App: React.FC = () => {
 
   // Cart state
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [buyNowItem, setBuyNowItem] = useState<CartItem | null>(null);
 
   // "Featured software" filter toggle:
   // Requirement: "Show a small number of products only" and "Include a View all software control"
@@ -133,7 +135,8 @@ export const App: React.FC = () => {
     variant?: Variant,
     selectedOs?: string,
     serviceOption?: ServiceOption,
-    quantity?: number
+    quantity?: number,
+    bundleSelections?: Record<string, string>
   ) => {
     setCartItems((prev) => {
       const existingIdx = prev.findIndex(
@@ -141,7 +144,8 @@ export const App: React.FC = () => {
           item.product.itemId === product.itemId &&
           item.variant?.variantId === variant?.variantId &&
           item.selectedOs === selectedOs &&
-          item.serviceOption?.optionId === serviceOption?.optionId
+          item.serviceOption?.optionId === serviceOption?.optionId &&
+          JSON.stringify(item.bundleSelections || {}) === JSON.stringify(bundleSelections || {})
       );
       if (existingIdx > -1) {
         const updated = [...prev];
@@ -163,8 +167,34 @@ export const App: React.FC = () => {
           selectedOs,
           quantity: quantity ?? 1,
           serviceOption,
+          bundleSelections,
         }
       ];
+    });
+  };
+
+  const defaultSelection = (product: CatalogueItem): Omit<CartItem, 'id' | 'product'> => {
+    const variant = product.variants?.find((candidate) => candidate.latest && candidate.available) || product.variants?.find((candidate) => candidate.available);
+    const bundleSelections: Record<string, string> = {};
+    product.bundleContents?.forEach((entry) => { if (entry.altGroup && !bundleSelections[entry.altGroup]) bundleSelections[entry.altGroup] = entry.variantId; });
+    return { variant, selectedOs: variant?.osList?.[0] || variant?.os, quantity: 1, serviceOption: product.options?.[0], bundleSelections };
+  };
+
+  const handleCardAdd = (product: CatalogueItem) => {
+    const choice = defaultSelection(product);
+    handleAddToCart(product, choice.variant, choice.selectedOs, choice.serviceOption, choice.quantity, choice.bundleSelections);
+  };
+
+  const handleBuyNow = (product: CatalogueItem, variant?: Variant, selectedOs?: string, serviceOption?: ServiceOption, quantity = 1, bundleSelections?: Record<string, string>) => {
+    const fallback = defaultSelection(product);
+    setBuyNowItem({
+      id: `buy-${product.itemId}`,
+      product,
+      variant: variant || fallback.variant,
+      selectedOs: selectedOs || fallback.selectedOs,
+      serviceOption: serviceOption || fallback.serviceOption,
+      quantity,
+      bundleSelections: bundleSelections || fallback.bundleSelections
     });
   };
 
@@ -172,12 +202,18 @@ export const App: React.FC = () => {
 
   // Featured software filtering logic
   const allProducts = catalog?.products || [];
+  const softwareProducts = allProducts.filter((item) => item.kind === 'product');
   const isFiltering = searchQuery.trim().length > 0;
   
   // If not filtering and not viewing all, show a curated small number of featured products (e.g. 3)
-  const displayedProducts = isFiltering || showAllSoftware
+  const featuredSoftware = softwareProducts
+    .filter((item) => item.featuredOrder != null)
+    .sort((a, b) => (a.featuredOrder ?? 999) - (b.featuredOrder ?? 999));
+  const displayedProducts = isFiltering
     ? allProducts
-    : allProducts.slice(0, 3);
+    : showAllSoftware
+      ? softwareProducts
+      : (featuredSoftware.length ? featuredSoftware : softwareProducts).slice(0, 3);
 
   const totalCartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const landingActive = route.view === 'home' && activeTab === 'home';
@@ -256,7 +292,8 @@ export const App: React.FC = () => {
               items={(catalog?.products || []).filter((item) => item.categoryId === route.categoryId)}
               onBack={() => navigateBack('/')}
               onSelectProduct={openProduct}
-              onBuyNow={openProduct}
+              onBuyNow={handleBuyNow}
+              onAddToCart={handleCardAdd}
             />
           )
         )}
@@ -269,6 +306,7 @@ export const App: React.FC = () => {
               product={catalog.products.find((item) => item.itemId === route.itemId)!}
               onClose={() => navigateBack(`/category/${encodeURIComponent(catalog.products.find((item) => item.itemId === route.itemId)!.categoryId)}`)}
               onAddToCart={handleAddToCart}
+              onBuyNow={handleBuyNow}
             />
           ) : (
             <div className="mx-auto flex min-h-[55vh] max-w-xl flex-col items-center justify-center px-4 text-center"><AlertCircle className="h-12 w-12 text-[#025656]" /><h1 className="mt-4 text-2xl font-black text-[#014040]">{STORE_COPY.catalog.productNotFoundTitle}</h1><p className="mt-2 text-sm text-slate-600">{STORE_COPY.catalog.productNotFoundDescription}</p><button type="button" onClick={() => navigate('/')} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#014040] px-5 py-3 text-sm font-black text-white"><ArrowLeft className="h-4 w-4" />{STORE_COPY.catalog.backToBrowse}</button></div>
@@ -281,6 +319,8 @@ export const App: React.FC = () => {
             {/* Hero Section */}
             <div ref={landingRegionRef}>
               <Hero
+                desktopImageUrl={catalog?.landing?.desktopImageUrl}
+                mobileImageUrl={catalog?.landing?.mobileImageUrl}
                 onBrowseClick={() => {
                   const el = document.getElementById('browse-categories');
                   el?.scrollIntoView({ behavior: 'smooth' });
@@ -297,15 +337,12 @@ export const App: React.FC = () => {
                     <h2 className="text-xl sm:text-2xl font-black text-[#014040] tracking-tight">
                       Browse by Category
                     </h2>
-                    <p className="text-xs sm:text-sm text-slate-600 font-medium">
-                      Select a department to view available software, services, or hardware
-                    </p>
                   </div>
 
                 </div>
 
                 {/* Compact Rounded Category Cards (1-col mobile, 2-col tablet, 4-col desktop) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="grid gap-3 sm:gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr))]">
                   {catalog?.categories.map((cat) => (
                     <CategoryCard
                       key={cat.categoryId}
@@ -334,7 +371,7 @@ export const App: React.FC = () => {
                   </div>
 
                   {/* View all software control */}
-                  {!isFiltering && allProducts.length > 3 && (
+                  {!isFiltering && softwareProducts.length > 3 && (
                     <button
                       id="view-all-software-btn"
                       onClick={() => setShowAllSoftware(!showAllSoftware)}
@@ -416,13 +453,14 @@ export const App: React.FC = () => {
 
                 {/* Product Cards Grid */}
                 {!isLoading && !error && displayedProducts.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+                  <div className="grid gap-5 sm:gap-6 [grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))]">
                     {displayedProducts.map((product) => (
                       <ProductCard
                         key={product.itemId}
                         product={product}
                         onSelect={openProduct}
-                        onBuyNowClick={openProduct}
+                        onBuyNowClick={handleBuyNow}
+                        onAddToCart={handleCardAdd}
                       />
                     ))}
                   </div>
@@ -487,6 +525,8 @@ export const App: React.FC = () => {
       {announcementOpen && catalog?.announcement && (
         <AnnouncementModal announcement={catalog.announcement} onClose={() => setAnnouncementOpen(false)} />
       )}
+
+      {buyNowItem && <DirectCheckoutModal item={buyNowItem} onClose={() => setBuyNowItem(null)} />}
 
       {/* Mobile Fixed Bottom Navigation */}
       <BottomNav

@@ -12,6 +12,7 @@ import {
   FileText,
   KeyRound,
   Images,
+  ImagePlus,
   LogOut,
   Plus,
   RefreshCw,
@@ -30,7 +31,7 @@ import { adminAuth } from './firebase';
 import { AdminApiError, adminRequest, loadAdminData } from './api';
 import { AdminData, AdminLicence, ApiValidationError } from './types';
 
-type Section = 'orders' | 'licences' | 'services' | 'announcements' | 'products';
+type Section = 'orders' | 'licences' | 'services' | 'announcements' | 'products' | 'landing' | 'ordering';
 
 const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#014040] focus:ring-2 focus:ring-[#014040]/10';
 const labelClass = 'space-y-1 text-xs font-bold text-slate-700';
@@ -345,14 +346,14 @@ function productMediaUrl(value?: string): string | undefined {
   return undefined;
 }
 
-async function resizeProductImage(file: File, role: 'banner' | 'gallery'): Promise<Blob> {
+async function resizeProductImage(file: File, role: 'icon' | 'card' | 'banner' | 'gallery'): Promise<Blob> {
   const source = URL.createObjectURL(file);
   try {
     const image = new window.Image();
     image.src = source;
     await image.decode();
-    const maxWidth = role === 'banner' ? 1600 : 1400;
-    const maxHeight = role === 'banner' ? 1000 : 1050;
+    const maxWidth = role === 'icon' ? 800 : role === 'card' ? 1200 : role === 'banner' ? 1600 : 1400;
+    const maxHeight = role === 'icon' ? 800 : role === 'card' ? 800 : role === 'banner' ? 1000 : 1050;
     const scale = Math.min(1, maxWidth / image.naturalWidth, maxHeight / image.naturalHeight);
     const width = Math.max(1, Math.round(image.naturalWidth * scale));
     const height = Math.max(1, Math.round(image.naturalHeight * scale));
@@ -371,24 +372,24 @@ async function resizeProductImage(file: File, role: 'banner' | 'gallery'): Promi
 }
 
 function ProductMediaSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
-  const [productId, setProductId] = useState(data.products[0]?.productId || '');
+  const [productId, setProductId] = useState(data.mediaItems[0]?.itemId || '');
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
-  const product = data.products.find((item) => item.productId === productId) || data.products[0];
+  const product = data.mediaItems.find((item) => item.itemId === productId) || data.mediaItems[0];
 
   useEffect(() => {
-    if (productId && data.products.some((item) => item.productId === productId)) return;
-    setProductId(data.products[0]?.productId || '');
-  }, [data.products, productId]);
+    if (productId && data.mediaItems.some((item) => item.itemId === productId)) return;
+    setProductId(data.mediaItems[0]?.itemId || '');
+  }, [data.mediaItems, productId]);
 
-  const upload = async (role: 'banner' | 'gallery', files?: FileList | null) => {
+  const upload = async (role: 'icon' | 'card' | 'banner' | 'gallery', files?: FileList | null) => {
     if (!product || !files?.length) return;
     setBusy(role); setMessage('');
     try {
-      const selected = role === 'banner' ? Array.from(files).slice(0, 1) : Array.from(files);
+      const selected = role === 'gallery' ? Array.from(files) : Array.from(files).slice(0, 1);
       for (const file of selected) {
         const blob = await resizeProductImage(file, role);
-        await adminRequest(user, `/products/${encodeURIComponent(product.productId)}/images?role=${role}`, {
+        await adminRequest(user, `/catalogue/${product.kind}/${encodeURIComponent(product.itemId)}/images?role=${role}`, {
           method: 'POST', body: blob, headers: { 'Content-Type': blob.type }
         });
       }
@@ -403,7 +404,7 @@ function ProductMediaSection({ data, user, reload }: { data: AdminData; user: Us
     if (!product || !window.confirm(ADMIN_COPY.products.confirmRemove)) return;
     setBusy(objectPath); setMessage('');
     try {
-      await adminRequest(user, `/products/${encodeURIComponent(product.productId)}/images`, {
+      await adminRequest(user, `/catalogue/${product.kind}/${encodeURIComponent(product.itemId)}/images`, {
         method: 'DELETE', body: JSON.stringify({ objectPath })
       });
       setMessage(ADMIN_COPY.products.removed);
@@ -420,25 +421,67 @@ function ProductMediaSection({ data, user, reload }: { data: AdminData; user: Us
       <div><h2 className="text-2xl font-black text-[#014040]">{ADMIN_COPY.products.title}</h2><p className="text-sm text-slate-600">{ADMIN_COPY.products.subtitle}</p></div>
       <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
         <aside className="h-fit rounded-2xl border bg-white p-2">
-          {data.products.map((item) => <button key={item.productId} onClick={() => { setProductId(item.productId); setMessage(''); }} className={`flex w-full items-center gap-3 rounded-xl p-3 text-left text-sm ${product.productId === item.productId ? 'bg-[#edf5f3] font-black text-[#014040]' : 'hover:bg-slate-50'}`}><ProductImage name={item.productName} itemId={item.productId} imageUrl={item.imageUrl} size="sm" /><span>{item.productName}<small className="block font-mono text-[10px] text-slate-500">{item.productId}</small></span></button>)}
+          {data.mediaItems.map((item) => <button key={`${item.kind}-${item.itemId}`} onClick={() => { setProductId(item.itemId); setMessage(''); }} className={`flex w-full items-center gap-3 rounded-xl p-3 text-left text-sm ${product.itemId === item.itemId ? 'bg-[#edf5f3] font-black text-[#014040]' : 'hover:bg-slate-50'}`}><ProductImage name={item.name} itemId={item.itemId} imageUrl={productMediaUrl(item.imagePath) || item.imageUrl} kind={item.kind === 'category' ? undefined : item.kind} size="sm" /><span>{item.name}<small className="block font-mono text-[10px] text-slate-500">{item.kind} · {item.itemId}</small></span></button>)}
         </aside>
         <section className="space-y-7 rounded-2xl border bg-white p-5">
-          <div className="flex items-center gap-3"><ProductImage name={product.productName} itemId={product.productId} imageUrl={product.imageUrl} /><div><p className="text-xs font-bold uppercase tracking-wider text-slate-500">{ADMIN_COPY.products.iconSource}</p><h3 className="text-xl font-black text-[#014040]">{product.productName}</h3></div></div>
+          <div className="flex items-center gap-3"><ProductImage name={product.name} itemId={product.itemId} imageUrl={productMediaUrl(product.imagePath) || product.imageUrl} kind={product.kind === 'category' ? undefined : product.kind} /><div><p className="text-xs font-bold uppercase tracking-wider text-slate-500">{product.kind}</p><h3 className="text-xl font-black text-[#014040]">{product.name}</h3></div></div>
 
-          <div>
+          <div><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-black text-[#014040]">{product.kind === 'category' ? 'Category card artwork' : 'Product icon'}</h4><p className="text-xs text-slate-500">Flexible square or landscape images are automatically resized for the storefront.</p></div><label className={secondaryButton}>{busy === (product.kind === 'category' ? 'card' : 'icon') ? ADMIN_COPY.products.uploading : 'Choose image'}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={Boolean(busy)} onChange={(event) => { void upload(product.kind === 'category' ? 'card' : 'icon', event.target.files); event.currentTarget.value = ''; }} /></label></div>{product.imagePath && <div className="relative aspect-[3/2] max-w-md overflow-hidden rounded-2xl bg-[#014040]"><img src={productMediaUrl(product.imagePath)} alt="" className="h-full w-full object-cover" /><button className="absolute right-2 top-2 rounded-lg bg-white/90 p-2 text-rose-700" onClick={() => void remove(product.imagePath!)}><Trash2 className="h-4 w-4" /></button></div>}</div>
+
+          {product.kind !== 'category' && <div>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h4 className="font-black text-[#014040]">{ADMIN_COPY.products.banner}</h4><label className={secondaryButton}>{busy === 'banner' ? ADMIN_COPY.products.uploading : ADMIN_COPY.products.chooseBanner}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={Boolean(busy)} onChange={(event) => { void upload('banner', event.target.files); event.currentTarget.value = ''; }} /></label></div>
             {bannerUrl ? <div className="relative aspect-[16/7] overflow-hidden rounded-2xl bg-[#014040]"><img src={bannerUrl} alt="" width="1200" height="525" className="h-full w-full object-cover" />{product.bannerImagePath?.startsWith('catalogue/') && <button className="absolute right-3 top-3 rounded-xl bg-white/90 px-3 py-2 text-xs font-bold text-rose-700" disabled={Boolean(busy)} onClick={() => void remove(product.bannerImagePath!)}><Trash2 className="mr-1 inline h-3.5 w-3.5" />{ADMIN_COPY.products.remove}</button>}</div> : <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{ADMIN_COPY.products.noBanner}</p>}
-          </div>
+          </div>}
 
-          <div>
+          {product.kind !== 'category' && <div>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h4 className="font-black text-[#014040]">{ADMIN_COPY.products.gallery}</h4><label className={secondaryButton}>{busy === 'gallery' ? ADMIN_COPY.products.uploading : ADMIN_COPY.products.chooseGallery}<input type="file" multiple accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={Boolean(busy)} onChange={(event) => { void upload('gallery', event.target.files); event.currentTarget.value = ''; }} /></label></div>
             {product.screenshots?.length ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3">{product.screenshots.map((image, index) => <div key={`${image}-${index}`} className="relative aspect-[4/3] overflow-hidden rounded-xl bg-slate-100"><img src={productMediaUrl(image)} alt="" width="480" height="360" loading="lazy" className="h-full w-full object-cover" />{image.startsWith('catalogue/') && <button className="absolute right-2 top-2 rounded-lg bg-white/90 p-2 text-rose-700" aria-label={ADMIN_COPY.products.remove} disabled={Boolean(busy)} onClick={() => void remove(image)}><Trash2 className="h-3.5 w-3.5" /></button>}</div>)}</div> : <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{ADMIN_COPY.products.noGallery}</p>}
-          </div>
+          </div>}
           {message && <p role="status" className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}
         </section>
       </div>
     </div>
   );
+}
+
+async function resizeBannerExact(file: File, width: number, height: number): Promise<Blob> {
+  const source = URL.createObjectURL(file);
+  try {
+    const image = new window.Image(); image.src = source; await image.decode();
+    const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+    const sourceWidth = width / scale; const sourceHeight = height / scale;
+    const sourceX = (image.naturalWidth - sourceWidth) / 2; const sourceY = (image.naturalHeight - sourceHeight) / 2;
+    const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+    const context = canvas.getContext('2d'); if (!context) throw new Error('Unable to resize this image.');
+    context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.84));
+    if (!blob) throw new Error('Unable to resize this image.'); return blob;
+  } finally { URL.revokeObjectURL(source); }
+}
+
+function LandingBannersSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
+  const [busy, setBusy] = useState(''); const [message, setMessage] = useState('');
+  const upload = async (role: 'desktop' | 'mobile', files?: FileList | null) => {
+    const file = files?.[0]; if (!file) return; setBusy(role); setMessage('');
+    try {
+      const blob = await resizeBannerExact(file, role === 'desktop' ? 1800 : 768, role === 'desktop' ? 900 : 1024);
+      await adminRequest(user, `/landing/images?role=${role}`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
+      setMessage(`${role === 'desktop' ? 'Large-screen' : 'Mobile'} banner uploaded.`); await reload();
+    } catch (error) { setMessage(messageOf(error)); } finally { setBusy(''); }
+  };
+  const rows = [
+    { role: 'desktop' as const, title: 'Large-screen banner', size: '1800 × 900 px', path: data.landing.desktopImagePath, aspect: 'aspect-[2/1]' },
+    { role: 'mobile' as const, title: 'Mobile banner', size: '768 × 1024 px', path: data.landing.mobileImagePath, aspect: 'aspect-[3/4]' }
+  ];
+  return <div className="space-y-5"><div><h2 className="text-2xl font-black text-[#014040]">Landing page banners</h2><p className="text-sm text-slate-600">Upload separate artwork for phones and larger screens. Images are centre-cropped to the exact displayed dimensions.</p></div><div className="grid gap-5 lg:grid-cols-2">{rows.map((row) => <section key={row.role} className="rounded-2xl border bg-white p-5"><div className="flex items-start justify-between gap-3"><div><h3 className="font-black text-[#014040]">{row.title}</h3><p className="text-xs font-bold text-slate-500">{row.size}</p></div><label className={secondaryButton}>{busy === row.role ? 'Uploading…' : 'Choose image'}<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { void upload(row.role, event.target.files); event.currentTarget.value = ''; }} /></label></div><div className={`mt-4 overflow-hidden rounded-2xl bg-[#014040] ${row.aspect}`}>{row.path ? <img src={productMediaUrl(row.path)} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xs font-bold text-white/70">Using the default banner</div>}</div></section>)}</div>{message && <p className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}</div>;
+}
+
+function CatalogueOrderSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
+  const catalogueItems = data.mediaItems.filter((item) => item.kind !== 'category');
+  const [values, setValues] = useState(() => Object.fromEntries(catalogueItems.map((item) => [`${item.kind}:${item.itemId}`, { sortOrder: item.sortOrder ?? 0, featuredOrder: item.featuredOrder }])));
+  const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
+  const save = async () => { setBusy(true); setMessage(''); try { await adminRequest(user, '/catalogue/order', { method: 'POST', body: JSON.stringify({ updates: catalogueItems.map((item) => ({ kind: item.kind, itemId: item.itemId, ...values[`${item.kind}:${item.itemId}`] })) }) }); setMessage('Catalogue order saved.'); await reload(); } catch (error) { setMessage(messageOf(error)); } finally { setBusy(false); } };
+  return <div className="space-y-5"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-black text-[#014040]">Catalogue order</h2><p className="text-sm text-slate-600">Lower display numbers appear first inside each category. A featured number includes software on the homepage, in that order.</p></div><button className={primaryButton} disabled={busy} onClick={save}><Save className="h-4 w-4" />{busy ? 'Saving…' : 'Save order'}</button></div>{data.categories.map((category) => { const items = catalogueItems.filter((item) => item.categoryId === category.categoryId); if (!items.length) return null; return <section key={category.categoryId} className="rounded-2xl border bg-white p-5"><h3 className="mb-3 text-lg font-black text-[#014040]">{category.name}</h3><div className="space-y-2">{items.map((item) => { const key = `${item.kind}:${item.itemId}`; const value = values[key] || { sortOrder: 0 }; return <div key={key} className="grid items-center gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-[1fr_110px_130px]"><div><b className="text-sm">{item.name}</b><small className="block text-[10px] uppercase text-slate-500">{item.kind}</small></div><label className="text-[11px] font-bold text-slate-600">Display order<input className={inputClass} type="number" min="0" value={value.sortOrder} onChange={(event) => setValues((old) => ({ ...old, [key]: { ...value, sortOrder: Number(event.target.value) } }))} /></label>{item.kind === 'product' ? <label className="text-[11px] font-bold text-slate-600">Featured order<input className={inputClass} type="number" min="0" placeholder="Not featured" value={value.featuredOrder ?? ''} onChange={(event) => setValues((old) => ({ ...old, [key]: { ...value, featuredOrder: event.target.value === '' ? undefined : Number(event.target.value) } }))} /></label> : <span />}</div>; })}</div></section>; })}{message && <p className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}</div>;
 }
 
 export default function AdminPortal() {
@@ -468,6 +511,6 @@ export default function AdminPortal() {
 
   if (checking) return <div className="min-h-screen bg-[#f7faf9] p-8 text-[#014040]">{ADMIN_COPY.loading}</div>;
   if (!user) return <SignIn />;
-  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'licences', icon: <Boxes /> }, { id: 'services', icon: <Settings2 /> }, { id: 'products', icon: <Images /> }, { id: 'announcements', icon: <Bell /> }];
-  return <div className="min-h-screen bg-[#f7faf9] text-slate-900"><header className="border-b border-[#cbdcd9] bg-[#014040] text-white"><div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-4 sm:px-6"><div><p className="text-lg font-black">{ADMIN_COPY.brand}</p><p className="text-xs text-slate-300">{user.email}</p></div><div className="flex gap-2"><button className="rounded-xl border border-white/20 p-2 hover:bg-white/10" onClick={reload} aria-label={ADMIN_COPY.refresh}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button><button className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 text-xs font-bold hover:bg-white/10" onClick={() => signOut(adminAuth)}><LogOut className="h-4 w-4" />{ADMIN_COPY.signOut}</button></div></div></header><div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[210px_1fr]"><nav className="flex h-fit gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 lg:flex-col">{nav.map((item) => <button key={item.id} onClick={() => setSection(item.id)} className={`inline-flex min-w-fit items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black ${section === item.id ? 'bg-[#014040] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{React.cloneElement(item.icon as React.ReactElement, { className: 'h-4 w-4' })}{ADMIN_COPY.sections[item.id]}</button>)}</nav><main>{error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-sm font-bold text-rose-800">{error}</p>}{!data ? <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">{ADMIN_COPY.loading}</div> : section === 'orders' ? <OrdersSection data={data} user={user} reload={reload} /> : section === 'licences' ? <LicencesSection data={data} user={user} reload={reload} /> : section === 'services' ? <ServicesSection data={data} user={user} reload={reload} /> : section === 'products' ? <ProductMediaSection data={data} user={user} reload={reload} /> : <AnnouncementsSection data={data} user={user} reload={reload} />}</main></div></div>;
+  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'licences', icon: <Boxes /> }, { id: 'services', icon: <Settings2 /> }, { id: 'products', icon: <Images /> }, { id: 'landing', icon: <ImagePlus /> }, { id: 'ordering', icon: <ArrowUp /> }, { id: 'announcements', icon: <Bell /> }];
+  return <div className="min-h-screen bg-[#f7faf9] text-slate-900"><header className="border-b border-[#cbdcd9] bg-[#014040] text-white"><div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-4 sm:px-6"><div><p className="text-lg font-black">{ADMIN_COPY.brand}</p><p className="text-xs text-slate-300">{user.email}</p></div><div className="flex gap-2"><button className="rounded-xl border border-white/20 p-2 hover:bg-white/10" onClick={reload} aria-label={ADMIN_COPY.refresh}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button><button className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 text-xs font-bold hover:bg-white/10" onClick={() => signOut(adminAuth)}><LogOut className="h-4 w-4" />{ADMIN_COPY.signOut}</button></div></div></header><div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[210px_1fr]"><nav className="flex h-fit gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 lg:flex-col">{nav.map((item) => <button key={item.id} onClick={() => setSection(item.id)} className={`inline-flex min-w-fit items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black ${section === item.id ? 'bg-[#014040] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{React.cloneElement(item.icon as React.ReactElement, { className: 'h-4 w-4' })}{ADMIN_COPY.sections[item.id]}</button>)}</nav><main>{error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-sm font-bold text-rose-800">{error}</p>}{!data ? <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">{ADMIN_COPY.loading}</div> : section === 'orders' ? <OrdersSection data={data} user={user} reload={reload} /> : section === 'licences' ? <LicencesSection data={data} user={user} reload={reload} /> : section === 'services' ? <ServicesSection data={data} user={user} reload={reload} /> : section === 'products' ? <ProductMediaSection data={data} user={user} reload={reload} /> : section === 'landing' ? <LandingBannersSection data={data} user={user} reload={reload} /> : section === 'ordering' ? <CatalogueOrderSection data={data} user={user} reload={reload} /> : <AnnouncementsSection data={data} user={user} reload={reload} />}</main></div></div>;
 }

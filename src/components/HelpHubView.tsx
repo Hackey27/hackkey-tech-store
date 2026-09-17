@@ -66,9 +66,7 @@ export const HelpHubView: React.FC = () => {
               >
                 <div className="flex items-center gap-3">
                   <Phone className="w-4 h-4 text-[#014040]" />
-                  <span className="text-xs sm:text-sm font-semibold">
-                    Phone number: <strong>{STORE_COPY.brand.phoneRaw}</strong>
-                  </span>
+                  <strong className="text-xs sm:text-sm">{STORE_COPY.brand.phoneRaw}</strong>
                 </div>
               </a>
 
@@ -80,9 +78,7 @@ export const HelpHubView: React.FC = () => {
               >
                 <div className="flex items-center gap-3">
                   <Mail className="w-4 h-4 text-[#014040]" />
-                  <span className="text-xs sm:text-sm font-semibold">
-                    Email: <strong>{STORE_COPY.brand.email}</strong>
-                  </span>
+                  <strong className="text-xs sm:text-sm">{STORE_COPY.brand.email}</strong>
                 </div>
               </a>
             </div>
@@ -114,7 +110,7 @@ export const HelpHubView: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <Monitor className="w-5 h-5 text-[#05ef28]" />
                   <span className="text-xs sm:text-sm font-bold">
-                    {STORE_COPY.help.windowsTeamViewer}
+                    Windows
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 text-[#05ef28] text-xs font-bold shrink-0">
@@ -134,7 +130,7 @@ export const HelpHubView: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <Laptop className="w-5 h-5 text-[#05ef28]" />
                   <span className="text-xs sm:text-sm font-bold">
-                    {STORE_COPY.help.macTeamViewer}
+                    Mac
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 text-[#05ef28] text-xs font-bold shrink-0">
@@ -145,9 +141,6 @@ export const HelpHubView: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-5 text-[11.5px] text-slate-500">
-            {STORE_COPY.help.unavailableNotice}
-          </div>
         </section>
       </div>
     </div>

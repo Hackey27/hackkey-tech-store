@@ -12,7 +12,10 @@ import {
   revealLicence,
   saveAnnouncement,
   saveService,
-  updateProductImages
+  updateProductImages,
+  updateCatalogueMedia,
+  updateCatalogueOrder,
+  updateLandingImage
 } from './adminData';
 import { getOrder } from './orders';
 import { applyOfflinePayment } from './payments';
@@ -52,6 +55,73 @@ export function createAdminRouter(): Router {
     } catch (err) {
       routeError(res, err, 'Failed to load the admin portal.');
     }
+  });
+
+  router.post(
+    '/catalogue/:kind/:itemId/images',
+    express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: MAX_CATALOGUE_IMAGE_BYTES }),
+    async (req: AdminRequest, res) => {
+      const kind = String(req.params.kind || '') as 'product' | 'bundle' | 'service' | 'laptop' | 'category';
+      const itemId = String(req.params.itemId || '').trim();
+      const role = ['icon', 'card', 'banner', 'gallery'].includes(String(req.query.role)) ? String(req.query.role) as 'icon' | 'card' | 'banner' | 'gallery' : null;
+      const contentType = String(req.header('content-type') || '').split(';')[0].trim();
+      const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+      if (!['product', 'bundle', 'service', 'laptop', 'category'].includes(kind) || !itemId || !role) return res.status(400).json({ error: 'A catalogue item and image role are required.' });
+      if (kind === 'category' && role !== 'card') return res.status(400).json({ error: 'Categories use card artwork only.' });
+      const validation = validateCatalogueImage(contentType, bytes.length);
+      if (!validation.ok) return res.status(400).json({ error: validation.error });
+      const objectPath = catalogueImageObjectPath(`${kind}-${itemId}`, role, contentType);
+      let attached = false;
+      try {
+        await saveCatalogueImage(objectPath, bytes, contentType);
+        const updated = await updateCatalogueMedia(kind, itemId, { role, objectPath });
+        attached = true;
+        if (updated.replacedPath) await deleteCatalogueImage(updated.replacedPath).catch(() => undefined);
+        await writeAdminAudit(actor(req), { action: `catalogue.${role}-upload`, targetType: kind, targetId: itemId, details: { objectPath } });
+        res.json(updated);
+      } catch (err) {
+        if (!attached) await deleteCatalogueImage(objectPath).catch(() => undefined);
+        routeError(res, err, 'Failed to upload catalogue artwork.');
+      }
+    }
+  );
+
+  router.delete('/catalogue/:kind/:itemId/images', async (req: AdminRequest, res) => {
+    const kind = String(req.params.kind || '') as 'product' | 'bundle' | 'service' | 'laptop' | 'category';
+    const itemId = String(req.params.itemId || '').trim();
+    const objectPath = String(req.body?.objectPath || '').trim();
+    if (!['product', 'bundle', 'service', 'laptop', 'category'].includes(kind) || !itemId || !isCatalogueImagePath(objectPath)) return res.status(400).json({ error: 'A valid catalogue image is required.' });
+    try {
+      const updated = await updateCatalogueMedia(kind, itemId, { role: 'remove', objectPath });
+      await deleteCatalogueImage(objectPath);
+      res.json(updated);
+    } catch (err) { routeError(res, err, 'Failed to remove catalogue artwork.'); }
+  });
+
+  router.post('/landing/images', express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: MAX_CATALOGUE_IMAGE_BYTES }), async (req: AdminRequest, res) => {
+    const role = req.query.role === 'desktop' ? 'desktop' : req.query.role === 'mobile' ? 'mobile' : null;
+    const contentType = String(req.header('content-type') || '').split(';')[0].trim();
+    const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (!role) return res.status(400).json({ error: 'Choose desktop or mobile artwork.' });
+    const validation = validateCatalogueImage(contentType, bytes.length);
+    if (!validation.ok) return res.status(400).json({ error: validation.error });
+    const objectPath = catalogueImageObjectPath('landing', role, contentType);
+    try {
+      await saveCatalogueImage(objectPath, bytes, contentType);
+      const result = await updateLandingImage(role, objectPath);
+      if (result.replacedPath) await deleteCatalogueImage(result.replacedPath).catch(() => undefined);
+      await writeAdminAudit(actor(req), { action: `landing.${role}-upload`, targetType: 'settings', targetId: 'landing', details: { objectPath } });
+      res.json(result);
+    } catch (err) { await deleteCatalogueImage(objectPath).catch(() => undefined); routeError(res, err, 'Failed to upload landing artwork.'); }
+  });
+
+  router.post('/catalogue/order', async (req: AdminRequest, res) => {
+    try {
+      const updates = Array.isArray(req.body?.updates) ? req.body.updates : [];
+      await updateCatalogueOrder(updates);
+      await writeAdminAudit(actor(req), { action: 'catalogue.order-update', targetType: 'settings', targetId: 'catalogue-order', details: { count: updates.length } });
+      res.json({ success: true });
+    } catch (err) { routeError(res, err, 'Failed to update catalogue order.'); }
   });
 
   router.post(

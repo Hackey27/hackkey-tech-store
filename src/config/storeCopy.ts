@@ -367,6 +367,8 @@ export const ADMIN_COPY = {
     services: 'Services',
     announcements: 'Announcements',
     products: 'Product media',
+    landing: 'Landing banners',
+    ordering: 'Catalogue order',
   },
   orders: {
     title: 'Orders needing attention',
