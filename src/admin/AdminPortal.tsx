@@ -1,5 +1,5 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
+import { onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
 import {
   AlertTriangle,
   ArrowDown,
@@ -43,12 +43,15 @@ function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError('');
+    setNotice('');
     try {
       const credential = await signInWithEmailAndPassword(adminAuth, email.trim(), password);
       const claims = await credential.user.getIdTokenResult(true);
@@ -63,6 +66,27 @@ function SignIn() {
     }
   };
 
+  const resetPassword = async () => {
+    if (!email.trim()) {
+      setError(ADMIN_COPY.enterEmailForReset);
+      return;
+    }
+    setResetBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await sendPasswordResetEmail(adminAuth, email.trim(), {
+        url: `${window.location.origin}/admin`,
+        handleCodeInApp: false
+      });
+      setNotice(ADMIN_COPY.resetSent);
+    } catch (err) {
+      setError(messageOf(err).replace('Firebase: ', ''));
+    } finally {
+      setResetBusy(false);
+    }
+  };
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#edf5f3] p-4">
       <form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-[#cbdcd9] bg-white p-7 shadow-xl sm:p-9">
@@ -74,7 +98,11 @@ function SignIn() {
           <label className={labelClass}>{ADMIN_COPY.password}<input className={inputClass} type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
         </div>
         {error && <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700">{error}</p>}
+        {notice && <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800">{notice}</p>}
         <button className={`${primaryButton} mt-6 w-full`} disabled={busy}>{busy ? ADMIN_COPY.signingIn : ADMIN_COPY.signIn}</button>
+        <button type="button" className="mt-3 w-full py-2 text-sm font-bold text-[#014040] hover:underline disabled:opacity-50" disabled={busy || resetBusy} onClick={resetPassword}>
+          {resetBusy ? ADMIN_COPY.sendingReset : ADMIN_COPY.forgotPassword}
+        </button>
       </form>
     </main>
   );
