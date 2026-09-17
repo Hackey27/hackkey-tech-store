@@ -99,21 +99,26 @@ export async function adminBootstrap() {
     .map((doc) => doc.data() as Announcement)
     .sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''));
   const products = productsSnap.docs
-    .map((doc) => doc.data() as Product)
+    .map((doc) => {
+      const product = doc.data() as Product;
+      const normalizedId = product.productId.toUpperCase();
+      const defaultInput = /^(AMOS|SPSS)/.test(normalizedId) ? 'Lock Code' : /^(MPLUS|MAXQDA|EVIEWS)/.test(normalizedId) ? 'Hardware ID' : undefined;
+      return { ...product, variants: (product.variants || []).map((variant) => ({ ...variant, customerInputRequired: variant.customerInputRequired || defaultInput, deliveryCodeType: variant.deliveryCodeType || 'licence' })) };
+    })
     .sort((a, b) => a.productName.localeCompare(b.productName));
 
   const bundles = bundlesSnap.docs.map((doc) => doc.data() as Bundle);
   const laptops = laptopsSnap.docs.map((doc) => doc.data() as Laptop);
   const categories = categoriesSnap.docs.map((doc) => doc.data() as Category);
   const mediaItems = [
-    ...products.map((item) => ({ kind: 'product' as const, itemId: item.productId, name: item.productName, categoryId: item.categoryId, imageUrl: item.imageUrl, imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder, featuredOrder: item.featuredOrder })),
-    ...bundles.map((item) => ({ kind: 'bundle' as const, itemId: item.bundleId, name: item.name, categoryId: item.categoryId, imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
-    ...services.map((item) => ({ kind: 'service' as const, itemId: item.serviceId, name: item.name, categoryId: item.categoryId, imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
-    ...laptops.map((item) => ({ kind: 'laptop' as const, itemId: item.laptopId, name: item.title, categoryId: item.categoryId, imageUrl: item.picturesUrl?.[0], imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
+    ...products.map((item) => ({ kind: 'product' as const, itemId: item.productId, name: item.productName, categoryId: item.categoryId, imageUrl: item.imageUrl, imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, mobileBannerImagePath: item.mobileBannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder, featuredOrder: item.featuredOrder })),
+    ...bundles.map((item) => ({ kind: 'bundle' as const, itemId: item.bundleId, name: item.name, categoryId: item.categoryId, imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, mobileBannerImagePath: item.mobileBannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
+    ...services.map((item) => ({ kind: 'service' as const, itemId: item.serviceId, name: item.name, categoryId: item.categoryId, imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, mobileBannerImagePath: item.mobileBannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
+    ...laptops.map((item) => ({ kind: 'laptop' as const, itemId: item.laptopId, name: item.title, categoryId: item.categoryId, imageUrl: item.picturesUrl?.[0], imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, mobileBannerImagePath: item.mobileBannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
     ...categories.map((item) => ({ kind: 'category' as const, itemId: item.categoryId, name: item.name, imagePath: item.imagePath, sortOrder: item.sortOrder }))
   ].sort((a, b) => a.name.localeCompare(b.name));
 
-  return { orders, licences, services, announcements, products, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {} };
+  return { orders, licences, services, announcements, products, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {} };
 }
 
 const mediaCollection: Record<CatalogueItemKind | 'category', string> = {
@@ -127,12 +132,12 @@ const mediaCollection: Record<CatalogueItemKind | 'category', string> = {
 export async function updateCatalogueMedia(
   kind: CatalogueItemKind | 'category',
   itemId: string,
-  change: { role: 'icon' | 'card' | 'banner' | 'gallery' | 'remove'; objectPath: string }
+  change: { role: 'icon' | 'card' | 'banner' | 'mobile-banner' | 'gallery' | 'remove'; objectPath: string }
 ) {
   const ref = getFirestore().collection(mediaCollection[kind]).doc(itemId);
   const snap = await ref.get();
   if (!snap.exists) throw new Error('Catalogue item not found.');
-  const current = snap.data() as { imagePath?: string; bannerImagePath?: string; screenshots?: string[] };
+  const current = snap.data() as { imagePath?: string; bannerImagePath?: string; mobileBannerImagePath?: string; screenshots?: string[] };
   let patch: Record<string, unknown> = {};
   let replacedPath: string | undefined;
   if (change.role === 'icon' || change.role === 'card') {
@@ -141,6 +146,9 @@ export async function updateCatalogueMedia(
   } else if (change.role === 'banner') {
     replacedPath = current.bannerImagePath?.startsWith('catalogue/') ? current.bannerImagePath : undefined;
     patch = { bannerImagePath: change.objectPath };
+  } else if (change.role === 'mobile-banner') {
+    replacedPath = current.mobileBannerImagePath?.startsWith('catalogue/') ? current.mobileBannerImagePath : undefined;
+    patch = { mobileBannerImagePath: change.objectPath };
   } else if (change.role === 'gallery') {
     const screenshots = [...new Set([...(current.screenshots || []), change.objectPath])];
     if (screenshots.length > 12) throw new Error('An item can have up to 12 gallery images.');
@@ -149,6 +157,7 @@ export async function updateCatalogueMedia(
     patch = {
       imagePath: current.imagePath === change.objectPath ? '' : current.imagePath,
       bannerImagePath: current.bannerImagePath === change.objectPath ? '' : current.bannerImagePath,
+      mobileBannerImagePath: current.mobileBannerImagePath === change.objectPath ? '' : current.mobileBannerImagePath,
       screenshots: (current.screenshots || []).filter((value) => value !== change.objectPath)
     };
   }
@@ -398,6 +407,110 @@ export async function addInternalNote(orderId: string, text: string, actor: Admi
   const patch: Partial<Order> = { internalNotes: [...(order.internalNotes || []), note], lastUpdated: now() };
   await ref.update(patch);
   return { ...order, ...patch } as Order;
+}
+
+const fulfilmentStatuses: FulfilmentStatus[] = [
+  'pending-payment', 'awaiting-customer-input', 'awaiting-document',
+  'awaiting-licence', 'awaiting-seller-activation', 'ready'
+];
+
+/** Admin-only editor for the stepwise order workflow. */
+export async function updateOrderWorkflow(
+  orderId: string,
+  input: Partial<Pick<Order,
+    'paymentStatus' | 'fulfilmentStatus' | 'amountPesewas' | 'customerInputType' |
+    'customerInputValue' | 'salesCode' | 'activationCodeOrKey' | 'activationWebsiteUrl' |
+    'windowsInstallerUrl' | 'guideUrl' | 'learningResourcesUrl' | 'fulfilmentMethod'>>,
+  actor: AdminActor
+): Promise<Order> {
+  const db = getFirestore();
+  const ref = db.collection(COLLECTIONS.orders).doc(orderId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('Order not found.');
+  const order = snap.data() as Order;
+  if (input.paymentStatus && !['pending', 'paid'].includes(input.paymentStatus)) throw new Error('Invalid payment status.');
+  if (input.fulfilmentStatus && !fulfilmentStatuses.includes(input.fulfilmentStatus)) throw new Error('Invalid fulfilment status.');
+  if (input.amountPesewas !== undefined && (!Number.isInteger(input.amountPesewas) || input.amountPesewas <= 0)) {
+    throw new Error('The adjusted price must be greater than zero.');
+  }
+  const clean = (value: unknown) => typeof value === 'string' ? value.trim() : value;
+  const patch: Partial<Order> = {
+    ...input,
+    customerInputValue: clean(input.customerInputValue) as string | undefined,
+    salesCode: clean(input.salesCode) as string | undefined,
+    activationCodeOrKey: clean(input.activationCodeOrKey) as string | undefined,
+    activationWebsiteUrl: clean(input.activationWebsiteUrl) as string | undefined,
+    windowsInstallerUrl: clean(input.windowsInstallerUrl) as string | undefined,
+    guideUrl: clean(input.guideUrl) as string | undefined,
+    learningResourcesUrl: clean(input.learningResourcesUrl) as string | undefined,
+    lastUpdated: now()
+  };
+  // The admin list masks existing activation codes. An empty field therefore
+  // means "leave the existing secret unchanged", not "erase it".
+  if (!String(input.activationCodeOrKey || '').trim()) delete patch.activationCodeOrKey;
+  if (input.paymentStatus === 'paid' && order.paymentStatus !== 'paid') {
+    patch.paidAt = now();
+    patch.paymentMethod = 'offline';
+    patch.offlinePaymentReason = 'Payment status set by administrator.';
+  }
+  if (input.fulfilmentStatus && input.fulfilmentStatus !== order.fulfilmentStatus) {
+    patch.fulfilmentHistory = [
+      ...(order.fulfilmentHistory || []),
+      { status: input.fulfilmentStatus, at: now(), actorUid: actor.uid, note: 'Status set by administrator.' }
+    ];
+    if (input.fulfilmentStatus === 'ready') patch.fulfilledAt = now();
+  }
+  await ref.update(patch);
+  return { ...order, ...patch } as Order;
+}
+
+export async function deleteUnpaidOrder(orderId: string): Promise<void> {
+  const ref = getFirestore().collection(COLLECTIONS.orders).doc(orderId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('Order not found.');
+  const order = snap.data() as Order;
+  if (order.paymentStatus === 'paid') throw new Error('Paid orders cannot be deleted.');
+  await ref.delete();
+}
+
+export async function saveProductConfiguration(productId: string, input: Product): Promise<Product> {
+  if (!input.productName?.trim()) throw new Error('Product name is required.');
+  const product: Product = {
+    ...input,
+    productId,
+    productName: input.productName.trim(),
+    variants: (input.variants || []).map((variant) => ({
+      ...variant,
+      customerInputRequired: variant.customerInputRequired?.trim() || undefined,
+      activationWebsiteUrl: variant.activationWebsiteUrl?.trim() || undefined,
+      windowsInstallerUrl: variant.windowsInstallerUrl?.trim() || undefined,
+      guideUrl: variant.guideUrl?.trim() || undefined,
+      learningResourcesUrl: variant.learningResourcesUrl?.trim() || undefined,
+      deliveryCodeType: variant.deliveryCodeType || 'licence'
+    }))
+  };
+  await getFirestore().collection(COLLECTIONS.products).doc(productId).set(product);
+  invalidateCatalogueCache();
+  return product;
+}
+
+export async function saveLaptop(laptopId: string, input: Laptop): Promise<Laptop> {
+  if (!input.title?.trim() || !input.brand?.trim() || !input.model?.trim()) {
+    throw new Error('Laptop name, brand and model are required.');
+  }
+  const laptop: Laptop = {
+    ...input,
+    laptopId,
+    title: input.title.trim(),
+    availability: input.availability === 'Pre-order' || input.availability === 'Preorder' ? 'Pre-order' : 'Available',
+    categoryId: input.categoryId || 'LAPTOP',
+    picturesUrl: input.picturesUrl || [],
+    active: input.active !== false,
+    sortOrder: Number.isFinite(input.sortOrder) ? input.sortOrder : 100
+  };
+  await getFirestore().collection(COLLECTIONS.laptops).doc(laptopId).set(laptop);
+  invalidateCatalogueCache();
+  return laptop;
 }
 
 export async function saveService(service: Service): Promise<Service> {

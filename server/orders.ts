@@ -251,6 +251,7 @@ async function createBundleOrders(
     // Part of a bundle, so the seller sees the whole purchase together.
     fulfilmentType: found?.variant.fulfilmentType || 'Bundle',
     fulfilmentMethod: (found?.variant.autoFulfil ? 'automatic' : 'manual') as 'automatic' | 'manual',
+    deliveryCodeType: found?.variant.deliveryCodeType || 'licence',
     customerInputType: (found?.variant.customerInputRequired as CustomerInputType) || undefined,
     activationWebsiteUrl: found?.variant.activationWebsiteUrl,
     windowsInstallerUrl: found?.variant.windowsInstallerUrl,
@@ -369,6 +370,7 @@ export async function createOrders(request: CheckoutRequest): Promise<Order[]> {
         fulfilmentStatus: 'pending-payment',
         fulfilmentType: variant.fulfilmentType,
         fulfilmentMethod: variant.autoFulfil ? 'automatic' : 'manual',
+        deliveryCodeType: variant.deliveryCodeType || 'licence',
         customerInputType: (variant.customerInputRequired as CustomerInputType) || undefined,
         activationWebsiteUrl: variant.activationWebsiteUrl,
         windowsInstallerUrl: variant.windowsInstallerUrl,
@@ -553,10 +555,16 @@ export async function fulfilPaidOrder(
     });
 
     patch.licenceId = licence.licenceId;
-    patch.activationCodeOrKey = licence.licenceCode;
-    patch.fulfilmentStatus = baseStatus;
-    recordHistory(baseStatus, 'Payment confirmed and a licence was assigned automatically.');
-    if (baseStatus === 'ready') {
+    const isSalesCode = variant.deliveryCodeType === 'sales-code';
+    if (isSalesCode) patch.salesCode = licence.licenceCode;
+    else patch.activationCodeOrKey = licence.licenceCode;
+    patch.fulfilmentStatus = isSalesCode
+      ? (variant.customerInputRequired && !order.customerInputValue ? 'awaiting-customer-input' : 'awaiting-seller-activation')
+      : baseStatus;
+    recordHistory(patch.fulfilmentStatus, isSalesCode
+      ? 'Payment confirmed and an internal sales code was assigned automatically.'
+      : 'Payment confirmed and a licence was assigned automatically.');
+    if (patch.fulfilmentStatus === 'ready') {
       patch.fulfilledAt = nowIso();
     }
 
@@ -583,6 +591,16 @@ export async function getOrder(orderId: string): Promise<Order | null> {
   return snap.exists ? (snap.data() as Order) : null;
 }
 
+export async function getOrdersByCartId(cartId: string): Promise<Order[]> {
+  const snapshot = await getFirestore().collection(COLLECTIONS.orders).where('cartId', '==', cartId).get();
+  return snapshot.docs.map((doc) => doc.data() as Order);
+}
+
+export async function getOrderByPaystackReference(reference: string): Promise<Order | null> {
+  const snapshot = await getFirestore().collection(COLLECTIONS.orders).where('paystackReference', '==', reference).limit(1).get();
+  return snapshot.empty ? null : snapshot.docs[0].data() as Order;
+}
+
 /** The customer supplies a lock code or hardware ID the activation needs. */
 export async function submitCustomerInput(
   orderId: string,
@@ -606,7 +624,7 @@ export async function submitCustomerInput(
   const nextStatus: FulfilmentStatus =
     order.paymentStatus !== 'paid'
       ? 'pending-payment'
-      : order.licenceId
+      : order.licenceId && order.deliveryCodeType !== 'sales-code'
         ? 'ready'
         : order.fulfilmentMethod === 'automatic'
           ? 'awaiting-licence'

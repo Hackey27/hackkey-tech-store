@@ -1,14 +1,16 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
 import { HealthResponse } from './src/types';
-import { Order } from './src/types';
 import { getCatalogue } from './server/catalogue';
 import {
   attachDocument,
   createOrders,
   createRequest,
   getOrder,
+  getOrderByPaystackReference,
+  getOrdersByCartId,
   lookupOrdersByPhone,
+  normalisePhone,
   recordPaystackReference,
   saveServiceAnswers,
   submitCustomerInput
@@ -31,6 +33,7 @@ import {
   validateUpload
 } from './server/storage';
 import { createAdminRouter } from './server/adminRoutes';
+import { publicOrder } from './server/publicOrder';
 
 // Cloud Run injects PORT (8080 by default); 3000 keeps local dev unchanged.
 const PORT = Number(process.env.PORT) || 3000;
@@ -55,18 +58,6 @@ function failed(res: Response, err: unknown, message: string, status = 500) {
     error: message,
     message: err instanceof Error ? err.message : 'Internal server error'
   });
-}
-
-/** Remove seller-only and storage-only fields from every public order response. */
-function publicOrder(order: Order): Order {
-  const {
-    internalNotes: _internalNotes,
-    offlinePaymentReason: _offlinePaymentReason,
-    documentPath: _documentPath,
-    fulfilmentHistory: _fulfilmentHistory,
-    ...safe
-  } = order;
-  return safe as Order;
 }
 
 async function startServer() {
@@ -222,6 +213,28 @@ async function startServer() {
     }
   });
 
+  // Start payment again from Find Order. The amount is read from Firestore at
+  // click time, so an administrator's adjusted price is reflected immediately.
+  app.post('/api/orders/:orderId/pay', async (req: Request, res: Response) => {
+    try {
+      const order = await getOrder(String(req.params.orderId));
+      if (!order) return res.status(404).json({ error: 'Order not found.' });
+      if (order.paymentStatus === 'paid') return res.status(409).json({ error: 'This order is already paid.' });
+      if (normalisePhone(String(req.body?.phone || '')) !== order.phone) {
+        return res.status(403).json({ error: 'The phone number does not match this order.' });
+      }
+      const cart = await getOrdersByCartId(order.cartId);
+      if (cart.some((row) => row.paymentStatus === 'paid')) {
+        return res.status(409).json({ error: 'Part of this checkout is already paid. Please contact support.' });
+      }
+      const totalPesewas = cart.reduce((sum, row) => sum + row.amountPesewas, 0);
+      const reference = `${order.orderId}-R${Date.now()}`;
+      const init = await initialiseTransaction({ email: order.email, amountPesewas: totalPesewas, reference, orderId: order.orderId });
+      await recordPaystackReference(cart, init.reference);
+      res.json({ authorizationUrl: init.authorizationUrl, reference: init.reference });
+    } catch (err) { failed(res, err, 'Failed to start payment', 400); }
+  });
+
   // Checkout
   app.post('/api/orders/checkout', async (req: Request, res: Response) => {
     const { customerName, phone, email, items } = req.body;
@@ -289,7 +302,7 @@ async function startServer() {
       const outcome = await applyVerifiedPayment(reference);
       // Rendered from the database, not from the query string and not from the
       // verification response.
-      const order = await getOrder(reference);
+      const order = 'order' in outcome ? outcome.order : await getOrder(reference) || await getOrderByPaystackReference(reference);
 
       if (!order) {
         return res.status(404).json({ error: 'We could not find that order.', reference });

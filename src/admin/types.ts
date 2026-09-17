@@ -1,4 +1,4 @@
-import { Announcement, CatalogueItemKind, Category, LandingSettings, LicencePoolEntry, Order, Product, Service } from '../types';
+import { Announcement, CatalogueItemKind, Category, LandingSettings, Laptop, LicencePoolEntry, Order, Product, Service } from '../types';
 
 export interface AdminMediaItem {
   kind: CatalogueItemKind | 'category';
@@ -8,6 +8,7 @@ export interface AdminMediaItem {
   imageUrl?: string;
   imagePath?: string;
   bannerImagePath?: string;
+  mobileBannerImagePath?: string;
   screenshots?: string[];
   sortOrder?: number;
   featuredOrder?: number;
@@ -30,6 +31,7 @@ export interface AdminData {
   services: Service[];
   announcements: Announcement[];
   products: Product[];
+  laptops: Laptop[];
   mediaItems: AdminMediaItem[];
   categories: Category[];
   landing: LandingSettings;

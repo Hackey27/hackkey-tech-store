@@ -15,7 +15,11 @@ import {
   updateProductImages,
   updateCatalogueMedia,
   updateCatalogueOrder,
-  updateLandingImage
+  updateLandingImage,
+  updateOrderWorkflow,
+  deleteUnpaidOrder,
+  saveProductConfiguration,
+  saveLaptop
 } from './adminData';
 import { getOrder } from './orders';
 import { applyOfflinePayment } from './payments';
@@ -63,7 +67,7 @@ export function createAdminRouter(): Router {
     async (req: AdminRequest, res) => {
       const kind = String(req.params.kind || '') as 'product' | 'bundle' | 'service' | 'laptop' | 'category';
       const itemId = String(req.params.itemId || '').trim();
-      const role = ['icon', 'card', 'banner', 'gallery'].includes(String(req.query.role)) ? String(req.query.role) as 'icon' | 'card' | 'banner' | 'gallery' : null;
+      const role = ['icon', 'card', 'banner', 'mobile-banner', 'gallery'].includes(String(req.query.role)) ? String(req.query.role) as 'icon' | 'card' | 'banner' | 'mobile-banner' | 'gallery' : null;
       const contentType = String(req.header('content-type') || '').split(';')[0].trim();
       const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
       if (!['product', 'bundle', 'service', 'laptop', 'category'].includes(kind) || !itemId || !role) return res.status(400).json({ error: 'A catalogue item and image role are required.' });
@@ -316,6 +320,23 @@ export function createAdminRouter(): Router {
     }
   });
 
+  router.put('/orders/:orderId/workflow', async (req: AdminRequest, res) => {
+    try {
+      const order = await updateOrderWorkflow(String(req.params.orderId), req.body || {}, actor(req));
+      await writeAdminAudit(actor(req), { action: 'order.workflow-update', targetType: 'order', targetId: order.orderId, orderId: order.orderId });
+      res.json({ order });
+    } catch (err) { routeError(res, err, 'Failed to update the order workflow.'); }
+  });
+
+  router.delete('/orders/:orderId', async (req: AdminRequest, res) => {
+    try {
+      const orderId = String(req.params.orderId);
+      await deleteUnpaidOrder(orderId);
+      await writeAdminAudit(actor(req), { action: 'order.delete-unpaid', targetType: 'order', targetId: orderId, orderId });
+      res.json({ success: true });
+    } catch (err) { routeError(res, err, 'Failed to delete the order.'); }
+  });
+
   router.post('/orders/:orderId/resend', async (req: AdminRequest, res) => {
     try {
       const order = await getOrder(String(req.params.orderId));
@@ -387,6 +408,22 @@ export function createAdminRouter(): Router {
   };
   router.post('/services', saveServiceHandler);
   router.put('/services/:serviceId', saveServiceHandler);
+
+  router.put('/products/:productId/configuration', async (req: AdminRequest, res) => {
+    try {
+      const product = await saveProductConfiguration(String(req.params.productId), req.body);
+      await writeAdminAudit(actor(req), { action: 'product.configuration-save', targetType: 'product', targetId: product.productId });
+      res.json({ product });
+    } catch (err) { routeError(res, err, 'Failed to save product configuration.'); }
+  });
+
+  router.put('/laptops/:laptopId', async (req: AdminRequest, res) => {
+    try {
+      const laptop = await saveLaptop(String(req.params.laptopId), req.body);
+      await writeAdminAudit(actor(req), { action: 'laptop.save', targetType: 'laptop', targetId: laptop.laptopId });
+      res.json({ laptop });
+    } catch (err) { routeError(res, err, 'Failed to save laptop properties.'); }
+  });
 
   const saveAnnouncementHandler = async (req: AdminRequest, res: any) => {
     try {

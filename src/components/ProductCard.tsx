@@ -75,6 +75,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {productName}
         </h3>
 
+        {product.kind === 'laptop' && product.laptop && <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600"><span><b>CPU</b><br />{product.laptop.processor}</span><span><b>RAM</b><br />{product.laptop.ram}</span><span><b>Storage</b><br />{product.laptop.storage}</span>{product.laptop.graphics?.toLowerCase().includes('dedicated') && <span><b>Graphics</b><br />{product.laptop.graphicsDetails || product.laptop.graphics}</span>}</div>}
+
         {/* OS Compatibility badges */}
         {product.osList && product.osList.length > 0 && (
           <div className="mt-3.5 flex items-center gap-1.5 flex-wrap">
@@ -119,7 +121,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </span>
         </div>
 
-        {payable ? <div className="flex gap-2"><button id={`product-buy-btn-${product.itemId}`} onClick={(event) => { event.stopPropagation(); onBuyNowClick(product); }} className="flex items-center gap-1.5 rounded-xl bg-[#05ef28] px-3 py-2.5 text-xs font-black text-[#014040] hover:bg-[#04d824]"><CreditCard className="h-3.5 w-3.5" />Buy now</button><button id={`product-cart-btn-${product.itemId}`} onClick={(event) => { event.stopPropagation(); onAddToCart?.(product); }} className="flex items-center gap-1.5 rounded-xl bg-[#014040] px-3 py-2.5 text-xs font-black text-white hover:bg-[#025656]"><ShoppingCart className="h-3.5 w-3.5" />Add</button></div> : <button onClick={(event) => { event.stopPropagation(); onSelect(product); }} className="flex items-center gap-1.5 rounded-xl bg-[#014040] px-4 py-2.5 text-xs font-black text-white"><MessageSquareQuote className="h-3.5 w-3.5" />Get a quote</button>}
+        {payable ? <div className="flex gap-2"><button id={`product-buy-btn-${product.itemId}`} onClick={(event) => { event.stopPropagation(); onBuyNowClick(product); }} className="flex items-center gap-1.5 rounded-xl bg-[#05ef28] px-3 py-2.5 text-xs font-black text-[#014040] hover:bg-[#04d824]"><CreditCard className="h-3.5 w-3.5" />Buy now</button><button id={`product-cart-btn-${product.itemId}`} onClick={(event) => { event.stopPropagation(); onAddToCart?.(product); }} className="flex items-center gap-1.5 rounded-xl bg-[#014040] px-3 py-2.5 text-xs font-black text-white hover:bg-[#025656]"><ShoppingCart className="h-3.5 w-3.5" />Add</button></div> : <button onClick={(event) => { event.stopPropagation(); onSelect(product); }} className="flex items-center gap-1.5 rounded-xl bg-[#014040] px-4 py-2.5 text-xs font-black text-white"><MessageSquareQuote className="h-3.5 w-3.5" />{product.kind === 'laptop' ? 'I am interested' : 'Get a quote'}</button>}
       </div>
     </article>
   );

@@ -62,8 +62,16 @@ function hydrateVariant(variant: Variant, productId: string): Variant {
     variant.macViaParallels
   );
 
+  const normalizedId = productId.toUpperCase();
+  const defaultCustomerInput = /^(AMOS|SPSS)/.test(normalizedId)
+    ? 'Lock Code'
+    : /^(MPLUS|MAXQDA|EVIEWS)/.test(normalizedId)
+      ? 'Hardware ID'
+      : undefined;
   return {
     ...variant,
+    customerInputRequired: variant.customerInputRequired || defaultCustomerInput,
+    deliveryCodeType: variant.deliveryCodeType || 'licence',
     listPricePesewas: pricing.listPesewas,
     payablePricePesewas: pricing.payablePesewas,
     promoLabel: pricing.promoLabel,
@@ -117,6 +125,7 @@ function productToCatalogueItem(product: Product): CatalogueItem {
     description: product.description,
     imageUrl: catalogueImageUrl(product.imagePath) || product.imageUrl,
     bannerImageUrl: catalogueImageUrl(product.bannerImagePath),
+    mobileBannerImageUrl: catalogueImageUrl(product.mobileBannerImagePath),
     screenshots: (product.screenshots || [])
       .map((image) => catalogueImageUrl(image))
       .filter((image): image is string => Boolean(image)),
@@ -162,6 +171,7 @@ function bundleToCatalogueItem(bundle: Bundle, products: Product[]): CatalogueIt
     description: bundle.description,
     imageUrl: catalogueImageUrl(bundle.imagePath),
     bannerImageUrl: catalogueImageUrl(bundle.bannerImagePath),
+    mobileBannerImageUrl: catalogueImageUrl(bundle.mobileBannerImagePath),
     screenshots: (bundle.screenshots || []).map(catalogueImageUrl).filter((value): value is string => Boolean(value)),
     sortOrder: bundle.sortOrder ?? 0,
     pricePesewas: pricing.payablePesewas,
@@ -191,6 +201,7 @@ function serviceToCatalogueItem(service: Service): CatalogueItem {
     description: service.description || service.tagline,
     imageUrl: catalogueImageUrl(service.imagePath),
     bannerImageUrl: catalogueImageUrl(service.bannerImagePath),
+    mobileBannerImageUrl: catalogueImageUrl(service.mobileBannerImagePath),
     screenshots: (service.screenshots || []).map(catalogueImageUrl).filter((value): value is string => Boolean(value)),
     sortOrder: service.sortOrder ?? 0,
     pricePesewas: pricing?.payablePesewas,
@@ -228,6 +239,7 @@ function laptopToCatalogueItem(laptop: Laptop): CatalogueItem {
     description: spec,
     imageUrl: catalogueImageUrl(laptop.imagePath) || laptop.picturesUrl?.[0],
     bannerImageUrl: catalogueImageUrl(laptop.bannerImagePath),
+    mobileBannerImageUrl: catalogueImageUrl(laptop.mobileBannerImagePath),
     screenshots: [
       ...(laptop.screenshots || []).map(catalogueImageUrl),
       ...(laptop.picturesUrl || [])

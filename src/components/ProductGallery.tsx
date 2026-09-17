@@ -13,6 +13,7 @@ interface ProductGalleryProps {
 export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productName, kind }) => {
   const [active, setActive] = useState<number | null>(null);
   const touchStart = useRef<number | null>(null);
+  const railRef = useRef<HTMLDivElement>(null);
   const validImages = images.map(renderableProductImageUrl).filter((value): value is string => Boolean(value));
 
   const move = (direction: number) => {
@@ -37,24 +38,25 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
 
   return (
     <section aria-labelledby="product-gallery-title" className="space-y-4">
-      <div>
-        <h2 id="product-gallery-title" className="text-xl font-black text-[#014040]">
-          {kind === 'laptop' ? 'Laptop image gallery' : kind === 'service' ? 'Service gallery' : kind === 'bundle' ? 'Bundle gallery' : 'Software gallery'}
+      <div className="flex items-end justify-between gap-3">
+        <div><h2 id="product-gallery-title" className="text-xl font-black text-[#014040]">
+          {kind === 'product' ? 'Successful installations' : 'Image Gallery'}
         </h2>
-        <p className="mt-1 text-sm text-slate-600">Images of {productName}.</p>
+        <p className="mt-1 text-sm text-slate-600">{kind === 'product' ? 'These images are installations completed for a sample of other clients.' : `Images of ${productName}.`}</p></div>
+        <div className="flex gap-2"><button type="button" onClick={() => railRef.current?.scrollBy({ left: -320, behavior: 'smooth' })} className="rounded-full border bg-white p-2 text-[#014040]" aria-label={STORE_COPY.gallery.previous}><ChevronLeft className="h-5 w-5" /></button><button type="button" onClick={() => railRef.current?.scrollBy({ left: 320, behavior: 'smooth' })} className="rounded-full border bg-white p-2 text-[#014040]" aria-label={STORE_COPY.gallery.next}><ChevronRight className="h-5 w-5" /></button></div>
       </div>
-      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))]">
+      <div ref={railRef} className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3 [scrollbar-width:thin]">
         {validImages.map((image, index) => (
           <button
             key={`${image}-${index}`}
             type="button"
             onClick={() => setActive(index)}
-            className="aspect-[4/3] overflow-hidden rounded-2xl border border-[#d8e7e4] bg-[#edf5f3] focus:outline-none focus:ring-2 focus:ring-[#014040]"
+            className="aspect-[4/3] w-[82vw] max-w-sm shrink-0 snap-start overflow-hidden rounded-2xl border border-[#d8e7e4] bg-[#edf5f3] focus:outline-none focus:ring-2 focus:ring-[#014040] sm:w-80"
             aria-label={STORE_COPY.gallery.openImage(index + 1)}
           >
             <img
               src={image}
-              alt={STORE_COPY.gallery.imageAlt(productName, index + 1)}
+              alt={`${kind === 'product' ? `${productName} installation` : productName} image ${index + 1}`}
               width="640"
               height="480"
               loading="lazy"
@@ -90,7 +92,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
           )}
           <img
             src={validImages[active]}
-            alt={STORE_COPY.gallery.imageAlt(productName, active + 1)}
+            alt={`${kind === 'product' ? `${productName} installation` : productName} image ${active + 1}`}
             width="1400"
             height="1050"
             className="max-h-[88vh] max-w-[88vw] rounded-2xl object-contain"

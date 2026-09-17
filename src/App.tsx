@@ -64,6 +64,7 @@ export const App: React.FC = () => {
   // Requirement: "Show a small number of products only" and "Include a View all software control"
   const [showAllSoftware, setShowAllSoftware] = useState(false);
   const [announcementOpen, setAnnouncementOpen] = useState(false);
+  const [nextSteps, setNextSteps] = useState<{ phone: string; orderId: string } | null>(null);
 
   // Fetch catalog from Phase 1 backend endpoint /api/catalog
   const fetchCatalogData = async (search?: string) => {
@@ -246,9 +247,13 @@ export const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#f7faf9] text-slate-900">
         <PaymentReturnView
-          onDone={() => {
+          onDone={(order) => {
             window.history.replaceState({}, '', '/');
             setRoute({ view: 'home' });
+            if (order) {
+              setNextSteps({ phone: order.phone, orderId: order.orderId });
+              setActiveTab('find-order');
+            }
           }}
         />
       </div>
@@ -499,7 +504,7 @@ export const App: React.FC = () => {
         )}
 
         {/* Tab 2: Find my order */}
-        {route.view === 'home' && activeTab === 'find-order' && <FindOrderView catalogItems={catalog?.products || []} />}
+        {route.view === 'home' && activeTab === 'find-order' && <FindOrderView catalogItems={catalog?.products || []} initialPhone={nextSteps?.phone} focusOrderId={nextSteps?.orderId} />}
 
         {/* Tab 3: Help support hub */}
         {route.view === 'home' && activeTab === 'help' && <HelpHubView />}

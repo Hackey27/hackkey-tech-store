@@ -365,6 +365,8 @@ export const ADMIN_COPY = {
     orders: 'Orders',
     licences: 'Licences',
     services: 'Services',
+    software: 'Software setup',
+    laptops: 'Laptop properties',
     announcements: 'Announcements',
     products: 'Product media',
     landing: 'Landing banners',

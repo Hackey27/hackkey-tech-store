@@ -13,7 +13,7 @@ import { STORE_COPY } from '../config/storeCopy';
  * caught up: the webhook frequently lands first, and a customer told their
  * successful payment failed will pay twice.
  */
-export const PaymentReturnView: React.FC<{ onDone: () => void }> = ({ onDone }) => {
+export const PaymentReturnView: React.FC<{ onDone: (order?: Order) => void }> = ({ onDone }) => {
   const [order, setOrder] = useState<Order | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,10 +119,10 @@ export const PaymentReturnView: React.FC<{ onDone: () => void }> = ({ onDone }) 
                 </button>
               )}
               <button
-                onClick={onDone}
+                onClick={() => onDone(confirmed ? order : undefined)}
                 className="px-4 py-2.5 rounded-xl border border-[#cbdcd9] bg-white hover:bg-[#edf4f3] text-[#014040] text-xs font-bold transition-colors cursor-pointer"
               >
-                Back to the store
+                {confirmed ? 'See next steps' : 'Back to the store'}
               </button>
             </div>
           </>

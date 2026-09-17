@@ -36,22 +36,22 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   const [bundleSelections, setBundleSelections] = useState<Record<string, string>>({});
   const [addedNotice, setAddedNotice] = useState(false);
   const [bannerFailed, setBannerFailed] = useState(false);
+  const [showInterestForm, setShowInterestForm] = useState(false);
   const productName = product.name || STORE_COPY.product.softwareFallback;
   const recommendedId = variants.find((variant) => variant.latest)?.variantId;
   const isPurchasableService = product.kind === 'service' && (product.options?.length ?? 0) > 0;
   const isQuoteOnly = product.kind === 'laptop' || (product.kind === 'service' && !isPurchasableService);
   const machineCodeType: MachineCodeType = product.machineCodeType || 'none';
 
+  const allOsList = useMemo(() => [...new Set(variants.flatMap((variant) => variant.osList || [variant.os || 'Windows']))], [variants]);
   const versionGroups = useMemo(() => {
     const groups = new Map<string, Variant[]>();
-    variants.forEach((variant) => groups.set(variant.versionOrPlan, [...(groups.get(variant.versionOrPlan) || []), variant]));
+    variants.filter((variant) => !selectedOs || (variant.osList || [variant.os]).some((os) => os.toLowerCase() === selectedOs.toLowerCase()))
+      .forEach((variant) => groups.set(variant.versionOrPlan, [...(groups.get(variant.versionOrPlan) || []), variant]));
     return [...groups.entries()];
-  }, [variants]);
+  }, [variants, selectedOs]);
   const selectedVersion = selectedVariant?.versionOrPlan;
-  const availableOsList = useMemo(() => {
-    const group = versionGroups.find(([version]) => version === selectedVersion)?.[1] || [];
-    return [...new Set(group.flatMap((variant) => variant.osList || [variant.os || 'Windows']))];
-  }, [selectedVersion, versionGroups]);
+  const availableOsList = allOsList;
   const alternativeGroups = useMemo(() => {
     const groups = new Map<string, NonNullable<CatalogueItem['bundleContents']>>();
     (product.bundleContents || []).forEach((entry) => {
@@ -62,12 +62,13 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
 
   useEffect(() => {
     setSelectedVariant(undefined);
-    setSelectedOs('');
+    setSelectedOs(allOsList[0] || '');
+    setShowInterestForm(false);
     const defaults: Record<string, string> = {};
     alternativeGroups.forEach(([group, choices]) => { if (choices[0]) defaults[group] = choices[0].variantId; });
     setBundleSelections(defaults);
     setBannerFailed(false);
-  }, [product.itemId, alternativeGroups]);
+  }, [product.itemId, alternativeGroups, allOsList]);
 
   useEffect(() => setBannerFailed(false), [product.bannerImageUrl]);
 
@@ -76,6 +77,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   const promoLabel = selectedVariant?.promoLabel ?? product.promoLabel;
   const promoPercent = selectedVariant?.promoPercent ?? product.promoPercent;
   const bannerUrl = renderableProductImageUrl(product.bannerImageUrl);
+  const mobileBannerUrl = renderableProductImageUrl(product.mobileBannerImageUrl);
   const needsVariant = variants.length > 0;
   const canBuy = !needsVariant || Boolean(selectedVariant?.available);
 
@@ -107,15 +109,11 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   const selectVariant = (variant: Variant) => {
     if (!variant.available) return;
     setSelectedVariant(variant);
-    setSelectedOs((variant.osList || [variant.os || 'Windows'])[0] || '');
   };
 
   const selectOs = (os: string) => {
-    const group = versionGroups.find(([version]) => version === selectedVersion)?.[1] || [];
-    const exact = group.find((variant) => variant.os.toLowerCase() === os.toLowerCase());
-    const matching = exact || group.find((variant) => (variant.osList || []).includes(os));
-    if (matching) setSelectedVariant(matching);
     setSelectedOs(os);
+    setSelectedVariant(undefined);
   };
 
   return (
@@ -126,12 +124,12 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
       </button>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(330px,0.75fr)]">
-        <section className="relative aspect-[16/10] min-h-[330px] overflow-hidden rounded-3xl bg-gradient-to-br from-[#025656] via-[#014040] to-[#002929] shadow-lg sm:min-h-[440px]">
-          {bannerUrl && !bannerFailed && <img src={bannerUrl} alt="" width="1200" height="750" loading="eager" decoding="async" className="absolute inset-0 h-full w-full object-cover" onError={() => setBannerFailed(true)} />}
+        <section className="relative aspect-[4/5] w-full min-w-0 overflow-hidden rounded-3xl bg-gradient-to-br from-[#025656] via-[#014040] to-[#002929] shadow-lg sm:aspect-[16/10]">
+          {bannerUrl && !bannerFailed && <picture><source media="(max-width: 639px)" srcSet={mobileBannerUrl || bannerUrl} /><img src={bannerUrl} alt="" width="1200" height="750" loading="eager" decoding="async" className="absolute inset-0 h-full w-full object-cover" onError={() => setBannerFailed(true)} /></picture>}
           <div className="absolute inset-0 bg-black/10" aria-hidden="true" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#014040] via-[#014040]/80 to-transparent" aria-hidden="true" />
           <div className="absolute inset-x-0 bottom-0 p-5 text-white sm:p-8">
-            <div className="mb-4 flex items-end gap-4">
+            <div className="mb-4 flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-end sm:gap-4">
               <ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} size="lg" eager />
               <div className="min-w-0">
                 <p className="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-[#d9ffe0]">{product.categoryName}</p>
@@ -149,11 +147,14 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
 
         <aside className="rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-24">
           {isQuoteOnly ? (
-            <QuoteRequestForm item={product} />
+            product.kind === 'laptop' && !showInterestForm
+              ? <button type="button" onClick={() => setShowInterestForm(true)} className="w-full rounded-xl bg-[#014040] px-5 py-3.5 text-sm font-black text-white">I am interested</button>
+              : <QuoteRequestForm item={product} submitLabel={product.kind === 'laptop' ? 'I am interested' : 'Get a quote'} />
           ) : isPurchasableService ? (
             <ServicePurchasePanel item={product} onAddToCart={handleServiceAdd} onBuyNow={handleServiceBuy} />
           ) : variants.length > 0 ? (
             <div>
+              {allOsList.length > 0 && <div className="mb-5"><p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-600">{STORE_COPY.product.chooseOperatingSystem}</p><div className="flex flex-wrap gap-2">{allOsList.map((os) => <button key={os} type="button" onClick={() => selectOs(os)} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold ${selectedOs === os ? 'bg-[#014040] text-white' : 'bg-[#edf5f3] text-[#014040]'}`}><Monitor className="h-3.5 w-3.5" />{os}</button>)}</div></div>}
               <div className="mb-4">
                 <h2 className="text-lg font-black text-[#014040]">{STORE_COPY.product.chooseVersion}</h2>
                 <p className="mt-1 text-xs text-slate-500">{STORE_COPY.product.selectVersion}</p>
@@ -187,19 +188,6 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
                 })}
               </div>
 
-              {selectedVariant && availableOsList.length > 0 && (
-                <div className="mt-5 border-t border-[#e2ecea] pt-5">
-                  <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-600">{STORE_COPY.product.chooseOperatingSystem}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {availableOsList.map((os) => (
-                      <button key={os} type="button" onClick={() => selectOs(os)} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold ${selectedOs === os ? 'bg-[#014040] text-white' : 'bg-[#edf5f3] text-[#014040]'}`}>
-                        <Monitor className="h-3.5 w-3.5" />{os}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" disabled={!selectedVariant} onClick={handleBuyClick} className="flex items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-3 py-3.5 text-sm font-black text-[#014040] disabled:opacity-50"><CreditCard className="h-4 w-4" />Buy now</button><button type="button" disabled={!selectedVariant} onClick={handleAddClick} className="flex items-center justify-center gap-2 rounded-xl bg-[#014040] px-3 py-3.5 text-sm font-black text-white disabled:opacity-50"><ShoppingCart className="h-4 w-4" />Add to cart</button></div>
             </div>
           ) : product.kind === 'bundle' ? (
@@ -222,6 +210,10 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
             <p className="mt-3 text-sm leading-7 text-slate-700 sm:text-base">{product.description}</p>
           </section>
         )}
+
+        {product.kind === 'laptop' && product.laptop && <section className="max-w-4xl"><h2 className="text-xl font-black text-[#014040]">Laptop specifications</h2><dl className="mt-4 grid gap-3 rounded-2xl border border-[#d8e7e4] bg-white p-5 sm:grid-cols-2">{[
+          ['Brand', product.laptop.brand], ['Model', product.laptop.model], ['Processor', product.laptop.processor], ['RAM', product.laptop.ram], ['Storage', product.laptop.storage], ['Screen size', product.laptop.screen], ['Colour', product.laptop.colour], ['Operating system', product.laptop.operatingSystem], ['Graphics card', [product.laptop.graphics, product.laptop.graphicsDetails].filter(Boolean).join(' · ')], ['Freebies included', product.laptop.freebies], ['Availability', product.laptop.availability]
+        ].filter(([, value]) => value).map(([label, value]) => <div key={label}><dt className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</dt><dd className="mt-1 text-sm font-bold text-slate-800">{value}</dd></div>)}</dl>{product.laptop.availability.toLowerCase().includes('pre') && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-800">Pre-orders take 2 to 4 weeks to arrive.</p>}</section>}
 
         {machineCodeType !== 'service' && machineCodeType !== 'none' && (
           <div className="flex max-w-3xl items-start gap-2 rounded-2xl border-l-4 border-[#e0a800] bg-[#fffaf0] p-4 text-xs leading-relaxed text-[#8a5b00]">

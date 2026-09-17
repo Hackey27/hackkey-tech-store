@@ -61,6 +61,9 @@ export interface Variant {
   deliverableType: string;
   activationMode: string;
   autoFulfil: boolean;
+  /** Determines whether an automatically assigned pool entry is the final
+   * customer licence or an internal sales code used by the seller. */
+  deliveryCodeType?: 'licence' | 'sales-code';
   manualDelivery: boolean;
   licenceRequiredForSelfActivation: boolean;
   prerequisiteBeforeActivationCode?: string;
@@ -97,6 +100,7 @@ export interface Product {
   /** Optional wide artwork. Admin uploads are stored as a private Cloud
    *  Storage object path and exposed through the public catalogue image route. */
   bannerImagePath?: string;
+  mobileBannerImagePath?: string;
   /** Installation images. Values may be migrated HTTPS URLs or private
    *  `catalogue/` object paths created by the admin portal. */
   screenshots?: string[];
@@ -133,6 +137,7 @@ export interface Bundle {
   active: boolean;
   imagePath?: string;
   bannerImagePath?: string;
+  mobileBannerImagePath?: string;
   screenshots?: string[];
   items: BundleItem[];
 }
@@ -208,6 +213,7 @@ export interface Service {
   sortOrder: number;
   imagePath?: string;
   bannerImagePath?: string;
+  mobileBannerImagePath?: string;
   screenshots?: string[];
 }
 
@@ -240,6 +246,7 @@ export interface Laptop {
   sortOrder: number;
   imagePath?: string;
   bannerImagePath?: string;
+  mobileBannerImagePath?: string;
   screenshots?: string[];
 }
 
@@ -277,6 +284,7 @@ export interface CatalogueItem {
   description?: string;
   imageUrl?: string;
   bannerImageUrl?: string;
+  mobileBannerImageUrl?: string;
   screenshots?: string[];
   sortOrder: number;
   featuredOrder?: number;
@@ -381,6 +389,7 @@ export interface Order {
   fulfilmentStatus: FulfilmentStatus;
   fulfilmentType?: string;
   fulfilmentMethod?: FulfilmentMethod;
+  deliveryCodeType?: 'licence' | 'sales-code';
   customerInputType?: CustomerInputType;
   customerInputValue?: string;
   salesCode?: string;

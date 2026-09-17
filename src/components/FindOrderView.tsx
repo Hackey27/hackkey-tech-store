@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Phone,
   CheckCircle2,
@@ -43,8 +43,8 @@ function whatsAppSubmissionLink(orderId: string, productName: string): string {
   return `${STORE_COPY.brand.whatsAppUrl}?text=${encodeURIComponent(text)}`;
 }
 
-export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[] }> = ({ catalogItems = [] }) => {
-  const [phoneNumber, setPhoneNumber] = useState('');
+export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPhone?: string; focusOrderId?: string }> = ({ catalogItems = [], initialPhone = '', focusOrderId }) => {
+  const [phoneNumber, setPhoneNumber] = useState(initialPhone);
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -55,9 +55,6 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[] }> = ({ ca
   const [isSubmittingInput, setIsSubmittingInput] = useState<Record<string, boolean>>({});
   const [actionSuccessMessage, setActionSuccessMessage] = useState<Record<string, string>>({});
   const [actionErrorMessage, setActionErrorMessage] = useState<Record<string, string>>({});
-
-  // Per-order licence saving state
-  const [returnedLicenceValues, setReturnedLicenceValues] = useState<Record<string, string>>({});
 
   // Copied states
   const [copiedKeys, setCopiedKeys] = useState<Record<string, boolean>>({});
@@ -97,6 +94,25 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[] }> = ({ ca
     }
   };
 
+  useEffect(() => { if (initialPhone) void executeLookup(initialPhone); }, [initialPhone]);
+
+  useEffect(() => {
+    if (!focusOrderId || !orders.length) return;
+    window.setTimeout(() => document.getElementById(`order-${focusOrderId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  }, [focusOrderId, orders]);
+
+  const handlePay = async (order: Order) => {
+    setActionErrorMessage((old) => ({ ...old, [order.orderId]: '' }));
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(order.orderId)}/pay`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: phoneNumber }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to start payment.');
+      window.location.assign(data.authorizationUrl);
+    } catch (caught) {
+      setActionErrorMessage((old) => ({ ...old, [order.orderId]: caught instanceof Error ? caught.message : 'Unable to start payment.' }));
+    }
+  };
+
   const handleFindOrder = (e: React.FormEvent) => {
     e.preventDefault();
     executeLookup(phoneNumber);
@@ -131,34 +147,6 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[] }> = ({ ca
       setActionErrorMessage((prev) => ({ ...prev, [order.orderId]: err.message }));
     } finally {
       setIsSubmittingInput((prev) => ({ ...prev, [order.orderId]: false }));
-    }
-  };
-
-  const handleSaveLicenceCode = async (order: Order) => {
-    const val = returnedLicenceValues[order.orderId];
-    if (!val || !val.trim()) return;
-
-    setActionErrorMessage((prev) => ({ ...prev, [order.orderId]: '' }));
-    setActionSuccessMessage((prev) => ({ ...prev, [order.orderId]: '' }));
-
-    try {
-      const res = await fetch(`/api/orders/${order.orderId}/save-licence`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ licenceCode: val.trim() })
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to save licence.');
-      }
-
-      setActionSuccessMessage((prev) => ({ ...prev, [order.orderId]: data.message }));
-      if (data.order) {
-        setOrders((prev) => prev.map((o) => (o.orderId === order.orderId ? data.order : o)));
-      }
-    } catch (err: any) {
-      setActionErrorMessage((prev) => ({ ...prev, [order.orderId]: err.message }));
     }
   };
 
@@ -229,7 +217,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[] }> = ({ ca
       {hasSearched && !errorMessage && (
         <div className="space-y-6">
           {orders.length > 0 ? (
-            orders.map((order) => {
+            <><div className="rounded-2xl bg-[#edf5f3] p-5"><h2 className="text-xl font-black text-[#014040]">{STORE_COPY.findOrder.resultsGreeting(orders[0].customerName)}</h2><p className="mt-1 text-sm text-slate-600">Here are all the orders linked to this phone number.</p></div>{orders.map((order) => {
               const catalogueItem = catalogItems.find((item) => item.itemId === order.productId || item.name === order.productName);
               const inputType = order.customerInputType || 'Lock Code';
               const isHardwareId = inputType === 'Hardware ID';
@@ -243,14 +231,12 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[] }> = ({ ca
               return (
                 <div
                   key={order.orderId}
+                  id={`order-${order.orderId}`}
                   className="bg-white rounded-2xl border border-[#d8e7e4] p-6 sm:p-8 shadow-sm space-y-6"
                 >
-                  {/* Header / Customer Greeting */}
+                  {/* Order header */}
                   <div className="border-b border-[#edf4f3] pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
-                      <h2 className="text-xl font-black text-[#014040]">
-                        {STORE_COPY.findOrder.resultsGreeting(order.customerName)}
-                      </h2>
                       <p className="text-xs text-slate-500 mt-0.5">
                         Order #{order.orderId} · Placed on {order.orderDate} · {order.deliveryOs}
                       </p>
@@ -343,7 +329,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[] }> = ({ ca
                           </p>
                         </div>
                       </div>
-
+                      <button type="button" onClick={() => void handlePay(order)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#014040] px-4 py-3 text-sm font-black text-white"><CreditCard className="h-4 w-4" />Proceed to pay</button>
                     </div>
                   )}
 
@@ -448,93 +434,10 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[] }> = ({ ca
                     </div>
                   )}
 
-                  {/* STATE 3: SALES CODE ISSUED (Section 4 & 7) -> Sales code with Copy button, activation link, and input to save licence */}
-                  {order.salesCode && (
-                    <div className="p-5 sm:p-6 rounded-2xl bg-[#f0f7f6] border border-[#b8ded6] space-y-4">
-                      <div>
-                        <span className="text-xs font-bold uppercase tracking-wider text-[#014040]">
-                          Sales Code Issued for Activation
-                        </span>
-                        <p className="text-xs text-slate-600 mt-1">
-                          Use this sales code alongside your {inputType} on the vendor&apos;s activation website to generate your permanent licence key.
-                        </p>
-                      </div>
-
-                      {/* Sales code display box with Copy */}
-                      <div className="flex items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-[#cbdcd9]">
-                        <span className="font-mono text-base font-black text-[#014040] tracking-wider">
-                          {order.salesCode}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(`sc-${order.orderId}`, order.salesCode!)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#edf5f3] hover:bg-[#dcefe9] text-xs font-bold text-[#014040] transition-colors cursor-pointer"
-                        >
-                          {copiedKeys[`sc-${order.orderId}`] ? (
-                            <>
-                              <Check className="w-3.5 h-3.5 text-green-600" />
-                              <span>Copied</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3.5 h-3.5" />
-                              <span>Copy Code</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {/* Link to activation website */}
-                      {order.activationWebsiteUrl && (
-                        <div>
-                          <a
-                            href={order.activationWebsiteUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#014040] hover:bg-[#025656] text-white font-bold text-xs transition-colors shadow-2xs"
-                          >
-                            <span>Open the activation website</span>
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        </div>
-                      )}
-
-                      {/* Field to save the licence returned by the vendor */}
-                      {!order.activationCodeOrKey && (
-                        <div className="pt-3 border-t border-[#d8e7e4] space-y-2">
-                          <label className="block text-xs font-bold text-[#014040]">
-                            Paste the licence key returned by the activation website:
-                          </label>
-                          <div className="flex flex-col sm:flex-row gap-2">
-                            <input
-                              type="text"
-                              value={returnedLicenceValues[order.orderId] || ''}
-                              onChange={(e) =>
-                                setReturnedLicenceValues((prev) => ({
-                                  ...prev,
-                                  [order.orderId]: e.target.value
-                                }))
-                              }
-                              placeholder="e.g. 4A29-881F-E902-771B-943C"
-                              className="flex-1 px-3 py-2 bg-white border border-[#cbdcd9] rounded-xl text-xs font-mono font-medium text-slate-900 focus:outline-none focus:border-[#014040]"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleSaveLicenceCode(order)}
-                              className="px-4 py-2 bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-xs rounded-xl transition-colors cursor-pointer"
-                            >
-                              Save my licence code
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   {/* STATE 4: READY (Section 4 & 7) -> Licence code with Copy button and Resource Links */}
-                  {order.fulfilmentStatus === 'ready' && order.activationCodeOrKey && (
+                  {order.paymentStatus === 'paid' && (order.activationCodeOrKey || order.windowsInstallerUrl || order.guideUrl || order.learningResourcesUrl) && (
                     <div className="space-y-4">
-                      <div className="p-5 rounded-2xl bg-[#014040] text-white space-y-2 shadow-xs">
+                      {order.activationCodeOrKey && <div className="p-5 rounded-2xl bg-[#014040] text-white space-y-2 shadow-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-white/70 font-semibold uppercase tracking-wider">
                             Licence / Activation Code
@@ -562,7 +465,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[] }> = ({ ca
                         <div className="font-mono text-lg sm:text-xl font-black text-[#05ef28] break-all tracking-wider pt-1">
                           {order.activationCodeOrKey}
                         </div>
-                      </div>
+                      </div>}
 
                       {/* Resource links (Section 9.7 verbatim) */}
                       <div className="p-4 bg-[#f8fbfa] rounded-2xl border border-[#d8e7e4] space-y-2">
@@ -598,20 +501,24 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[] }> = ({ ca
                             </>
                           ) : (
                             <>
-                              <a
-                                href={order.windowsInstallerUrl || '#'}
+                              {order.windowsInstallerUrl && <a
+                                href={order.windowsInstallerUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#cbdcd9] text-xs font-bold text-[#014040] hover:bg-[#edf5f3] shadow-2xs"
                               >
                                 <Download className="w-3.5 h-3.5 text-[#014040]" />
                                 <span>Download Software</span>
-                              </a>
-                              <a
-                                href={order.guideUrl || '#'}
+                              </a>}
+                              {order.guideUrl && <a
+                                href={order.guideUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#cbdcd9] text-xs font-bold text-[#014040] hover:bg-[#edf5f3] shadow-2xs"
                               >
                                 <BookOpen className="w-3.5 h-3.5 text-[#014040]" />
                                 <span>Installation / Activation Instructions</span>
-                              </a>
+                              </a>}
                               {order.learningResourcesUrl && (
                                 <a
                                   href={order.learningResourcesUrl}
@@ -637,7 +544,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[] }> = ({ ca
                   </div>
                 </div>
               );
-            })
+            })}</>
           ) : (
             <div className="p-8 text-center bg-white rounded-2xl border border-[#d8e7e4] shadow-xs space-y-3">
               <h3 className="text-lg font-bold text-[#014040]">
