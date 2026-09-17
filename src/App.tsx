@@ -216,6 +216,7 @@ export const App: React.FC = () => {
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         cartCount={totalCartCount}
+        cartItems={cartItems}
       />
 
       {/* Main Content Area */}

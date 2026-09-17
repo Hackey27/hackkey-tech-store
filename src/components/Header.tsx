@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Search, ShoppingBag } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import { STORE_COPY } from '../config/storeCopy';
+import { CartItem } from './CartView';
+import { CartFlyout } from './CartFlyout';
 
 interface HeaderProps {
   searchQuery: string;
@@ -9,6 +11,7 @@ interface HeaderProps {
   activeTab: 'home' | 'find-order' | 'help' | 'request' | 'cart';
   onSelectTab: (tab: 'home' | 'find-order' | 'help' | 'request' | 'cart') => void;
   cartCount?: number;
+  cartItems: CartItem[];
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -16,10 +19,21 @@ export const Header: React.FC<HeaderProps> = ({
   onSearchChange,
   activeTab,
   onSelectTab,
-  cartCount = 0
+  cartCount = 0,
+  cartItems,
 }) => {
+  const [cartOpen, setCartOpen] = useState(false);
+  const cartButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => setCartOpen(false), [activeTab]);
+
+  const openCartPage = () => {
+    setCartOpen(false);
+    onSelectTab('cart');
+  };
+
   return (
-    <header className="sticky top-0 z-40 w-full bg-white border-b border-[#e2ecea] shadow-xs">
+    <header className="sticky top-0 z-[55] w-full bg-white border-b border-[#e2ecea] shadow-xs">
       {/* Main Header */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
         <div className="flex items-center justify-between gap-4">
@@ -115,8 +129,12 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Cart Button (Always accessible in top header) */}
             <button
+              ref={cartButtonRef}
               id="header-cart-btn"
-              onClick={() => onSelectTab('cart')}
+              onClick={() => setCartOpen((open) => !open)}
+              aria-expanded={cartOpen}
+              aria-controls="header-cart-flyout"
+              aria-haspopup="dialog"
               className="relative p-2.5 sm:px-3.5 sm:py-2 rounded-xl bg-[#014040] hover:bg-[#025656] text-white font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all shadow-xs cursor-pointer"
               title={STORE_COPY.navigation.cart}
             >
@@ -154,6 +172,17 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </div>
+      <CartFlyout
+        open={cartOpen}
+        items={cartItems}
+        triggerRef={cartButtonRef}
+        onClose={() => setCartOpen(false)}
+        onCheckout={openCartPage}
+        onBrowse={() => {
+          setCartOpen(false);
+          onSelectTab('home');
+        }}
+      />
     </header>
   );
 };

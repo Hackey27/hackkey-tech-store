@@ -304,6 +304,14 @@ export const STORE_COPY = {
     subtotal: (count: number) => `Subtotal (${count} item${count === 1 ? '' : 's'})`,
     total: 'Total',
     proceedToCheckout: 'Proceed to checkout',
+    flyout: {
+      closeLabel: 'Close cart preview',
+      ready: 'Ready when you are',
+      lineCount: (count: number) => `${count} line${count === 1 ? '' : 's'} selected`,
+      emptyDescription: 'Browse the catalogue and add an item to get started.',
+      browseProducts: 'Browse products',
+      quantity: (quantity: number) => `Qty ${quantity}`,
+    },
 
     checkoutTitle: 'Your details',
     checkoutSubtitle: 'You will use this phone number to retrieve your licences later.',
