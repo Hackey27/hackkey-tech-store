@@ -74,14 +74,20 @@ const paystack = http.createServer((req, res) => {
 
 // --- stub mail ------------------------------------------------------------
 
-const sentMail: Array<{ to: string[]; subject: string }> = [];
+const sentMail: Array<{ to: string[]; subject: string; from: string; replyTo: string }> = [];
 const mail = http.createServer((req, res) => {
   let raw = '';
   req.on('data', (c) => (raw += c));
   req.on('end', () => {
     try {
       const body = JSON.parse(raw || '{}');
-      sentMail.push({ to: body.to, subject: body.subject });
+      sentMail.push({
+        to: body.to,
+        subject: body.subject,
+        from: body.from,
+        // Resend's REST field is snake_case.
+        replyTo: body.reply_to
+      });
     } catch {
       /* ignore */
     }
@@ -219,6 +225,16 @@ async function run(): Promise<void> {
     check('paidAt recorded', Boolean(order.paidAt));
     check('seller alert and customer receipt sent', sentMail.length === 2, `${sentMail.length} email(s)`);
     check('receiptSent flag set', order.receiptSent === true, String(order.receiptSent));
+    check(
+      'sent From the send. subdomain',
+      sentMail.every((m) => m.from === 'Hack-Key Tech <orders@send.hackeytech.com>'),
+      sentMail.map((m) => m.from).join(' | ')
+    );
+    check(
+      'Reply-To is the root-domain inbox',
+      sentMail.every((m) => m.replyTo === 'orders@hackeytech.com'),
+      sentMail.map((m) => m.replyTo).join(' | ')
+    );
   }
 
   console.log('\n=== adversarial: webhook with a wrong signature ===');

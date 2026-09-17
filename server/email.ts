@@ -23,8 +23,21 @@ function sellerAddress(): string | undefined {
   return process.env.SELLER_ALERT_EMAIL || undefined;
 }
 
+/**
+ * Mail is sent from the `send.` subdomain, which is what carries the SPF and
+ * DKIM records, keeping the root domain's DNS free of sending policy.
+ */
 function fromAddress(): string {
-  return process.env.MAIL_FROM || 'Hack-Key Tech <orders@hackeytech.com>';
+  return process.env.MAIL_FROM || 'Hack-Key Tech <orders@send.hackeytech.com>';
+}
+
+/**
+ * Replies go to the real inbox on the root domain, not to the sending
+ * subdomain — nobody reads mail at send.hackeytech.com, so without this a
+ * customer replying to their receipt would be talking to no one.
+ */
+function replyToAddress(): string {
+  return process.env.MAIL_REPLY_TO || 'orders@hackeytech.com';
 }
 
 /** Mail is configured only when both a key and a sender destination exist. */
@@ -46,7 +59,13 @@ async function send(to: string, subject: string, text: string): Promise<void> {
       Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ from: fromAddress(), to: [to], subject, text })
+    body: JSON.stringify({
+      from: fromAddress(),
+      reply_to: replyToAddress(),
+      to: [to],
+      subject,
+      text
+    })
   });
 
   if (!res.ok) {
