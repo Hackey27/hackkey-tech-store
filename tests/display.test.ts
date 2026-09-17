@@ -59,9 +59,11 @@ test('no source file builds a currency string by hand', () => {
         const source = fs.readFileSync(full, 'utf8');
         source.split('\n').forEach((line, i) => {
           if (line.trim().startsWith('*') || line.trim().startsWith('//')) return;
-          // A cedi sign immediately followed by an interpolation, or an
-          // amount divided by 100 for display.
-          if (/₵\$\{/.test(line) || /Pesewas\s*\/\s*100/.test(line)) {
+          // A cedi sign followed by an interpolation — in a template literal
+          // (₵${...}) OR in JSX (₵{...}), which the first version of this
+          // guard missed and which is exactly how the cart line item kept
+          // rendering raw pesewas. Also an amount divided by 100 for display.
+          if (/₵\s*\$?\{/.test(line) || /Pesewas\s*\/\s*100/.test(line)) {
             offenders.push(`${full}:${i + 1}: ${line.trim()}`);
           }
         });
@@ -229,4 +231,71 @@ test('priceServiceLine is unchanged by the shared resolver', () => {
       priceServiceLine(PLAG_AI, qty).totalPesewas
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// Round 2 — the four issues found in end-to-end testing
+// ---------------------------------------------------------------------------
+
+test('issue 4: a service prices from the chosen option, not the cheapest one', () => {
+  // The card advertises the cheapest option (PLAG, 1500). Choosing PLAG_AI
+  // must cost 5000 — picking "the first price we can find" gave 1500 and made
+  // the most-bought SKU impossible to buy at its real price.
+  const chosen = resolveLinePricePesewas({
+    item: { kind: 'service', pricePesewas: 1500, options: TURNITIN_SERVICE.options },
+    serviceOption: PLAG_AI,
+    quantity: 1
+  });
+  assert.equal(chosen.unitPesewas, 5000, 'PLAG_AI is 5000, not the 1500 "from" price');
+
+  const cheap = resolveLinePricePesewas({
+    item: { kind: 'service', pricePesewas: 1500, options: TURNITIN_SERVICE.options },
+    serviceOption: PLAG,
+    quantity: 1
+  });
+  assert.equal(cheap.unitPesewas, 1500, 'PLAG really is 1500');
+});
+
+test('issue 4: the option is matched by optionId, not by position', () => {
+  // A stale option object carrying only an id must still resolve the live
+  // price from the service's own options.
+  const staleReference = { optionId: 'PLAG_AI', name: 'stale', unitPriceGhs: 999 };
+  const line = resolveLinePricePesewas({
+    item: { kind: 'service', pricePesewas: 1500, options: TURNITIN_SERVICE.options },
+    serviceOption: staleReference,
+    quantity: 1
+  });
+  assert.equal(line.unitPesewas, 5000, 'matched by optionId against the live catalogue');
+});
+
+test('issue 2: a service line with no chosen option still prices a real SKU', () => {
+  // The card's "Buy now" used to add an optionless line. It must not fall back
+  // to the "from" price of a different SKU.
+  const line = resolveLinePricePesewas({
+    item: { kind: 'service', pricePesewas: 1500, options: TURNITIN_SERVICE.options },
+    quantity: 1
+  });
+  assert.equal(line.unitPesewas, 5000, 'defaults to the preselected first option, PLAG_AI');
+});
+
+test('issue 1: a cart line total is not multiplied by quantity twice', () => {
+  // resolveLinePricePesewas already includes quantity. The cart rendered
+  // total * quantity, charging double for any quantity above one.
+  const line = resolveLinePricePesewas({
+    item: { kind: 'laptop', pricePesewas: 850000 },
+    quantity: 2
+  });
+  assert.equal(line.totalPesewas, 1700000);
+  assert.equal(formatPesewas(line.totalPesewas), 'GHS 17,000.00');
+  assert.notEqual(line.totalPesewas * 2, line.totalPesewas, 'rendering total*qty would double it');
+});
+
+test('issue 3: a laptop resolves its own price with no variant present', () => {
+  const line = resolveLinePricePesewas({
+    item: { kind: 'laptop', pricePesewas: 850000 },
+    variant: undefined,
+    quantity: 1
+  });
+  assert.equal(formatPesewas(line.unitPesewas), 'GHS 8,500.00');
+  assert.notEqual(formatPesewas(line.unitPesewas), 'GHS 0.00');
 });

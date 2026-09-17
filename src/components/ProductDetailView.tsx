@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
 import { STORE_COPY } from '../config/storeCopy';
-import { cedisToPesewas, formatPesewas } from '../utils/money';
+import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
 import { ServicePurchasePanel } from './ServicePurchasePanel';
 
 interface ProductDetailViewProps {
@@ -47,12 +47,13 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
   const hasMultipleOs = availableOsList.length > 1;
   const [selectedOs, setSelectedOs] = useState<string>(availableOsList[0] || 'Windows');
 
-  // Active price in GHS
-  const currentPriceGhs =
-    selectedVariant?.payablePricePesewas ??
-    cedisToPesewas(selectedVariant?.priceGhs ?? 0) ??
-    product.pricePesewas ??
-    0;
+  // The one resolver, so a laptop or bundle — which has no variant — shows its
+  // own price instead of falling through a dead ?? chain to zero.
+  const currentPricePesewas = resolveLinePricePesewas({
+    item: product,
+    variant: selectedVariant,
+    quantity: 1
+  }).unitPesewas;
 
   // Active step for progress preview
   const [progressDemoStep, setProgressDemoStep] = useState(1);
@@ -247,10 +248,11 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                           const vKey = variant.variantId || 'var';
                           const isSelected =
                             (selectedVariant?.variantId) === vKey;
-                          const vPrice =
-                            variant.payablePricePesewas ??
-                            cedisToPesewas(variant.priceGhs ?? 0) ??
-                            0;
+                          const vPrice = resolveLinePricePesewas({
+                            item: product,
+                            variant,
+                            quantity: 1
+                          }).unitPesewas;
 
                           return (
                             <div
@@ -296,7 +298,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                     Price
                   </span>
                   <div className="text-2xl font-black text-[#014040]">
-                    {formatPesewas(currentPriceGhs)}
+                    {formatPesewas(currentPricePesewas)}
                   </div>
                 </div>
 

@@ -166,17 +166,26 @@ export function cheapestOptionPesewas(options: ServiceOption[]): number | undefi
  * or laptop — which has no variant — always resolved to zero.
  */
 export function resolveLinePricePesewas(line: {
-  item: { kind: string; pricePesewas?: number };
+  item: { kind: string; pricePesewas?: number; options?: ServiceOption[] };
   variant?: { payablePricePesewas?: number; priceGhs?: number };
   serviceOption?: ServiceOption;
   quantity: number;
 }): { unitPesewas: number; totalPesewas: number } {
   const quantity = Math.max(1, Math.floor(line.quantity) || 1);
 
-  // A service with a chosen option carries the bulk rule, so quantity is
-  // already accounted for in the line total.
-  if (line.serviceOption) {
-    const priced = priceServiceLine(line.serviceOption, quantity);
+  // A service prices from its chosen option — matched by optionId, never by
+  // "the first price we can find". With no explicit choice it falls back to the
+  // service's first option, which is the one the panel preselects; the card's
+  // "from" price is the CHEAPEST option and charging that for a different SKU
+  // is how the ₵50 check came to cost ₵15.
+  const chosenOption =
+    (line.serviceOption &&
+      (line.item.options?.find((o) => o.optionId === line.serviceOption!.optionId) ??
+        line.serviceOption)) ||
+    (line.item.kind === 'service' ? line.item.options?.[0] : undefined);
+
+  if (chosenOption) {
+    const priced = priceServiceLine(chosenOption, quantity);
     return { unitPesewas: priced.unitPricePesewas, totalPesewas: priced.totalPesewas };
   }
 

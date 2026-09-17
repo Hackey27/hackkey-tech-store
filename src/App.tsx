@@ -134,7 +134,14 @@ export const App: React.FC = () => {
   };
 
   const handleBuyNowDirect = (product: CatalogueItem) => {
-    // For single-variant products, add to cart and open cart or show detail
+    // A purchasable service has to have its option chosen first: adding one
+    // straight to the cart produced a line with no option, priced at the card's
+    // "from" price and naming nothing the server could charge for. Open the
+    // panel instead so the customer picks.
+    if (product.kind === 'service' && (product.options?.length ?? 0) > 0) {
+      setActiveDetailProduct(product);
+      return;
+    }
     handleAddToCart(product, product.variants?.[0], product.osList?.[0]);
     setActiveTab('cart');
   };

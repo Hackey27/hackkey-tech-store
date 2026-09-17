@@ -72,10 +72,15 @@ export const CartView: React.FC<CartViewProps> = ({
             // Name the thing by its kind. A bundle and a laptop have no
             // variant, and sending an undefined variantId is what made
             // "Failed to place order" the only possible outcome for them.
-            if (item.serviceOption) {
+            // A service is always resolved by serviceId and optionId. Falling
+            // back to the first option matters: the card's "Buy now" adds a
+            // line without one, and without this the payload named nothing the
+            // server could price, which is why Turnitin could not be bought.
+            if (item.product.kind === 'service' || item.serviceOption) {
               return {
                 serviceId: item.product.itemId,
-                optionId: item.serviceOption.optionId,
+                optionId:
+                  item.serviceOption?.optionId ?? item.product.options?.[0]?.optionId,
                 quantity: item.quantity
               };
             }
@@ -194,7 +199,9 @@ export const CartView: React.FC<CartViewProps> = ({
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <span className="text-sm sm:text-base font-black text-[#014040]">
-                        ₵{(itemPrice * item.quantity).toLocaleString()}
+                        {/* itemPrice is already the line total, quantity
+                            included — multiplying again double-charged. */}
+                        {formatPesewas(itemPrice)}
                       </span>
                     </div>
 
