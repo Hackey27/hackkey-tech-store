@@ -30,7 +30,7 @@ Collections (all camelCase, in Firestore and in TypeScript):
 | `bundles/{bundleId}` | Items embedded as `items[]`; `altGroup`/`altLabel` mean "choose one of these". |
 | `services/{serviceId}` | `fields[]` is the parsed enquiry form. `options[]` present => purchasable. |
 | `laptops/{laptopId}` | `picturesUrl` is a `string[]`. |
-| `licencePool/{licenceId}` | **Empty in Phase 1.** Populated through the admin portal in Phase 2. |
+| `licencePool/{licenceId}` | Loaded and assigned through the Firebase-authenticated admin portal. |
 | `orders/{orderId}` | Survives instance restarts, which is the point of all this. |
 | `requests/{requestId}` | All request kinds in one inbox, discriminated by `kind`. |
 | `announcements/{announcementId}` | Returned only while `active` and inside `startsAt`/`endsAt`. |
@@ -89,10 +89,10 @@ checks for this and refuses to write, naming the category ids that do exist.
 
 ## Payments
 
-**Nothing may mark an order paid except code that has verified a reference
-against the Paystack API.** The endpoint that once did it on request is gone
-(Phase 2 §0); `fulfilPaidOrder` is not an entry point and has exactly one
-caller, `applyVerifiedPayment`.
+Public requests may never mark an order paid. Paystack payments are applied
+only after server-side verification; seller-confirmed offline payments use a
+separate Firebase-admin-authenticated, audited route and the same fulfilment
+transaction.
 
 Both the webhook and the customer's return call that one routine. Neither has
 its own copy, because two copies drift and one ends up missing the amount
@@ -174,9 +174,11 @@ Firestore only from the server, whose Admin SDK bypasses rules. That keeps
 `orders` and `licencePool` — customer contact details and unissued keys — out
 of reach of a browser.
 
-`/api/admin/data` returns that same sensitive data. In production it is
-disabled until `ADMIN_TOKEN` is set, and then requires it in an
-`x-admin-token` header.
+Every `/api/admin/*` route is protected by one Firebase Authentication
+middleware mounted on the entire subtree. Access requires a valid token for
+this Firebase project with the custom claim `admin: true`. There is no public
+registration route. State changes and sensitive key/document reveals are
+written to `admin_audit`.
 
 `PAYSTACK_SECRET_KEY` is server-only and never reaches `dist/`. In production
 the server **refuses to start** without it: a storefront that boots without

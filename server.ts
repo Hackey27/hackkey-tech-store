@@ -1,15 +1,13 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
 import { HealthResponse } from './src/types';
+import { Order } from './src/types';
 import { getCatalogue } from './server/catalogue';
 import {
   attachDocument,
   createOrders,
   createRequest,
   getOrder,
-  listLicencePool,
-  listOrders,
-  listRequests,
   lookupOrdersByPhone,
   recordPaystackReference,
   saveServiceAnswers,
@@ -26,12 +24,12 @@ import {
 } from './server/paystack';
 import {
   confirmUpload,
-  createSignedDownload,
   createSignedUpload,
   documentObjectPath,
   validateServiceAnswers,
   validateUpload
 } from './server/storage';
+import { createAdminRouter } from './server/adminRoutes';
 
 // Cloud Run injects PORT (8080 by default); 3000 keeps local dev unchanged.
 const PORT = Number(process.env.PORT) || 3000;
@@ -56,6 +54,18 @@ function failed(res: Response, err: unknown, message: string, status = 500) {
     error: message,
     message: err instanceof Error ? err.message : 'Internal server error'
   });
+}
+
+/** Remove seller-only and storage-only fields from every public order response. */
+function publicOrder(order: Order): Order {
+  const {
+    internalNotes: _internalNotes,
+    offlinePaymentReason: _offlinePaymentReason,
+    documentPath: _documentPath,
+    fulfilmentHistory: _fulfilmentHistory,
+    ...safe
+  } = order;
+  return safe as Order;
 }
 
 async function startServer() {
@@ -119,6 +129,10 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Every route below this mount is protected by the single Firebase custom-
+  // claim middleware in createAdminRouter. There is no legacy shared token.
+  app.use('/api/admin', createAdminRouter());
+
   // Health endpoint
   app.get('/api/health', (req: Request, res: Response) => {
     const healthData: HealthResponse = {
@@ -163,7 +177,7 @@ async function startServer() {
 
     try {
       const orders = await lookupOrdersByPhone(phone);
-      res.json({ orders, count: orders.length });
+      res.json({ orders: orders.map(publicOrder), count: orders.length });
     } catch (err) {
       failed(res, err, 'Failed to look up orders');
     }
@@ -181,7 +195,7 @@ async function startServer() {
       if (!result.success) {
         return res.status(400).json({ error: result.message });
       }
-      res.json(result);
+      res.json({ ...result, order: result.order ? publicOrder(result.order) : undefined });
     } catch (err) {
       failed(res, err, 'Failed to save customer input');
     }
@@ -262,7 +276,7 @@ async function startServer() {
 
       res.json({
         reference,
-        order,
+        order: publicOrder(order),
         // Not "payment failed": the webhook frequently lands first, and a
         // customer told their successful payment failed will pay twice.
         confirmed: order.paymentStatus === 'paid',
@@ -277,7 +291,7 @@ async function startServer() {
     try {
       const order = await getOrder(String(req.params.orderId));
       if (!order) return res.status(404).json({ error: 'Order not found.' });
-      res.json({ order });
+      res.json({ order: publicOrder(order) });
     } catch (err) {
       failed(res, err, 'Failed to retrieve order');
     }
@@ -337,28 +351,9 @@ async function startServer() {
 
       const result = await attachDocument(order.orderId, objectPath);
       if (!result.success) return res.status(400).json({ error: result.message });
-      res.json(result);
+      res.json({ ...result, order: result.order ? publicOrder(result.order) : undefined });
     } catch (err) {
       failed(res, err, 'Failed to record the document');
-    }
-  });
-
-  // Retrieval is server-mediated and short-lived; documents are never public.
-  // Until the Phase 2 admin portal exists this is admin-only.
-  app.get('/api/orders/:orderId/document', async (req: Request, res: Response) => {
-    const adminToken = process.env.ADMIN_TOKEN;
-    if (!adminToken || req.header('x-admin-token') !== adminToken) {
-      return res.status(401).json({ error: 'Unauthorized.' });
-    }
-
-    try {
-      const order = await getOrder(String(req.params.orderId));
-      if (!order?.documentPath) {
-        return res.status(404).json({ error: 'No document on this order.' });
-      }
-      res.json({ url: await createSignedDownload(order.documentPath) });
-    } catch (err) {
-      failed(res, err, 'Failed to prepare the download');
     }
   });
 
@@ -387,7 +382,8 @@ async function startServer() {
       }
 
       const updated = await saveServiceAnswers(order.orderId, answers);
-      res.json({ success: true, order: updated });
+      if (!updated) return res.status(404).json({ error: 'Order not found.' });
+      res.json({ success: true, order: publicOrder(updated) });
     } catch (err) {
       failed(res, err, 'Failed to save answers');
     }
@@ -459,34 +455,6 @@ async function startServer() {
       res.json({ success: true, submission: request });
     } catch (err) {
       failed(res, err, 'Failed to submit enquiry');
-    }
-  });
-
-  // Admin diagnostics.
-  // Returns orders, the licence pool and customer PII, so it must never be
-  // open on a public URL. In production it stays disabled until ADMIN_TOKEN is
-  // set, and then requires that value in the x-admin-token header. Local
-  // development is unaffected.
-  app.get('/api/admin/data', async (req: Request, res: Response) => {
-    if (process.env.NODE_ENV === 'production') {
-      const adminToken = process.env.ADMIN_TOKEN;
-      if (!adminToken) {
-        return res.status(404).json({ error: 'Not found.' });
-      }
-      if (req.header('x-admin-token') !== adminToken) {
-        return res.status(401).json({ error: 'Unauthorized.' });
-      }
-    }
-
-    try {
-      const [orders, licencePool, requests] = await Promise.all([
-        listOrders(),
-        listLicencePool(),
-        listRequests()
-      ]);
-      res.json({ orders, licencePool, requests });
-    } catch (err) {
-      failed(res, err, 'Failed to retrieve admin data');
     }
   });
 

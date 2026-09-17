@@ -56,6 +56,17 @@
   }
 }
 
+@keyframes hk-modal-enter {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.hk-modal-enter { animation: hk-modal-enter 180ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hk-modal-enter { animation: none; }
+}
+
 /* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;

@@ -211,7 +211,11 @@ function selectAnnouncement(announcements: Announcement[], now: Date): Announcem
       if (endsAt && new Date(endsAt) < now) return false;
       return true;
     })
-    .sort((a, b) => (toIsoString(b.createdAt) || '').localeCompare(toIsoString(a.createdAt) || ''))[0];
+    .sort((a, b) =>
+      (toIsoString(b.updatedAt) || toIsoString(b.createdAt) || '').localeCompare(
+        toIsoString(a.updatedAt) || toIsoString(a.createdAt) || ''
+      )
+    )[0];
 }
 
 function matchesSearch(item: CatalogueItem, query: string): boolean {

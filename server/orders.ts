@@ -400,11 +400,9 @@ export interface FulfilmentOutcome {
  * Mark an order paid and, where the variant is auto-fulfilled, take one licence
  * from the pool — atomically.
  *
- * NOT AN ENTRY POINT. The only caller is applyVerifiedPayment in
- * server/payments.ts, which has already verified the reference against the
- * Paystack API and checked the amount. Nothing else may call this, and no route
- * reaches it: an endpoint that marks orders paid on request is the defect
- * Phase 2 §0 deleted.
+ * NOT A PUBLIC ENTRY POINT. Paystack verification and the authenticated,
+ * audited offline-payment admin action both converge here so their fulfilment
+ * behavior cannot drift.
  *
  * The read of an available licence, its transition to `assigned`, and its
  * attachment to the order all happen inside one Firestore transaction.
@@ -419,7 +417,9 @@ export interface FulfilmentOutcome {
  */
 export async function fulfilPaidOrder(
   orderId: string,
-  payment: { paystackReference: string; paidAt?: string }
+  payment:
+    | { method: 'paystack'; paystackReference: string; paidAt?: string }
+    | { method: 'offline'; reference: string; reason: string; paidAt?: string }
 ): Promise<FulfilmentOutcome | null> {
   const db: Firestore = getFirestore();
   const orderRef = db.collection(COLLECTIONS.orders).doc(orderId);
@@ -449,10 +449,22 @@ export async function fulfilPaidOrder(
 
     const patch: Partial<Order> = {
       paymentStatus: 'paid',
-      paystackReference: payment.paystackReference,
+      paymentMethod: payment.method,
       paidAt: payment.paidAt || nowIso(),
       lastUpdated: nowIso()
     };
+    const recordHistory = (status: FulfilmentStatus, note: string) => {
+      patch.fulfilmentHistory = [
+        ...(order.fulfilmentHistory || []),
+        { status, at: patch.paidAt as string, note }
+      ];
+    };
+    if (payment.method === 'paystack') {
+      patch.paystackReference = payment.paystackReference;
+    } else {
+      patch.offlinePaymentReference = payment.reference;
+      patch.offlinePaymentReason = payment.reason;
+    }
 
     // A service is fulfilled by hand and must never touch the licence pool.
     // Landing one in awaiting-licence would be meaningless and would hide it
@@ -463,6 +475,7 @@ export async function fulfilPaidOrder(
       patch.fulfilmentStatus = order.documentPath
         ? 'awaiting-seller-activation'
         : 'awaiting-document';
+      recordHistory(patch.fulfilmentStatus, `${payment.method === 'offline' ? 'Offline' : 'Paystack'} payment confirmed.`);
       tx.update(orderRef, patch);
       return { order: { ...order, ...patch } as Order, licenceIssued: false, alreadyPaid: false };
     }
@@ -472,6 +485,7 @@ export async function fulfilPaidOrder(
       // The customer has still paid, so the order is the seller's to resolve.
       patch.fulfilmentStatus = 'awaiting-seller-activation';
       patch.licenceIssueNote = `Variant ${order.variantId} is no longer in the catalogue; needs manual review.`;
+      recordHistory('awaiting-seller-activation', 'Payment confirmed; catalogue variant requires manual review.');
       tx.update(orderRef, patch);
       return { order: { ...order, ...patch } as Order, licenceIssued: false, alreadyPaid: false };
     }
@@ -480,6 +494,7 @@ export async function fulfilPaidOrder(
 
     if (!variant.autoFulfil) {
       patch.fulfilmentStatus = baseStatus;
+      recordHistory(baseStatus, 'Payment confirmed; seller fulfilment required.');
       tx.update(orderRef, patch);
       return { order: { ...order, ...patch } as Order, licenceIssued: false, alreadyPaid: false };
     }
@@ -499,6 +514,7 @@ export async function fulfilPaidOrder(
       patch.licenceIssueNote =
         `No licence key was available in the pool for variant ${order.variantId} ` +
         `at ${nowIso()}. The order is paid and owed a licence.`;
+      recordHistory('awaiting-licence', 'Payment confirmed; no licence was available in stock.');
       tx.update(orderRef, patch);
       return { order: { ...order, ...patch } as Order, licenceIssued: false, alreadyPaid: false };
     }
@@ -515,6 +531,7 @@ export async function fulfilPaidOrder(
     patch.licenceId = licence.licenceId;
     patch.activationCodeOrKey = licence.licenceCode;
     patch.fulfilmentStatus = baseStatus;
+    recordHistory(baseStatus, 'Payment confirmed and a licence was assigned automatically.');
     if (baseStatus === 'ready') {
       patch.fulfilledAt = nowIso();
     }

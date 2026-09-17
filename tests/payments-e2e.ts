@@ -16,6 +16,10 @@
 import http from 'http';
 import crypto from 'crypto';
 import { Firestore } from '@google-cloud/firestore';
+import { assignLicence } from '../server/adminData';
+import { fulfilPaidOrder } from '../server/orders';
+import { applyOfflinePayment } from '../server/payments';
+import { TURNITIN_SERVICE } from '../server/seed/turnitin';
 
 const SECRET = 'sk_test_e2e_secret_key';
 const APP = 'http://127.0.0.1:8099';
@@ -195,9 +199,57 @@ async function settled(orderId: string, quietMs = 1500): Promise<void> {
  *  for it to have changed if the control were missing. */
 const settle = () => sleep(2500);
 
+async function seedE2eCatalogue(): Promise<void> {
+  const variant = (variantId: string, priceGhs: number) => ({
+    variantId,
+    versionOrPlan: 'E2E',
+    priceGhs,
+    latest: true,
+    available: true,
+    licenceTerm: 'Perpetual',
+    os: 'Windows',
+    macViaParallels: false,
+    fulfilmentType: 'Licence',
+    deliverableType: 'Licence key',
+    activationMode: 'Key',
+    autoFulfil: true,
+    manualDelivery: false,
+    licenceRequiredForSelfActivation: true,
+    activationLinkLive: false
+  });
+  await Promise.all([
+    db.collection('products').doc('AMOS').set({
+      productId: 'AMOS', productName: 'AMOS', categoryId: 'DATA', active: true, variants: [variant('AMOS01', 220)]
+    }),
+    db.collection('products').doc('SPSS').set({
+      productId: 'SPSS', productName: 'SPSS', categoryId: 'DATA', active: true, variants: [variant('SPSS01', 300)]
+    }),
+    db.collection('services').doc('TURNITIN').set(TURNITIN_SERVICE),
+    db.collection('bundles').doc('SEM').set({
+      bundleId: 'SEM', name: 'SEM Bundle', description: 'E2E bundle', priceGhs: 480,
+      categoryId: 'BUNDLE', sortOrder: 1, active: true,
+      items: [
+        { itemId: 'SEM-AMOS', productId: 'AMOS', variantId: 'AMOS01', sortOrder: 1 },
+        { itemId: 'SEM-SPSS', productId: 'SPSS', variantId: 'SPSS01', sortOrder: 2 }
+      ]
+    }),
+    db.collection('laptops').doc('LT1').set({
+      laptopId: 'LT1', title: 'Priced E2E Laptop', priceGhs: 3200, categoryId: 'LAPTOP', brand: 'Test', model: 'One',
+      processor: 'Core i5', ram: '16GB', storage: '512GB', screen: '14 inch', colour: 'Black', graphics: 'Integrated',
+      ports: '', operatingSystem: 'Windows', picturesUrl: [], availability: 'Available', active: true, sortOrder: 1
+    }),
+    db.collection('laptops').doc('LT2').set({
+      laptopId: 'LT2', title: 'Quote-only E2E Laptop', categoryId: 'LAPTOP', brand: 'Test', model: 'Two',
+      processor: 'Core i5', ram: '8GB', storage: '256GB', screen: '14 inch', colour: 'Black', graphics: 'Integrated',
+      ports: '', operatingSystem: 'Windows', picturesUrl: [], availability: 'Available', active: true, sortOrder: 2
+    })
+  ]);
+}
+
 // --- cases ----------------------------------------------------------------
 
 async function run(): Promise<void> {
+  await seedE2eCatalogue();
   console.log('\n=== §0: the unverified endpoint is gone ===');
   {
     const { orderId } = await buyOne();
@@ -270,6 +322,44 @@ async function run(): Promise<void> {
     check('order paid exactly once', order.paymentStatus === 'paid', order.paymentStatus);
     check('exactly ONE licence assigned', assigned === 1, `${assigned} assigned`);
     check('receipt not re-sent on replay', sentMail.length === 2, `${sentMail.length} email(s)`);
+  }
+
+  console.log('\n=== concurrency: manual assignment and auto-fulfil cannot take the same key ===');
+  {
+    const sharedKey = `CONCURRENT-${Date.now()}`;
+    const manualOrderId = `HK-MANUAL-${Date.now()}`;
+    const autoOrderId = `HK-AUTO-${Date.now()}`;
+    await db.collection('licencePool').doc(sharedKey).set({
+      licenceId: sharedKey, variantId: 'AMOS01', licenceCode: 'ONE-KEY-ONLY', status: 'available'
+    });
+    const base = {
+      cartId: `CART-${Date.now()}`, orderDate: new Date().toISOString(), lastUpdated: new Date().toISOString(),
+      customerName: 'Concurrency Test', phone: '0550000000', email: 'test@example.com', variantId: 'AMOS01',
+      productId: 'AMOS', productName: 'AMOS', versionOrPlan: 'Current', deliveryOs: 'Windows', amountPesewas: 22000,
+      fulfilmentMethod: 'automatic' as const
+    };
+    await db.collection('orders').doc(manualOrderId).set({ ...base, orderId: manualOrderId, paymentStatus: 'paid', fulfilmentStatus: 'awaiting-licence' });
+    await db.collection('orders').doc(autoOrderId).set({ ...base, orderId: autoOrderId, paymentStatus: 'pending', fulfilmentStatus: 'pending-payment' });
+
+    await Promise.allSettled([
+      assignLicence(manualOrderId, { licenceId: sharedKey }, { uid: 'e2e-admin', email: 'admin@example.com' }),
+      fulfilPaidOrder(autoOrderId, { method: 'paystack', paystackReference: autoOrderId })
+    ]);
+    const [manual, auto, key] = await Promise.all([getOrder(manualOrderId), getOrder(autoOrderId), db.collection('licencePool').doc(sharedKey).get()]);
+    const issued = [manual, auto].filter((order) => order.activationCodeOrKey === 'ONE-KEY-ONLY');
+    check('the shared key was issued exactly once', issued.length === 1, `${issued.length} order(s)`);
+    check('the pool row names the same single order', key.data()?.assignedOrderId === issued[0]?.orderId, String(key.data()?.assignedOrderId));
+  }
+
+  console.log('\n=== offline payment: distinct, fulfilled once, and idempotently refused ===');
+  {
+    const { orderId } = await buyOne();
+    const first = await applyOfflinePayment(orderId, { reference: 'MOMO-E2E-123', reason: 'Merchant MoMo received' });
+    const saved = await getOrder(orderId);
+    const second = await applyOfflinePayment(orderId, { reference: 'MOMO-E2E-123', reason: 'Merchant MoMo received' });
+    check('offline payment is applied', first.result === 'paid', first.result);
+    check('offline marker and reference are stored', saved.paymentMethod === 'offline' && saved.offlinePaymentReference === 'MOMO-E2E-123', `${saved.paymentMethod} / ${saved.offlinePaymentReference}`);
+    check('already-paid retry is refused', second.result === 'already-paid', second.result);
   }
 
   console.log('\n=== adversarial: return URL hand-edited to another order ===');

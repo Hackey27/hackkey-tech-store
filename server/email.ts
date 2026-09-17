@@ -154,3 +154,20 @@ export async function sendCustomerReceipt(
 
   await send(order.email, `Your order ${order.orderId}`, lines.join('\n'));
 }
+
+/** Delivery confirmation for seller-fulfilled orders and manual licences. */
+export async function sendCustomerDelivery(order: Order): Promise<void> {
+  if (!order.email) throw new Error('The order has no email address.');
+  const lines = [
+    `Your order is ready.`,
+    ``,
+    `ORDER REFERENCE:  ${order.orderId}`,
+    `${order.productName} — ${order.versionOrPlan}`,
+    order.activationCodeOrKey ? `Licence / activation code: ${order.activationCodeOrKey}` : '',
+    order.windowsInstallerUrl ? `Installer: ${order.windowsInstallerUrl}` : '',
+    order.guideUrl ? `Guide: ${order.guideUrl}` : '',
+    ``,
+    `If you need help, reply to this email or contact ${STORE_COPY.brand.phone}.`
+  ].filter(Boolean);
+  await send(order.email, `Your order ${order.orderId} is ready`, lines.join('\n'));
+}

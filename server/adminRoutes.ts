@@ -1,0 +1,271 @@
+import { Router } from 'express';
+import { sendCustomerDelivery, sendCustomerReceipt } from './email';
+import { AdminRequest, requireAdmin } from './adminAuth';
+import { writeAdminAudit } from './adminAudit';
+import {
+  addInternalNote,
+  adminBootstrap,
+  assignLicence,
+  importLicences,
+  markDocumentReceived,
+  markFulfilled,
+  revealLicence,
+  saveAnnouncement,
+  saveService
+} from './adminData';
+import { getOrder } from './orders';
+import { applyOfflinePayment } from './payments';
+import { createSignedDownload } from './storage';
+
+function actor(req: AdminRequest) {
+  if (!req.adminActor) throw new Error('Missing authenticated admin actor.');
+  return req.adminActor;
+}
+
+function routeError(res: any, err: unknown, fallback: string) {
+  console.error(`[admin] ${fallback}:`, err);
+  const validationErrors = (err as { validationErrors?: unknown }).validationErrors;
+  res.status(400).json({
+    error: err instanceof Error ? err.message : fallback,
+    validationErrors
+  });
+}
+
+export function createAdminRouter(): Router {
+  const router = Router();
+  // One gate for the whole subtree. Adding a route below cannot accidentally
+  // bypass authentication by forgetting its own check.
+  router.use(requireAdmin());
+
+  router.get('/data', async (_req, res) => {
+    try {
+      res.json(await adminBootstrap());
+    } catch (err) {
+      routeError(res, err, 'Failed to load the admin portal.');
+    }
+  });
+
+  router.get('/licences/:licenceId/reveal', async (req: AdminRequest, res) => {
+    try {
+      const licence = await revealLicence(String(req.params.licenceId));
+      if (!licence) return res.status(404).json({ error: 'Licence not found.' });
+      await writeAdminAudit(actor(req), {
+        action: 'licence.reveal',
+        targetType: 'licence',
+        targetId: licence.licenceId,
+        orderId: licence.assignedOrderId
+      });
+      res.json({ licenceCode: licence.licenceCode });
+    } catch (err) {
+      routeError(res, err, 'Failed to reveal licence.');
+    }
+  });
+
+  router.post('/licences/import', async (req: AdminRequest, res) => {
+    try {
+      const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+      const result = await importLicences(rows);
+      if (result.errors.length) return res.status(400).json(result);
+      await writeAdminAudit(actor(req), {
+        action: 'licence.import',
+        targetType: 'licence',
+        targetId: result.licenceIds?.join(',') || 'batch',
+        details: { count: result.imported }
+      });
+      res.json(result);
+    } catch (err) {
+      routeError(res, err, 'Failed to import licences.');
+    }
+  });
+
+  router.post('/orders/:orderId/assign-licence', async (req: AdminRequest, res) => {
+    try {
+      const order = await assignLicence(String(req.params.orderId), req.body || {}, actor(req));
+      let emailError: string | undefined;
+      if (order.fulfilmentStatus === 'ready') {
+        await sendCustomerDelivery(order).catch((err) => {
+          emailError = err instanceof Error ? err.message : 'Delivery email failed.';
+        });
+      }
+      await writeAdminAudit(actor(req), {
+        action: 'order.assign-licence',
+        targetType: 'order',
+        targetId: order.orderId,
+        orderId: order.orderId,
+        details: { licenceId: order.licenceId, source: req.body?.manualKey ? 'manual' : 'pool', emailError }
+      });
+      res.json({ order, emailError });
+    } catch (err) {
+      routeError(res, err, 'Failed to assign licence.');
+    }
+  });
+
+  router.post('/orders/:orderId/mark-document-received', async (req: AdminRequest, res) => {
+    try {
+      const order = await markDocumentReceived(String(req.params.orderId), actor(req));
+      await writeAdminAudit(actor(req), {
+        action: 'order.document-received',
+        targetType: 'order',
+        targetId: order.orderId,
+        orderId: order.orderId
+      });
+      res.json({ order });
+    } catch (err) {
+      routeError(res, err, 'Failed to mark the document received.');
+    }
+  });
+
+  router.post('/orders/:orderId/fulfil', async (req: AdminRequest, res) => {
+    try {
+      const order = await markFulfilled(String(req.params.orderId), req.body || {}, actor(req));
+      let emailError: string | undefined;
+      await sendCustomerDelivery(order).catch((err) => {
+        emailError = err instanceof Error ? err.message : 'Delivery email failed.';
+      });
+      await writeAdminAudit(actor(req), {
+        action: 'order.fulfil',
+        targetType: 'order',
+        targetId: order.orderId,
+        orderId: order.orderId,
+        details: { emailError }
+      });
+      res.json({ order, emailError });
+    } catch (err) {
+      routeError(res, err, 'Failed to fulfil the order.');
+    }
+  });
+
+  router.post('/orders/:orderId/record-offline-payment', async (req: AdminRequest, res) => {
+    const reference = String(req.body?.reference || '').trim();
+    const reason = String(req.body?.reason || '').trim();
+    if (!reference || !reason) {
+      return res.status(400).json({ error: 'A payment reference and reason are required.' });
+    }
+    try {
+      const result = await applyOfflinePayment(String(req.params.orderId), { reference, reason });
+      if (result.result === 'unknown-order') return res.status(404).json({ error: 'Order not found.' });
+      if (result.result === 'already-paid') return res.status(409).json({ error: 'This order is already paid.' });
+      await writeAdminAudit(actor(req), {
+        action: 'order.record-offline-payment',
+        targetType: 'order',
+        targetId: result.order.orderId,
+        orderId: result.order.orderId,
+        details: { reference, reason }
+      });
+      res.json(result);
+    } catch (err) {
+      routeError(res, err, 'Failed to record offline payment.');
+    }
+  });
+
+  router.post('/orders/:orderId/note', async (req: AdminRequest, res) => {
+    const text = String(req.body?.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'A note is required.' });
+    try {
+      const order = await addInternalNote(String(req.params.orderId), text, actor(req));
+      await writeAdminAudit(actor(req), {
+        action: 'order.add-note',
+        targetType: 'order',
+        targetId: order.orderId,
+        orderId: order.orderId
+      });
+      res.json({ order });
+    } catch (err) {
+      routeError(res, err, 'Failed to add the note.');
+    }
+  });
+
+  router.post('/orders/:orderId/resend', async (req: AdminRequest, res) => {
+    try {
+      const order = await getOrder(String(req.params.orderId));
+      if (!order) return res.status(404).json({ error: 'Order not found.' });
+      const kind = req.body?.kind === 'delivery' ? 'delivery' : 'receipt';
+      if (kind === 'delivery') await sendCustomerDelivery(order);
+      else await sendCustomerReceipt(order);
+      await writeAdminAudit(actor(req), {
+        action: `order.resend-${kind}`,
+        targetType: 'order',
+        targetId: order.orderId,
+        orderId: order.orderId
+      });
+      res.json({ success: true });
+    } catch (err) {
+      routeError(res, err, 'Failed to resend email.');
+    }
+  });
+
+  router.post('/orders/:orderId/nudge', async (req: AdminRequest, res) => {
+    try {
+      const order = await getOrder(String(req.params.orderId));
+      if (!order) return res.status(404).json({ error: 'Order not found.' });
+      if (order.fulfilmentStatus !== 'awaiting-customer-input') {
+        return res.status(409).json({ error: 'This order is not awaiting customer input.' });
+      }
+      await sendCustomerReceipt(order);
+      await writeAdminAudit(actor(req), {
+        action: 'order.nudge-customer',
+        targetType: 'order',
+        targetId: order.orderId,
+        orderId: order.orderId
+      });
+      res.json({ success: true });
+    } catch (err) {
+      routeError(res, err, 'Failed to send the customer reminder.');
+    }
+  });
+
+  router.get('/orders/:orderId/document', async (req: AdminRequest, res) => {
+    try {
+      const order = await getOrder(String(req.params.orderId));
+      if (!order?.documentPath) return res.status(404).json({ error: 'No document on this order.' });
+      const url = await createSignedDownload(order.documentPath);
+      await writeAdminAudit(actor(req), {
+        action: 'order.document-download',
+        targetType: 'order',
+        targetId: order.orderId,
+        orderId: order.orderId
+      });
+      res.json({ url });
+    } catch (err) {
+      routeError(res, err, 'Failed to prepare the document download.');
+    }
+  });
+
+  const saveServiceHandler = async (req: AdminRequest, res: any) => {
+    try {
+      const service = await saveService({ ...req.body, serviceId: String(req.params.serviceId || req.body?.serviceId || '') });
+      await writeAdminAudit(actor(req), {
+        action: 'service.save',
+        targetType: 'service',
+        targetId: service.serviceId
+      });
+      res.json({ service });
+    } catch (err) {
+      routeError(res, err, 'Failed to save the service.');
+    }
+  };
+  router.post('/services', saveServiceHandler);
+  router.put('/services/:serviceId', saveServiceHandler);
+
+  const saveAnnouncementHandler = async (req: AdminRequest, res: any) => {
+    try {
+      const announcement = await saveAnnouncement({
+        ...req.body,
+        announcementId: String(req.params.announcementId || req.body?.announcementId || '')
+      });
+      await writeAdminAudit(actor(req), {
+        action: 'announcement.save',
+        targetType: 'announcement',
+        targetId: announcement.announcementId,
+        details: { active: announcement.active }
+      });
+      res.json({ announcement });
+    } catch (err) {
+      routeError(res, err, 'Failed to save the announcement.');
+    }
+  };
+  router.post('/announcements', saveAnnouncementHandler);
+  router.put('/announcements/:announcementId', saveAnnouncementHandler);
+
+  return router;
+}

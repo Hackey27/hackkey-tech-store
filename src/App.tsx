@@ -12,6 +12,7 @@ import { CartView, CartItem } from './components/CartView';
 import { BrandLogo } from './components/BrandLogo';
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { PaymentReturnView } from './components/PaymentReturnView';
+import { AnnouncementModal, shouldShowAnnouncement } from './components/AnnouncementModal';
 import { STORE_COPY } from './config/storeCopy';
 import { CatalogResponse, CatalogueItem, ServiceOption, Variant } from './types';
 import {
@@ -48,6 +49,7 @@ export const App: React.FC = () => {
   // "Featured software" filter toggle:
   // Requirement: "Show a small number of products only" and "Include a View all software control"
   const [showAllSoftware, setShowAllSoftware] = useState(false);
+  const [announcementOpen, setAnnouncementOpen] = useState(false);
 
   // Fetch catalog from Phase 1 backend endpoint /api/catalog
   const fetchCatalogData = async (cat?: string | 'all', search?: string) => {
@@ -69,6 +71,9 @@ export const App: React.FC = () => {
       }
       const data: CatalogResponse = await res.json();
       setCatalog(data);
+      if (data.announcement && shouldShowAnnouncement(data.announcement)) {
+        setAnnouncementOpen(true);
+      }
     } catch (err: any) {
       console.error('[App] Failed to load catalog:', err);
       setError(err.message || 'Error connecting to catalogue service');
@@ -421,6 +426,10 @@ export const App: React.FC = () => {
 
       {/* Persistent WhatsApp shortcut (lower-left) */}
       <FloatingWhatsApp />
+
+      {announcementOpen && catalog?.announcement && (
+        <AnnouncementModal announcement={catalog.announcement} onClose={() => setAnnouncementOpen(false)} />
+      )}
 
       {/* Mobile Fixed Bottom Navigation */}
       <BottomNav

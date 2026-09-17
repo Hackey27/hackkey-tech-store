@@ -348,6 +348,10 @@ export interface Order {
   activationWebsiteUrl?: string;
   /** One order, one reference, so re-verification never has to guess. */
   paystackReference?: string;
+  /** Offline payments are deliberately distinguishable from Paystack. */
+  paymentMethod?: 'paystack' | 'offline';
+  offlinePaymentReference?: string;
+  offlinePaymentReason?: string;
   /** Set when Paystack reports an amount or currency that does not match the
    *  order. Fulfilment is blocked and the seller is alerted: it needs a human. */
   paymentMismatchNote?: string;
@@ -366,6 +370,20 @@ export interface Order {
   documentUploadedAt?: string;
   /** Answers to the service's enquiry form. */
   serviceAnswers?: Record<string, unknown>;
+  /** Seller-only notes. Never returned by the public phone lookup. */
+  internalNotes?: Array<{
+    text: string;
+    actorUid: string;
+    actorEmail?: string;
+    createdAt: string;
+  }>;
+  /** Human-readable state changes for the admin order timeline. */
+  fulfilmentHistory?: Array<{
+    status: FulfilmentStatus;
+    at: string;
+    actorUid?: string;
+    note?: string;
+  }>;
 }
 
 // ==========================================
@@ -427,6 +445,19 @@ export interface Announcement {
   startsAt?: string;
   endsAt?: string;
   createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AdminAuditEntry {
+  auditId: string;
+  actorUid: string;
+  actorEmail?: string;
+  action: string;
+  targetType: 'order' | 'licence' | 'service' | 'announcement';
+  targetId: string;
+  orderId?: string;
+  details?: Record<string, unknown>;
+  createdAt: string;
 }
 
 // ==========================================

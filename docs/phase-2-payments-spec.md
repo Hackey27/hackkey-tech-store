@@ -20,7 +20,7 @@ Harm is limited today only because the licence pool is empty. That protection
 disappears the moment licences are loaded.
 
 **Step one of this phase, before anything else: delete that endpoint.** Not
-gate it behind `ADMIN_TOKEN` — delete it. After this phase, the only thing that
+gate it behind a shared admin secret — delete it. After this phase, the only thing that
 may set `payment_status: 'Paid'` is code that has verified a reference against
 the Paystack API. A manual "mark as paid" for offline payments belongs in the
 Phase 3 admin portal, behind admin auth, and is out of scope here.

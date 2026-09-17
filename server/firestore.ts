@@ -22,7 +22,8 @@ export const COLLECTIONS = {
   orders: 'orders',
   requests: 'requests',
   announcements: 'announcements',
-  reviews: 'reviews'
+  reviews: 'reviews',
+  adminAudit: 'admin_audit'
 } as const;
 
 let db: Firestore | null = null;

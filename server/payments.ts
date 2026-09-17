@@ -121,6 +121,7 @@ export async function applyVerifiedPayment(reference: string): Promise<ApplyOutc
   const outcomes: FulfilmentOutcome[] = [];
   for (const row of cart) {
     const outcome = await fulfilPaidOrder(row.orderId, {
+      method: 'paystack',
       paystackReference: verified.reference,
       paidAt: verified.paidAt
     });
@@ -147,6 +148,49 @@ export async function applyVerifiedPayment(reference: string): Promise<ApplyOutc
     result: 'paid',
     order: outcomes[0].order,
     licenceIssued: outcomes.some((o) => o.licenceIssued)
+  };
+}
+
+export type OfflinePaymentOutcome =
+  | { result: 'unknown-order'; orderId: string }
+  | { result: 'already-paid'; order: Order }
+  | { result: 'paid'; order: Order; licenceIssued: boolean };
+
+/**
+ * Record a seller-confirmed offline payment through the exact same fulfilment
+ * transactions and notification path as a verified Paystack payment.
+ */
+export async function applyOfflinePayment(
+  orderId: string,
+  input: { reference: string; reason: string }
+): Promise<OfflinePaymentOutcome> {
+  const cart = await findOrdersByReference(orderId);
+  const order = cart[0];
+  if (!order) return { result: 'unknown-order', orderId };
+  if (order.paymentStatus === 'paid') return { result: 'already-paid', order };
+
+  const outcomes: FulfilmentOutcome[] = [];
+  for (const row of cart) {
+    const outcome = await fulfilPaidOrder(row.orderId, {
+      method: 'offline',
+      reference: input.reference,
+      reason: input.reason
+    });
+    if (outcome) outcomes.push(outcome);
+  }
+  if (!outcomes.length) return { result: 'unknown-order', orderId };
+  if (outcomes.every((outcome) => outcome.alreadyPaid)) {
+    return { result: 'already-paid', order: outcomes[0].order };
+  }
+
+  const totalPesewas = cart.reduce((sum, row) => sum + row.amountPesewas, 0);
+  await notify(outcomes, totalPesewas).catch((err) => {
+    console.error('[payments] Offline-payment notification failed:', err);
+  });
+  return {
+    result: 'paid',
+    order: outcomes[0].order,
+    licenceIssued: outcomes.some((outcome) => outcome.licenceIssued)
   };
 }
 

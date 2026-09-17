@@ -71,13 +71,14 @@ pipeline would race the Cloud Build trigger and deploy twice on every push.
 | --- | --- |
 | `PORT` | Set by Cloud Run. Defaults to 3000 locally. |
 | `NODE_ENV` | Must be `production` in the deployed service, so the server serves `dist/` instead of starting Vite. |
-| `ADMIN_TOKEN` | Optional. Unset in production, `/api/admin/data` returns 404. Set it, and the endpoint requires the same value in an `x-admin-token` header. |
+| `GOOGLE_CLOUD_PROJECT` | Firebase project used to verify admin ID tokens. Cloud Run normally supplies project identity through Application Default Credentials. |
 
-To enable the admin endpoint on a deployed service:
+The admin API uses Firebase Authentication email/password accounts with an
+`admin: true` custom claim. Create the account in Firebase Authentication, then
+grant the claim from a trusted machine:
 
 ```bash
-gcloud run services update "$SERVICE" --region "$REGION" \
-  --set-env-vars NODE_ENV=production,ADMIN_TOKEN="$(openssl rand -hex 32)"
+npx tsx scripts/set-admin-claim.ts admin@example.com
 ```
 
 ## Firestore
@@ -126,11 +127,10 @@ firebase deploy --only storage   # uses storage.rules (deny-all, like Firestore)
 
 Set `DOCUMENTS_BUCKET` if you use a bucket other than the project default.
 
-**Retrieving submitted documents, until Phase 2.** The admin portal does not
-exist yet, so uploaded files are read from the Firebase Storage browser in the
-console, under `orders/<orderId>/`. This is expected for now, not missing
-functionality. `GET /api/orders/:orderId/document` also returns a short-lived
-signed link when `ADMIN_TOKEN` is set.
+Submitted documents are retrieved only from their order in the authenticated
+admin portal. The server verifies the Firebase admin claim, audits the click,
+and returns a short-lived signed link; bucket listing remains unavailable to
+the browser.
 
 ## Seeding priced services
 
