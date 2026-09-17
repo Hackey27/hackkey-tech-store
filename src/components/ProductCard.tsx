@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { CatalogueItem } from '../types';
 import { CheckCircle, CreditCard, MessageSquareQuote, ShoppingCart } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
-import { ProductImage } from './ProductImage';
+import { ProductImage, renderableProductImageUrl } from './ProductImage';
 
 interface ProductCardProps {
   product: CatalogueItem;
@@ -21,8 +21,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   showCategoryLabel = true
 }) => {
   const hasMultipleVariants = product.variants && product.variants.length > 1;
+  const [laptopPreviewFailed, setLaptopPreviewFailed] = useState(false);
 
   const productName = product.name || STORE_COPY.product.softwareFallback;
+  const cardName = product.kind === 'laptop' && product.laptop
+    ? [product.laptop.brand, product.laptop.model].filter(Boolean).join(' ') || productName
+    : productName;
+  const laptopPreviewUrl = useMemo(() => renderableProductImageUrl(
+    product.bannerImageUrl || product.mobileBannerImageUrl || product.imageUrl
+  ), [product.bannerImageUrl, product.mobileBannerImageUrl, product.imageUrl]);
+  const laptopMobilePreviewUrl = useMemo(() => renderableProductImageUrl(
+    product.mobileBannerImageUrl || product.bannerImageUrl || product.imageUrl
+  ), [product.mobileBannerImageUrl, product.bannerImageUrl, product.imageUrl]);
+  useEffect(() => setLaptopPreviewFailed(false), [laptopPreviewUrl]);
 
   // Format GHS price string: From ₵... or ₵...
   // One resolution for every kind, and one formatter — a card must never build
@@ -48,34 +59,25 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       className="group flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-[#d8e7e4] bg-white text-slate-900 transition-all duration-200 hover:border-[#014040]/70 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#014040]"
     >
       <div className="p-5 sm:p-6">
-        {/* Top bar: real catalogue image + optional category context. */}
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="rounded-2xl transition-transform group-hover:scale-105 motion-reduce:transition-none">
-            <ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} />
-          </div>
-
-          <div className="text-right">
-            {showCategoryLabel && (
-              <span className="inline-block text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#edf5f3] text-[#014040] border border-[#d0e4e0]">
-                {product.categoryName || STORE_COPY.product.softwareFallback}
-              </span>
-            )}
-            {hasMultipleVariants && (
-              <span className="block text-[10px] text-slate-500 mt-1 font-medium">
-                {STORE_COPY.product.versionsAvailable(product.variants?.length || 0)}
-              </span>
-            )}
-          </div>
-        </div>
+        {/* Laptops use their product banner as the browsing preview. */}
+        {product.kind === 'laptop' ? <div className="relative -mx-5 -mt-5 mb-5 aspect-[16/9] overflow-hidden bg-gradient-to-br from-[#025656] to-[#002929] sm:-mx-6 sm:-mt-6">
+          {laptopPreviewUrl && !laptopPreviewFailed && <picture><source media="(max-width: 639px)" srcSet={laptopMobilePreviewUrl || laptopPreviewUrl} /><img src={laptopPreviewUrl} alt={cardName} width="960" height="540" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none" onError={() => setLaptopPreviewFailed(true)} /></picture>}
+          {(!laptopPreviewUrl || laptopPreviewFailed) && <div className="flex h-full items-center justify-center px-6 text-center text-2xl font-black text-white">{cardName}</div>}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" aria-hidden="true" />
+          {showCategoryLabel && <span className="absolute right-3 top-3 rounded-full border border-white/30 bg-[#014040]/85 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white backdrop-blur-sm">{product.categoryName || 'Laptop'}</span>}
+        </div> : <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="rounded-2xl transition-transform group-hover:scale-105 motion-reduce:transition-none"><ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} /></div>
+          <div className="text-right">{showCategoryLabel && <span className="inline-block rounded-full border border-[#d0e4e0] bg-[#edf5f3] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-[#014040]">{product.categoryName || STORE_COPY.product.softwareFallback}</span>}{hasMultipleVariants && <span className="mt-1 block text-[10px] font-medium text-slate-500">{STORE_COPY.product.versionsAvailable(product.variants?.length || 0)}</span>}</div>
+        </div>}
 
         {/* Product Name */}
         <h3
           className="text-base sm:text-lg font-bold text-[#014040] tracking-tight group-hover:text-[#025656] transition-colors leading-snug"
         >
-          {productName}
+          {cardName}
         </h3>
 
-        {product.kind === 'laptop' && product.laptop && <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600"><span><b>CPU</b><br />{product.laptop.processor}</span><span><b>RAM</b><br />{product.laptop.ram}</span><span><b>Storage</b><br />{product.laptop.storage}</span>{product.laptop.graphics?.toLowerCase().includes('dedicated') && <span><b>Graphics</b><br />{product.laptop.graphicsDetails || product.laptop.graphics}</span>}</div>}
+        {product.kind === 'laptop' && product.laptop && <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600"><span><b>CPU</b><br />{product.laptop.processor}</span><span><b>RAM</b><br />{product.laptop.ram}</span><span><b>Storage</b><br />{product.laptop.storage}</span>{(product.laptop.graphicsDetails || product.laptop.graphics?.toLowerCase().includes('dedicated')) && <span><b>Dedicated graphics</b><br />{product.laptop.graphicsDetails || product.laptop.graphics}</span>}</div>}
 
         {/* OS Compatibility badges */}
         {product.osList && product.osList.length > 0 && (

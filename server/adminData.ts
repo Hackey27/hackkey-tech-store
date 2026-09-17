@@ -465,7 +465,7 @@ export async function updateOrderWorkflow(
   orderId: string,
   input: Partial<Pick<Order,
     'paymentStatus' | 'fulfilmentStatus' | 'amountPesewas' | 'customerInputType' |
-    'customerInputValue' | 'salesCode'>>,
+    'customerInputValue' | 'salesCode' | 'activationCodeOrKey'>>,
   actor: AdminActor
 ): Promise<Order> {
   const db = getFirestore();
@@ -486,6 +486,9 @@ export async function updateOrderWorkflow(
   if (input.customerInputType !== undefined) patch.customerInputType = input.customerInputType;
   if (input.customerInputValue !== undefined) patch.customerInputValue = clean(input.customerInputValue) as string;
   if (input.salesCode !== undefined) patch.salesCode = clean(input.salesCode) as string;
+  // Admin order responses mask saved licence codes. A blank field means keep
+  // the existing secret; only a newly entered value replaces it.
+  if (String(input.activationCodeOrKey || '').trim()) patch.activationCodeOrKey = clean(input.activationCodeOrKey) as string;
   if (input.paymentStatus === 'paid' && order.paymentStatus !== 'paid') {
     patch.paidAt = now();
     patch.paymentMethod = 'offline';

@@ -10,6 +10,8 @@ test('software families use the correct customer activation detail', () => {
   assert.equal(defaultCustomerInputType('SPSS'), 'Lock Code');
   assert.equal(defaultCustomerInputType('AMOS'), 'Lock Code');
   assert.equal(defaultCustomerInputType('MP'), 'Hardware ID');
+  assert.equal(defaultCustomerInputType('MXQ'), 'Hardware ID');
+  assert.equal(defaultCustomerInputType('EV'), 'Hardware ID');
   assert.equal(defaultCustomerInputType('PLS'), undefined);
   assert.equal(defaultCustomerInputType('NV'), undefined);
 });
