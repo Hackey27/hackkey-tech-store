@@ -1,4 +1,5 @@
 import { Order } from '../src/types';
+import { formatPesewas } from '../src/utils/money';
 import { COLLECTIONS, getFirestore } from './firestore';
 import { verifyTransaction } from './paystack';
 import { fulfilPaidOrder, FulfilmentOutcome } from './orders';
@@ -20,21 +21,42 @@ export type ApplyOutcome =
   | { result: 'mismatch'; order: Order; reason: string }
   | { result: 'paid'; order: Order; licenceIssued: boolean };
 
-async function findOrderByReference(reference: string): Promise<Order | null> {
+/**
+ * Every order row the reference paid for, primary first.
+ *
+ * One checkout is one Paystack transaction, and a cart can be several rows — a
+ * bundle becomes one row per included item, and a multi-item cart is several
+ * lines. Paystack is charged the CART TOTAL, so verification has to compare
+ * against the same total and fulfil every row. Comparing one row's amount
+ * against the cart total is a guaranteed false mismatch.
+ */
+async function findOrdersByReference(reference: string): Promise<Order[]> {
   const db = getFirestore();
 
-  // The reference is the order id, so this is normally a direct read. The
-  // query is the fallback for any reference that was ever derived differently.
+  // The reference is the order id, so this is normally a direct read.
   const direct = await db.collection(COLLECTIONS.orders).doc(reference).get();
-  if (direct.exists) return direct.data() as Order;
+  const primary = direct.exists ? (direct.data() as Order) : null;
+
+  if (primary) {
+    const siblings = await db
+      .collection(COLLECTIONS.orders)
+      .where('cartId', '==', primary.cartId)
+      .get();
+
+    const rows = siblings.docs.map((d) => d.data() as Order);
+    // Primary first, so the receipt and the reference agree.
+    return [
+      primary,
+      ...rows.filter((o) => o.orderId !== primary.orderId)
+    ];
+  }
 
   const byRef = await db
     .collection(COLLECTIONS.orders)
     .where('paystackReference', '==', reference)
-    .limit(1)
     .get();
 
-  return byRef.empty ? null : (byRef.docs[0].data() as Order);
+  return byRef.docs.map((d) => d.data() as Order);
 }
 
 /**
@@ -53,7 +75,8 @@ export async function applyVerifiedPayment(reference: string): Promise<ApplyOutc
     return { result: 'not-successful', reference };
   }
 
-  const order = await findOrderByReference(reference);
+  const cart = await findOrdersByReference(reference);
+  const order = cart[0];
   if (!order) {
     console.error(`[payments] Verified transaction ${reference} matches no order.`);
     await sendSellerAlert({
@@ -66,7 +89,7 @@ export async function applyVerifiedPayment(reference: string): Promise<ApplyOutc
     return { result: 'unknown-order', reference };
   }
 
-  if (order.paymentStatus === 'paid') {
+  if (cart.every((o) => o.paymentStatus === 'paid')) {
     return { result: 'already-paid', order };
   }
 
@@ -74,10 +97,14 @@ export async function applyVerifiedPayment(reference: string): Promise<ApplyOutc
   // initialise call pays GHS 1 for a GHS 500 licence and every signature check
   // still passes. Both amounts are integer pesewas, so this is an exact
   // comparison — which is the reason money is not stored in cedis.
-  if (verified.amountPesewas !== order.amountPesewas) {
+  // Compared against the CART total, which is what Paystack was asked for.
+  const cartTotalPesewas = cart.reduce((sum, o) => sum + o.amountPesewas, 0);
+  if (verified.amountPesewas !== cartTotalPesewas) {
     const reason =
-      `Paystack reports ${verified.amountPesewas} pesewas but the order is ` +
-      `${order.amountPesewas} pesewas.`;
+      `Paystack reports ${verified.amountPesewas} pesewas but the cart is ` +
+      `${cartTotalPesewas} pesewas` +
+      (cart.length > 1 ? ` across ${cart.length} rows` : '') +
+      '.';
     await flagMismatch(order, reason);
     return { result: 'mismatch', order, reason };
   }
@@ -88,28 +115,39 @@ export async function applyVerifiedPayment(reference: string): Promise<ApplyOutc
     return { result: 'mismatch', order, reason };
   }
 
-  const outcome = await fulfilPaidOrder(order.orderId, {
-    paystackReference: verified.reference,
-    paidAt: verified.paidAt
-  });
+  // Every row in the cart is fulfilled on its own terms: a bundle's rows can
+  // each need a different thing, and one may take a licence while another
+  // waits for the seller.
+  const outcomes: FulfilmentOutcome[] = [];
+  for (const row of cart) {
+    const outcome = await fulfilPaidOrder(row.orderId, {
+      paystackReference: verified.reference,
+      paidAt: verified.paidAt
+    });
+    if (outcome) outcomes.push(outcome);
+  }
 
-  if (!outcome) {
+  if (!outcomes.length) {
     return { result: 'unknown-order', reference };
   }
 
   // Already paid by the time the transaction ran — the other of the webhook and
   // the return got there first. Not an error, and no second email.
-  if (outcome.alreadyPaid) {
-    return { result: 'already-paid', order: outcome.order };
+  if (outcomes.every((o) => o.alreadyPaid)) {
+    return { result: 'already-paid', order: outcomes[0].order };
   }
 
   // Emails are sent after the transaction commits, and only on the call that
   // actually moved the order, so retries do not re-send.
-  await notify(outcome).catch((err) => {
+  await notify(outcomes, cartTotalPesewas).catch((err) => {
     console.error('[payments] Notification failed after a successful payment:', err);
   });
 
-  return { result: 'paid', order: outcome.order, licenceIssued: outcome.licenceIssued };
+  return {
+    result: 'paid',
+    order: outcomes[0].order,
+    licenceIssued: outcomes.some((o) => o.licenceIssued)
+  };
 }
 
 /**
@@ -158,9 +196,19 @@ function sellerAction(order: Order, licenceIssued: boolean): string {
   }
 }
 
-async function notify(outcome: FulfilmentOutcome): Promise<void> {
-  const { order, licenceIssued } = outcome;
+/** One alert and one receipt per cart, however many rows it became. */
+async function notify(outcomes: FulfilmentOutcome[], cartTotalPesewas: number): Promise<void> {
+  const order = outcomes[0].order;
   const db = getFirestore();
+
+  const itemLines = outcomes.map(({ order: row, licenceIssued }) => {
+    const quantity = row.quantity && row.quantity > 1 ? ` x${row.quantity}` : '';
+    return (
+      `  ${row.productName} — ${row.versionOrPlan}${quantity}   ` +
+      `${formatPesewas(row.amountPesewas)}\n` +
+      `      ACTION: ${sellerAction(row, licenceIssued)}`
+    );
+  });
 
   const results = await Promise.allSettled([
     sendSellerAlert({
@@ -170,14 +218,13 @@ async function notify(outcome: FulfilmentOutcome): Promise<void> {
         `Customer   ${order.customerName}`,
         `Phone      ${order.phone}`,
         `Email      ${order.email}`,
-        `Item       ${order.productName} — ${order.versionOrPlan}` +
-          (order.quantity && order.quantity > 1 ? ` x${order.quantity}` : ''),
-        `Amount     ${(order.amountPesewas / 100).toFixed(2)} GHS`,
+        `Total      ${formatPesewas(cartTotalPesewas)}` +
+          (outcomes.length > 1 ? ` across ${outcomes.length} rows` : ''),
         '',
-        `ACTION:    ${sellerAction(order, licenceIssued)}`
+        ...itemLines
       ]
     }),
-    sendCustomerReceipt(order)
+    sendCustomerReceipt(order, outcomes.map((o) => o.order), cartTotalPesewas)
   ]);
 
   const failures = results
@@ -198,7 +245,7 @@ async function notify(outcome: FulfilmentOutcome): Promise<void> {
 
   // An empty pool at fulfilment time is its own alert: it is the seller's
   // cue to issue a key for an order that is already paid for.
-  if (order.fulfilmentStatus === 'awaiting-licence') {
+  if (outcomes.some((o) => o.order.fulfilmentStatus === 'awaiting-licence')) {
     await sendSellerAlert({
       subject: `Licence pool empty — ${order.orderId} is paid and owed a key`,
       lines: [

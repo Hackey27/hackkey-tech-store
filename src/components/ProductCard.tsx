@@ -2,6 +2,7 @@ import React from 'react';
 import { CatalogueItem } from '../types';
 import { Laptop, CheckCircle, ChevronRight, Sparkles } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
+import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
 
 interface ProductCardProps {
   product: CatalogueItem;
@@ -20,16 +21,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   // Format GHS price string: From ₵... or ₵...
   const firstVariant = product.variants?.[0];
-  const firstVariantPrice = firstVariant?.payablePricePesewas ?? firstVariant?.priceGhs ?? 0;
-  const minPrice = product.pricePesewas ?? (firstVariantPrice > 0 ? firstVariantPrice : 0);
+  // One resolution for every kind, and one formatter — a card must never build
+  // a currency string by hand, which is how pesewas came to render as cedis.
+  const { unitPesewas: minPrice } = resolveLinePricePesewas({
+    item: product,
+    variant: firstVariant,
+    quantity: 1
+  });
 
-  const displayPrice = hasMultipleVariants && minPrice > 0
-    ? STORE_COPY.product.fromPrice(`₵${minPrice.toLocaleString()}`)
-    : product.pricePesewas
-    ? `₵${(product.pricePesewas ?? 0).toLocaleString()}`
-    : firstVariantPrice > 0
-    ? `₵${firstVariantPrice.toLocaleString()}`
-    : '₵0.00';
+  const displayPrice =
+    minPrice > 0
+      ? hasMultipleVariants
+        ? STORE_COPY.product.fromPrice(formatPesewas(minPrice))
+        : formatPesewas(minPrice)
+      : STORE_COPY.product.askForPrice;
 
   // Primary action button label (Buy now vs View options)
   const actionLabel = hasMultipleVariants ? STORE_COPY.product.viewOptions : STORE_COPY.product.buyNow;

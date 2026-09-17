@@ -1,4 +1,5 @@
 import { Order } from '../src/types';
+import { formatPesewas } from '../src/utils/money';
 import { STORE_COPY } from '../src/config/storeCopy';
 
 /**
@@ -118,17 +119,31 @@ function customerNextSteps(order: Order): string[] {
   }
 }
 
-export async function sendCustomerReceipt(order: Order): Promise<void> {
+/**
+ * One receipt per cart. A bundle becomes several order rows, and the customer
+ * bought one thing — they should be sent one receipt showing what they paid in
+ * total, itemised, not several partial ones.
+ */
+export async function sendCustomerReceipt(
+  order: Order,
+  rows: Order[] = [order],
+  totalPesewas: number = order.amountPesewas
+): Promise<void> {
   if (!order.email) throw new Error('The order has no email address.');
 
-  const quantity = order.quantity && order.quantity > 1 ? ` x${order.quantity}` : '';
+  const itemised = rows.map((row) => {
+    const quantity = row.quantity && row.quantity > 1 ? ` x${row.quantity}` : '';
+    return `  ${row.productName} — ${row.versionOrPlan}${quantity}   ${formatPesewas(row.amountPesewas)}`;
+  });
+
   const lines = [
     `Thank you — we have received your payment.`,
     ``,
     `ORDER REFERENCE:  ${order.orderId}`,
     ``,
-    `  ${order.productName} — ${order.versionOrPlan}${quantity}`,
-    `  Amount paid: GHS ${(order.amountPesewas / 100).toFixed(2)}`,
+    ...itemised,
+    ``,
+    `  Total paid: ${formatPesewas(totalPesewas)}`,
     ``,
     `WHAT HAPPENS NEXT`,
     ...customerNextSteps(order),

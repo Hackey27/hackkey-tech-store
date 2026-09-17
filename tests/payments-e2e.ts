@@ -342,6 +342,126 @@ async function run(): Promise<void> {
     check('returns 200', res.status === 200, `got ${res.status}`);
   }
 
+  console.log('\n=== every catalogue kind prices and checks out ===');
+  {
+    const buy = async (label: string, items: any[]) => {
+      const { status, body } = await post('/api/orders/checkout', {
+        customerName: 'Kinds Test', phone: '0554440000', email: 'k@example.com', items
+      });
+      return { label, status, body };
+    };
+
+    // Service: the Turnitin bulk rule must survive the whole path.
+    const svc = await buy('service', [{ serviceId: 'TURNITIN', optionId: 'PLAG_AI', quantity: 2 }]);
+    check('service checks out', svc.status === 200, `http ${svc.status} ${svc.body.error || ''}`);
+    check(
+      'service charges 9500p (bulk, not 9750)',
+      svc.body.orders?.[0]?.amountPesewas === 9500,
+      String(svc.body.orders?.[0]?.amountPesewas)
+    );
+    check(
+      'service order is a Service and records the option',
+      svc.body.orders?.[0]?.fulfilmentType === 'Service' &&
+        svc.body.orders?.[0]?.serviceOptionId === 'PLAG_AI',
+      `${svc.body.orders?.[0]?.fulfilmentType} / ${svc.body.orders?.[0]?.serviceOptionId}`
+    );
+
+    // Bundle: one row per item, summing exactly to the bundle price.
+    const bun = await buy('bundle', [{ bundleId: 'SEM', quantity: 1 }]);
+    const rows = bun.body.orders || [];
+    const sum = rows.reduce((a: number, o: any) => a + o.amountPesewas, 0);
+    check('bundle checks out', bun.status === 200, `http ${bun.status} ${bun.body.error || ''}`);
+    check('bundle is not zero-priced', sum > 0, `${sum}p`);
+    check(
+      'bundle rows sum EXACTLY to the bundle price (48000p)',
+      sum === 48000,
+      `${rows.length} row(s) = ${rows.map((o: any) => o.amountPesewas).join(' + ')} = ${sum}`
+    );
+    check(
+      'bundle rows share one cart id',
+      rows.length > 1 && new Set(rows.map((o: any) => o.cartId)).size === 1,
+      `${new Set(rows.map((o: any) => o.cartId)).size} cart id(s) across ${rows.length} rows`
+    );
+    check(
+      'the split does not divide evenly, so the remainder is really absorbed',
+      new Set(rows.map((o: any) => o.amountPesewas)).size > 1,
+      rows.map((o: any) => o.amountPesewas).join(', ')
+    );
+
+    // Laptop.
+    const lap = await buy('laptop', [{ laptopId: 'LT1', quantity: 1 }]);
+    check('laptop checks out', lap.status === 200, `http ${lap.status} ${lap.body.error || ''}`);
+    check(
+      'laptop charges 320000p (GHS 3200)',
+      lap.body.orders?.[0]?.amountPesewas === 320000,
+      String(lap.body.orders?.[0]?.amountPesewas)
+    );
+
+    // An ask-for-price laptop must never be sold as free.
+    const free = await buy('priceless laptop', [{ laptopId: 'LT2', quantity: 1 }]);
+    check(
+      'an ask-for-price laptop is refused, not sold for 0',
+      free.status >= 400,
+      `http ${free.status}`
+    );
+
+    // Products must charge exactly what they charged before this fix.
+    const prod = await buy('product', [{ variantId: 'AMOS01', quantity: 1 }]);
+    check(
+      'product still charges 22000p — display fix changed nothing charged',
+      prod.body.orders?.[0]?.amountPesewas === 22000,
+      String(prod.body.orders?.[0]?.amountPesewas)
+    );
+  }
+
+  console.log('\n=== a bundle purchase completes end to end ===');
+  {
+    sentMail.length = 0;
+    const { body } = await post('/api/orders/checkout', {
+      customerName: 'Bundle Buyer', phone: '0556660000', email: 'b@example.com',
+      items: [{ bundleId: 'SEM', quantity: 1 }]
+    });
+    const primary = body.orders[0];
+    const total = body.orders.reduce((a: number, o: any) => a + o.amountPesewas, 0);
+    check('Paystack was asked for the bundle total', body.reference === primary.orderId, String(body.reference));
+    customerPays(primary.orderId, total);
+    await webhook(primary.orderId);
+    await waitFor('the bundle order to be paid', async () => (await getOrder(primary.orderId))?.paymentStatus === 'paid');
+    await settled(primary.orderId);
+    const paid = await getOrder(primary.orderId);
+    check('bundle order paid', paid.paymentStatus === 'paid', paid.paymentStatus);
+    // One alert and one receipt for the CART, however many rows it became — an
+    // extra pool-empty alert is by design and is counted separately.
+    const paidAlerts = sentMail.filter((m) => m.subject.startsWith('Paid:'));
+    const receipts = sentMail.filter((m) => m.subject.startsWith('Your order'));
+    check('exactly one seller alert for the bundle cart', paidAlerts.length === 1, String(paidAlerts.length));
+    check('exactly one receipt for the bundle cart', receipts.length === 1, String(receipts.length));
+    check(
+      'every other mail is a deliberate pool-empty alert',
+      sentMail.every((m) => /^Paid:|^Your order|licence pool empty/i.test(m.subject)),
+      sentMail.map((m) => m.subject).join(' | ')
+    );
+  }
+
+  console.log('\n=== a service purchase completes end to end ===');
+  {
+    sentMail.length = 0;
+    const { body } = await post('/api/orders/checkout', {
+      customerName: 'Svc Buyer', phone: '0557770000', email: 's@example.com',
+      items: [{ serviceId: 'TURNITIN', optionId: 'PLAG_AI', quantity: 2 }]
+    });
+    const o = body.orders[0];
+    customerPays(o.orderId, 9500);
+    await webhook(o.orderId);
+    await waitFor('the service order to be paid', async () => (await getOrder(o.orderId))?.paymentStatus === 'paid');
+    await settled(o.orderId);
+    const paid = await getOrder(o.orderId);
+    check('service order paid', paid.paymentStatus === 'paid', paid.paymentStatus);
+    check('service went to awaiting-document, not awaiting-licence', paid.fulfilmentStatus === 'awaiting-document', paid.fulfilmentStatus);
+    check('service took NO licence from the pool', !paid.activationCodeOrKey && !paid.licenceId, String(paid.activationCodeOrKey));
+    check('both emails sent for the service', sentMail.length === 2, `${sentMail.length}`);
+  }
+
   console.log('\n=== a failed initialise leaves the order pending, not deleted ===');
   {
     initialiseShouldFail = true;

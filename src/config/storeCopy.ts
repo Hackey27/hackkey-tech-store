@@ -60,6 +60,7 @@ export const STORE_COPY = {
     recommended: 'Recommended',
     latest: 'Latest',
     fromPrice: (priceStr: string) => `From ${priceStr}`,
+    askForPrice: 'Ask for price',
     fromPrefix: 'From',
     chooseOperatingSystem: '1. Choose your operating system',
     chooseVersion: 'Choose a version',

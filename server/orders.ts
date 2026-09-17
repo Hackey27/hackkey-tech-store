@@ -10,8 +10,9 @@ import {
   Variant
 } from '../src/types';
 import { COLLECTIONS, getFirestore } from './firestore';
-import { findService, findVariant } from './catalogue';
+import { findBundle, findLaptop, findService, findVariant } from './catalogue';
 import {
+  allocateProportionally,
   applyPricingRules,
   cedisToPesewas,
   priceServiceLine,
@@ -38,13 +39,15 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+/** A cart line names WHAT WAS CHOSEN, by its kind. Never what it costs. */
 export interface CheckoutItem {
-  /** A software line names a variant; a service line names a service option. */
   variantId?: string;
   selectedOs?: string;
   quantity?: number;
   serviceId?: string;
   optionId?: string;
+  bundleId?: string;
+  laptopId?: string;
 }
 
 export interface CheckoutRequest {
@@ -137,6 +140,149 @@ async function createServiceOrder(
   };
 }
 
+/**
+ * A bundle becomes one order row per included item, sharing a cart id.
+ *
+ * The bundle price is fixed and deliberately not the sum of its parts, so it is
+ * spread across the rows in proportion to each item's list price with the last
+ * row absorbing the remainder — in integer pesewas the parts therefore sum to
+ * the bundle price exactly, with no pesewa lost or invented.
+ */
+async function createBundleOrders(
+  request: CheckoutRequest,
+  item: CheckoutItem,
+  cartId: string
+): Promise<Order[]> {
+  const bundle = await findBundle(item.bundleId as string);
+  if (!bundle) throw new Error(`Unknown bundle: ${item.bundleId}`);
+  if (!bundle.active) throw new Error(`Bundle ${bundle.bundleId} is not available.`);
+
+  const quantity = Math.max(1, Math.floor(item.quantity || 1) || 1);
+  const applied = applyPricingRules(
+    cedisToPesewas(bundle.priceGhs),
+    [bundle.bundleId],
+    PRICING_CONFIG
+  );
+  const totalPesewas = applied.payablePesewas * quantity;
+
+  // Resolve each included item so the allocation can be weighted by real list
+  // prices rather than split blindly.
+  const resolved = await Promise.all(
+    (bundle.items || []).map(async (bundleItem) => {
+      const found = bundleItem.variantId ? await findVariant(bundleItem.variantId) : null;
+      return { bundleItem, found };
+    })
+  );
+
+  // A bundle with no items is still a sellable thing: it becomes one row.
+  if (!resolved.length) {
+    return [
+      {
+        orderId: newId('HK'),
+        cartId,
+        orderDate: nowIso(),
+        lastUpdated: nowIso(),
+        customerName: request.customerName.trim(),
+        phone: normalisePhone(request.phone),
+        email: request.email.trim(),
+        variantId: bundle.bundleId,
+        productId: bundle.bundleId,
+        productName: bundle.name,
+        versionOrPlan: 'Bundle',
+        quantity,
+        deliveryOs: '',
+        amountPesewas: totalPesewas,
+        originalAmountPesewas: applied.listPesewas * quantity,
+        paymentStatus: 'pending',
+        fulfilmentStatus: 'pending-payment',
+        fulfilmentType: 'Bundle',
+        fulfilmentMethod: 'manual',
+        receiptSent: false
+      }
+    ];
+  }
+
+  const weights = resolved.map(
+    ({ found }) => found?.variant.payablePricePesewas ?? cedisToPesewas(found?.variant.priceGhs ?? 0)
+  );
+  const parts = allocateProportionally(totalPesewas, weights);
+
+  return resolved.map(({ bundleItem, found }, i) => ({
+    orderId: newId('HK'),
+    cartId,
+    orderDate: nowIso(),
+    lastUpdated: nowIso(),
+    customerName: request.customerName.trim(),
+    phone: normalisePhone(request.phone),
+    email: request.email.trim(),
+    variantId: bundleItem.variantId || bundle.bundleId,
+    productId: found?.product.productId || bundleItem.productId || bundle.bundleId,
+    productName: found?.product.productName || bundle.name,
+    versionOrPlan: found?.variant.versionOrPlan || 'Bundle',
+    quantity,
+    deliveryOs: found?.variant.osList?.[0] || found?.variant.os || '',
+    amountPesewas: parts[i],
+    paymentStatus: 'pending' as const,
+    fulfilmentStatus: 'pending-payment' as const,
+    // Part of a bundle, so the seller sees the whole purchase together.
+    fulfilmentType: found?.variant.fulfilmentType || 'Bundle',
+    fulfilmentMethod: (found?.variant.autoFulfil ? 'automatic' : 'manual') as 'automatic' | 'manual',
+    customerInputType: (found?.variant.customerInputRequired as CustomerInputType) || undefined,
+    activationWebsiteUrl: found?.variant.activationWebsiteUrl,
+    windowsInstallerUrl: found?.variant.windowsInstallerUrl,
+    guideUrl: found?.variant.guideUrl,
+    learningResourcesUrl: found?.variant.learningResourcesUrl,
+    macViaParallels: found?.variant.macViaParallels,
+    notes: `Part of bundle ${bundle.bundleId} (${bundle.name}).`,
+    receiptSent: false
+  }));
+}
+
+/** A laptop is a single manually-fulfilled line. */
+async function createLaptopOrder(
+  request: CheckoutRequest,
+  item: CheckoutItem,
+  cartId: string
+): Promise<Order> {
+  const laptop = await findLaptop(item.laptopId as string);
+  if (!laptop) throw new Error(`Unknown laptop: ${item.laptopId}`);
+  if (!laptop.active) throw new Error(`Laptop ${laptop.laptopId} is not available.`);
+  // A blank price means "ask for price"; it must never be sold as free.
+  if (typeof laptop.priceGhs !== 'number' || laptop.priceGhs <= 0) {
+    throw new Error(`${laptop.title} is priced on enquiry and cannot be bought online.`);
+  }
+
+  const quantity = Math.max(1, Math.floor(item.quantity || 1) || 1);
+  const applied = applyPricingRules(
+    cedisToPesewas(laptop.priceGhs),
+    [laptop.laptopId],
+    PRICING_CONFIG
+  );
+
+  return {
+    orderId: newId('HK'),
+    cartId,
+    orderDate: nowIso(),
+    lastUpdated: nowIso(),
+    customerName: request.customerName.trim(),
+    phone: normalisePhone(request.phone),
+    email: request.email.trim(),
+    variantId: laptop.laptopId,
+    productId: laptop.laptopId,
+    productName: laptop.title,
+    versionOrPlan: [laptop.processor, laptop.ram, laptop.storage].filter(Boolean).join(' · ') || 'Laptop',
+    quantity,
+    deliveryOs: laptop.operatingSystem || '',
+    amountPesewas: applied.payablePesewas * quantity,
+    originalAmountPesewas: applied.listPesewas * quantity,
+    paymentStatus: 'pending',
+    fulfilmentStatus: 'pending-payment',
+    fulfilmentType: 'Laptop',
+    fulfilmentMethod: 'manual',
+    receiptSent: false
+  };
+}
+
 export async function createOrders(request: CheckoutRequest): Promise<Order[]> {
   const db = getFirestore();
   const cartId = newId('CART');
@@ -150,8 +296,26 @@ export async function createOrders(request: CheckoutRequest): Promise<Order[]> {
       continue;
     }
 
+    if (item.bundleId) {
+      const bundleOrders = await createBundleOrders(request, item, cartId);
+      for (const order of bundleOrders) {
+        await db.collection(COLLECTIONS.orders).doc(order.orderId).set(order);
+        orders.push(order);
+      }
+      continue;
+    }
+
+    if (item.laptopId) {
+      const order = await createLaptopOrder(request, item, cartId);
+      await db.collection(COLLECTIONS.orders).doc(order.orderId).set(order);
+      orders.push(order);
+      continue;
+    }
+
     if (!item.variantId) {
-      throw new Error('Each cart line must name either a variantId or a serviceId.');
+      throw new Error(
+        'Each cart line must name a variantId, serviceId, bundleId or laptopId.'
+      );
     }
 
     const found = await findVariant(item.variantId);

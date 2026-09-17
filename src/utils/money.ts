@@ -148,3 +148,71 @@ export function cheapestOptionPesewas(options: ServiceOption[]): number | undefi
   const prices = options.map((o) => cedisToPesewas(o.unitPriceGhs)).filter((p) => p > 0);
   return prices.length ? Math.min(...prices) : undefined;
 }
+
+// ---------------------------------------------------------------------------
+// One price-resolution path for every catalogue kind
+// ---------------------------------------------------------------------------
+
+/**
+ * What one cart line costs, whatever kind it is.
+ *
+ * Products price from the chosen variant, services from the chosen option with
+ * the bulk rule, and bundles and laptops from the price the catalogue already
+ * resolved. Everything returns integer pesewas.
+ *
+ * This exists because four parallel resolutions is how a line ends up at ₵0:
+ * the previous cart read `variant.priceGhs` and fell back to the item price
+ * through a `??` chain whose left side was never nullish, so a bundle, service
+ * or laptop — which has no variant — always resolved to zero.
+ */
+export function resolveLinePricePesewas(line: {
+  item: { kind: string; pricePesewas?: number };
+  variant?: { payablePricePesewas?: number; priceGhs?: number };
+  serviceOption?: ServiceOption;
+  quantity: number;
+}): { unitPesewas: number; totalPesewas: number } {
+  const quantity = Math.max(1, Math.floor(line.quantity) || 1);
+
+  // A service with a chosen option carries the bulk rule, so quantity is
+  // already accounted for in the line total.
+  if (line.serviceOption) {
+    const priced = priceServiceLine(line.serviceOption, quantity);
+    return { unitPesewas: priced.unitPricePesewas, totalPesewas: priced.totalPesewas };
+  }
+
+  const unitPesewas =
+    line.variant?.payablePricePesewas ??
+    (line.variant?.priceGhs !== undefined ? cedisToPesewas(line.variant.priceGhs) : undefined) ??
+    line.item.pricePesewas ??
+    0;
+
+  return { unitPesewas, totalPesewas: unitPesewas * quantity };
+}
+
+/**
+ * Split a total across parts in proportion to their weights, exactly.
+ *
+ * A bundle's price is fixed and is deliberately not the sum of its parts, so
+ * spreading it over one order row per item has to land on the bundle price to
+ * the pesewa. Every part is floored and the **last row absorbs the remainder**,
+ * which is what makes the sum exact rather than approximately right.
+ */
+export function allocateProportionally(totalPesewas: number, weights: number[]): number[] {
+  if (weights.length === 0) return [];
+  if (weights.length === 1) return [totalPesewas];
+
+  const weightSum = weights.reduce((a, b) => a + b, 0);
+
+  // No usable weights: split as evenly as integers allow.
+  if (weightSum <= 0) {
+    const each = Math.floor(totalPesewas / weights.length);
+    const parts = weights.map(() => each);
+    parts[parts.length - 1] = totalPesewas - each * (weights.length - 1);
+    return parts;
+  }
+
+  const parts = weights.map((w) => Math.floor((totalPesewas * w) / weightSum));
+  const allocated = parts.slice(0, -1).reduce((a, b) => a + b, 0);
+  parts[parts.length - 1] = totalPesewas - allocated;
+  return parts;
+}

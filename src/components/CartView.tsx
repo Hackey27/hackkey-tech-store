@@ -3,7 +3,7 @@ import { CatalogueItem, Variant, ServiceOption } from '../types';
 import { ShoppingBag, Trash2, ChevronRight, Check } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
 import { STORE_COPY } from '../config/storeCopy';
-import { cedisToPesewas, formatPesewas, priceServiceLine } from '../utils/money';
+import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
 
 export interface CartItem {
   id: string;
@@ -38,9 +38,13 @@ export const CartView: React.FC<CartViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
 
-  const totalGhs = items.reduce((sum, item) => {
-    const price = cedisToPesewas(item.variant?.priceGhs ?? 0) ?? item.product.pricePesewas ?? 0;
-    return sum + price * item.quantity;
+  const totalPesewas = items.reduce((sum, item) => {
+    return sum + resolveLinePricePesewas({
+      item: item.product,
+      variant: item.variant,
+      serviceOption: item.serviceOption,
+      quantity: item.quantity
+    }).totalPesewas;
   }, 0);
 
   const [createdOrderIds, setCreatedOrderIds] = useState<string[]>([]);
@@ -65,17 +69,27 @@ export const CartView: React.FC<CartViewProps> = ({
           // server prices every line from the catalogue. Anything else here
           // would be a number a customer can edit.
           items: items.map((item) => {
-            return item.serviceOption
-              ? {
-                  serviceId: item.product.itemId,
-                  optionId: item.serviceOption.optionId,
-                  quantity: item.quantity
-                }
-              : {
-                  variantId: item.variant?.variantId || item.product.variants?.[0]?.variantId,
-                  selectedOs: item.selectedOs || item.variant?.os || item.product.osList?.[0],
-                  quantity: item.quantity
-                };
+            // Name the thing by its kind. A bundle and a laptop have no
+            // variant, and sending an undefined variantId is what made
+            // "Failed to place order" the only possible outcome for them.
+            if (item.serviceOption) {
+              return {
+                serviceId: item.product.itemId,
+                optionId: item.serviceOption.optionId,
+                quantity: item.quantity
+              };
+            }
+            if (item.product.kind === 'bundle') {
+              return { bundleId: item.product.itemId, quantity: item.quantity };
+            }
+            if (item.product.kind === 'laptop') {
+              return { laptopId: item.product.itemId, quantity: item.quantity };
+            }
+            return {
+              variantId: item.variant?.variantId || item.product.variants?.[0]?.variantId,
+              selectedOs: item.selectedOs || item.variant?.os || item.product.osList?.[0],
+              quantity: item.quantity
+            };
           })
         })
       });
@@ -143,7 +157,12 @@ export const CartView: React.FC<CartViewProps> = ({
           {/* Item List */}
           <div className="lg:col-span-8 space-y-3">
             {items.map((item) => {
-              const itemPrice = cedisToPesewas(item.variant?.priceGhs ?? 0) ?? item.product.pricePesewas ?? 0;
+              const itemPrice = resolveLinePricePesewas({
+                item: item.product,
+                variant: item.variant,
+                serviceOption: item.serviceOption,
+                quantity: item.quantity
+              }).totalPesewas;
               return (
                 <div
                   key={item.id}
@@ -209,11 +228,11 @@ export const CartView: React.FC<CartViewProps> = ({
             <div className="space-y-2 text-xs sm:text-sm">
               <div className="flex justify-between text-slate-600">
                 <span>{STORE_COPY.cart.subtotal(items.length)}</span>
-                <span className="font-bold text-slate-800">₵{totalGhs.toLocaleString()}</span>
+                <span className="font-bold text-slate-800">{formatPesewas(totalPesewas)}</span>
               </div>
               <div className="flex justify-between text-base font-black text-[#014040] pt-2 border-t border-[#edf4f3]">
                 <span>{STORE_COPY.cart.total}</span>
-                <span>₵{totalGhs.toLocaleString()}</span>
+                <span>{formatPesewas(totalPesewas)}</span>
               </div>
             </div>
 

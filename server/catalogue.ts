@@ -335,6 +335,20 @@ export async function getCatalogue(
   };
 }
 
+/** Look up one bundle, for order placement. */
+export async function findBundle(bundleId: string): Promise<Bundle | null> {
+  const db = getFirestore();
+  const snap = await db.collection(COLLECTIONS.bundles).doc(bundleId).get();
+  return snap.exists ? (snap.data() as Bundle) : null;
+}
+
+/** Look up one laptop, for order placement. */
+export async function findLaptop(laptopId: string): Promise<Laptop | null> {
+  const db = getFirestore();
+  const snap = await db.collection(COLLECTIONS.laptops).doc(laptopId).get();
+  return snap.exists ? (snap.data() as Laptop) : null;
+}
+
 /** Look up one service, for order placement. */
 export async function findService(serviceId: string): Promise<Service | null> {
   const db = getFirestore();
