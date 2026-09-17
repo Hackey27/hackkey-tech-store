@@ -40,7 +40,7 @@ export const Hero: React.FC<HeroProps> = ({ onFindOrderClick }) => {
               <span>{STORE_COPY.hero.trustChips[1]}</span>
             </div>
 
-            {/* 3. WhatsApp support */}
+            {/* 3. After-sales support via WhatsApp */}
             <a
               href={STORE_COPY.brand.whatsAppUrl}
               target="_blank"

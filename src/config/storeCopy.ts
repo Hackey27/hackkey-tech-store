@@ -35,7 +35,7 @@ export const STORE_COPY = {
     trustChips: [
       'Secure Paystack checkout',
       'Find your order anytime',
-      'WhatsApp support',
+      'After sales support',
     ],
   },
 
