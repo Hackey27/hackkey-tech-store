@@ -92,6 +92,20 @@ test('a product line prices from its chosen variant', () => {
   assert.equal(line.totalPesewas, 44000);
 });
 
+test('a raw variant cedi price crosses the unit boundary before display', () => {
+  // ProductDetailView can briefly receive an unhydrated variant during a
+  // catalogue rollout. Sending priceGhs straight to formatPesewas would render
+  // GHS 2.20 instead of GHS 220.00, so every variant display uses the shared
+  // resolver even when payablePricePesewas has not been attached yet.
+  const line = resolveLinePricePesewas({
+    item: { kind: 'product' },
+    variant: { priceGhs: 220 },
+    quantity: 1
+  });
+  assert.equal(line.unitPesewas, 22000);
+  assert.equal(formatPesewas(line.unitPesewas), 'GHS 220.00');
+});
+
 test('bundles, services and laptops resolve a price without a variant', () => {
   // The ₵0 defect: these kinds have no variant, and the old cart fell through a
   // dead ?? chain to zero.

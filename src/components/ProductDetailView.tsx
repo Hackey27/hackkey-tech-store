@@ -231,9 +231,11 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                       <div className="text-right">
                         <span className="text-sm font-black text-[#014040]">
                           {formatPesewas(
-                            recommendedVariant.payablePricePesewas ??
-                              recommendedVariant.priceGhs ??
-                              0
+                            resolveLinePricePesewas({
+                              item: product,
+                              variant: recommendedVariant,
+                              quantity: 1
+                            }).unitPesewas
                           )}
                         </span>
                       </div>
