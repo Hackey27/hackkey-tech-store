@@ -10,23 +10,23 @@ interface HeroProps {
 
 export const Hero: React.FC<HeroProps> = ({ onFindOrderClick }) => {
   return (
-    <section className="relative overflow-hidden bg-gradient-to-b from-[#eaf3f1] to-[#f7faf9] border-b border-[#dce9e6] py-10 sm:py-14">
+    <section className="hk-landing-region relative border-b border-white/20 py-12 sm:py-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto text-center space-y-4">
           {/* Main Title */}
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-[#014040] tracking-tight leading-tight">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight drop-shadow-sm">
             {STORE_COPY.hero.title}
           </h1>
 
           {/* Supporting Text */}
-          <p className="text-base sm:text-lg text-slate-700 font-medium leading-relaxed max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg text-white/90 font-medium leading-relaxed max-w-2xl mx-auto drop-shadow-sm">
             {STORE_COPY.hero.lead}
           </p>
 
           {/* Three Compact Trust Indicators */}
-          <div className="pt-3 flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 text-xs font-semibold text-slate-800">
+          <div className="pt-3 flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 text-xs font-semibold text-[#014040]">
             {/* 1. Secure Paystack checkout */}
-            <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white border border-[#cbe0dc] shadow-xs hover:border-[#014040]/50 transition-colors">
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/90 border border-white/60 shadow-xs backdrop-blur-sm hover:bg-white transition-colors">
               <CreditCard className="w-4 h-4 text-[#014040]" />
               <span>{STORE_COPY.hero.trustChips[0]}</span>
             </div>
@@ -34,7 +34,7 @@ export const Hero: React.FC<HeroProps> = ({ onFindOrderClick }) => {
             {/* 2. Find your order anytime */}
             <div
               onClick={onFindOrderClick}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white border border-[#cbe0dc] shadow-xs cursor-pointer hover:border-[#014040]/50 transition-colors"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/90 border border-white/60 shadow-xs cursor-pointer backdrop-blur-sm hover:bg-white transition-colors"
             >
               <Clock className="w-4 h-4 text-[#014040]" />
               <span>{STORE_COPY.hero.trustChips[1]}</span>
@@ -46,7 +46,7 @@ export const Hero: React.FC<HeroProps> = ({ onFindOrderClick }) => {
               target="_blank"
               rel="noopener noreferrer"
               aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white border border-[#cbe0dc] shadow-xs hover:border-[#014040]/50 transition-colors"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/90 border border-white/60 shadow-xs backdrop-blur-sm hover:bg-white transition-colors"
             >
               <WhatsAppIcon className="w-4 h-4 text-[#05ef28]" />
               <span>{STORE_COPY.hero.trustChips[2]}</span>

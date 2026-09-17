@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
 import { CategoryCard } from './components/CategoryCard';
@@ -180,6 +180,29 @@ export const App: React.FC = () => {
     : allProducts.slice(0, 3);
 
   const totalCartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const landingActive = route.view === 'home' && activeTab === 'home';
+  const landingRegionRef = useRef<HTMLDivElement>(null);
+  const [landingPassed, setLandingPassed] = useState(false);
+
+  useEffect(() => {
+    if (!landingActive || !landingRegionRef.current) {
+      setLandingPassed(false);
+      return;
+    }
+
+    let debounceTimer: number | undefined;
+    const observer = new IntersectionObserver(([entry]) => {
+      const passed = !entry.isIntersecting && entry.boundingClientRect.bottom <= 72;
+      window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => setLandingPassed(passed), 80);
+    }, { threshold: 0, rootMargin: '-68px 0px 0px 0px' });
+
+    observer.observe(landingRegionRef.current);
+    return () => {
+      window.clearTimeout(debounceTimer);
+      observer.disconnect();
+    };
+  }, [landingActive]);
 
   // Paystack returns the customer to /payment/return. The SPA serves every
   // path, so that route is handled here rather than by a router.
@@ -217,6 +240,7 @@ export const App: React.FC = () => {
         }}
         cartCount={totalCartCount}
         cartItems={cartItems}
+        isLandingTransparent={landingActive && !landingPassed}
       />
 
       {/* Main Content Area */}
@@ -255,13 +279,15 @@ export const App: React.FC = () => {
         {route.view === 'home' && activeTab === 'home' && (
           <div>
             {/* Hero Section */}
-            <Hero
-              onBrowseClick={() => {
-                const el = document.getElementById('browse-categories');
-                el?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              onFindOrderClick={() => setActiveTab('find-order')}
-            />
+            <div ref={landingRegionRef}>
+              <Hero
+                onBrowseClick={() => {
+                  const el = document.getElementById('browse-categories');
+                  el?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                onFindOrderClick={() => setActiveTab('find-order')}
+              />
+            </div>
 
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-12">
               {/* Browse by Category Section */}
