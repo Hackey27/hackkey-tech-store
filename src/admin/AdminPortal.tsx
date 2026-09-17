@@ -25,6 +25,7 @@ import {
 import { ADMIN_COPY } from '../config/storeCopy';
 import { Announcement, Laptop as LaptopType, Order, Product, Service, ServiceField, ServiceFieldType, ServiceOption } from '../types';
 import { formatPesewas } from '../utils/money';
+import { defaultCustomerInputType, defaultDeliveryCodeType, effectiveActivationWebsiteUrl } from '../utils/softwareFulfilment';
 import { AnnouncementModal } from '../components/AnnouncementModal';
 import { ProductImage, renderableProductImageUrl } from '../components/ProductImage';
 import { adminAuth } from './firebase';
@@ -132,6 +133,25 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
   const [message, setMessage] = useState('');
   const [step, setStep] = useState(0);
   const [workflow, setWorkflow] = useState<Partial<Order>>({});
+  const [selectedSalesLicenceId, setSelectedSalesLicenceId] = useState('');
+
+  const selectedProduct = selected
+    ? data.products.find((product) => product.productId === selected.productId || product.variants.some((variant) => variant.variantId === selected.variantId))
+    : undefined;
+  const selectedVariant = selectedProduct?.variants.find((variant) => variant.variantId === selected?.variantId);
+  const productId = String(selected?.productId || selectedProduct?.productId || '').toUpperCase();
+  const effectiveInputType = (selected?.customerInputType || selectedVariant?.customerInputRequired || defaultCustomerInputType(productId)) as Order['customerInputType'];
+  const usesSalesId = selected?.deliveryCodeType === 'sales-code' || selectedVariant?.deliveryCodeType === 'sales-code' || defaultDeliveryCodeType(productId) === 'sales-code';
+  const usesLicence = Boolean(selectedVariant && !usesSalesId && selected?.fulfilmentType !== 'Service');
+  const activationUrl = effectiveActivationWebsiteUrl(selectedVariant);
+  const availableCodes = data.licences.filter((licence) => licence.variantId === selected?.variantId && licence.status === 'available');
+  const orderSteps = [
+    { id: 'payment', label: 'Payment & price' },
+    ...(usesSalesId && effectiveInputType ? [{ id: 'activation', label: 'Activation details' }] : []),
+    ...(usesLicence ? [{ id: 'licence', label: 'Licence' }] : []),
+    { id: 'finish', label: 'Finish' }
+  ];
+  const activeStep = orderSteps[Math.min(step, orderSteps.length - 1)]?.id || 'payment';
 
   useEffect(() => {
     if (selected) setSelected(data.orders.find((order) => order.orderId === selected.orderId) || null);
@@ -139,9 +159,11 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
 
   useEffect(() => {
     if (!selected) return;
-    setWorkflow({ paymentStatus: selected.paymentStatus, fulfilmentStatus: selected.fulfilmentStatus, amountPesewas: selected.amountPesewas, customerInputType: selected.customerInputType, customerInputValue: selected.customerInputValue || '', salesCode: selected.salesCode || '', activationCodeOrKey: '', activationWebsiteUrl: selected.activationWebsiteUrl || '', windowsInstallerUrl: selected.windowsInstallerUrl || '', guideUrl: selected.guideUrl || '', learningResourcesUrl: selected.learningResourcesUrl || '', fulfilmentMethod: selected.fulfilmentMethod });
+    setWorkflow({ paymentStatus: selected.paymentStatus, fulfilmentStatus: selected.fulfilmentStatus, amountPesewas: selected.amountPesewas, customerInputType: effectiveInputType, customerInputValue: selected.customerInputValue || '', salesCode: selected.salesCode || '' });
+    setManualKey('');
+    setSelectedSalesLicenceId('');
     setStep(0);
-  }, [selected?.orderId]);
+  }, [selected?.orderId, selected?.salesCode, selected?.customerInputValue, selected?.paymentStatus, selected?.fulfilmentStatus, selected?.amountPesewas]);
 
   const rows = useMemo(() => data.orders.filter((order) => {
     if (filter === 'action' && ['ready', 'pending-payment'].includes(order.fulfilmentStatus)) return false;
@@ -179,7 +201,17 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
     if (!selected) return;
     setBusy('workflow'); setMessage('');
     try {
-      await adminRequest(user, `/orders/${selected.orderId}/workflow`, { method: 'PUT', body: JSON.stringify(workflow) });
+      await adminRequest(user, `/orders/${selected.orderId}/workflow`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          paymentStatus: workflow.paymentStatus,
+          fulfilmentStatus: workflow.fulfilmentStatus,
+          amountPesewas: workflow.amountPesewas,
+          customerInputType: effectiveInputType,
+          customerInputValue: workflow.customerInputValue,
+          salesCode: usesSalesId ? workflow.salesCode : undefined
+        })
+      });
       setMessage('Order workflow saved.'); await reload();
     } catch (err) { setMessage(messageOf(err)); } finally { setBusy(''); }
   };
@@ -226,29 +258,34 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
               {selected.serviceAnswers && <div className="md:col-span-3"><b>Service answers</b><pre className="mt-1 overflow-auto whitespace-pre-wrap rounded-lg bg-white p-3 text-xs">{JSON.stringify(selected.serviceAnswers, null, 2)}</pre></div>}
             </div>
 
-            <section className="mt-5 rounded-2xl border border-[#cbdcd9] p-4 sm:p-5"><div className="flex flex-wrap gap-2">{['Payment & price', 'Machine details', 'Delivery codes', 'Finish'].map((label, index) => <button key={label} type="button" onClick={() => setStep(index)} className={`rounded-full px-3 py-2 text-xs font-black ${step === index ? 'bg-[#014040] text-white' : 'bg-slate-100 text-slate-600'}`}>{index + 1}. {label}</button>)}</div>
+            <section className="mt-5 rounded-2xl border border-[#cbdcd9] p-4 sm:p-5"><div className="flex flex-wrap gap-2">{orderSteps.map((item, index) => <button key={item.id} type="button" onClick={() => setStep(index)} className={`rounded-full px-3 py-2 text-xs font-black ${step === index ? 'bg-[#014040] text-white' : 'bg-slate-100 text-slate-600'}`}>{index + 1}. {item.label}</button>)}</div>
               <div className="mt-5">
-                {step === 0 && <div className="grid gap-4 sm:grid-cols-2"><label className={labelClass}>Payment status<select className={inputClass} value={workflow.paymentStatus} onChange={(e) => setWorkflow((old) => ({ ...old, paymentStatus: e.target.value as Order['paymentStatus'] }))}><option value="pending">Pending</option><option value="paid">Paid</option></select></label><label className={labelClass}>Adjusted price (GHS)<input className={inputClass} type="number" min="0.01" step="0.01" value={(workflow.amountPesewas || 0) / 100} onChange={(e) => setWorkflow((old) => ({ ...old, amountPesewas: Math.round(Number(e.target.value) * 100) }))} /></label><p className="sm:col-span-2 text-xs text-slate-500">The buyer sees this new amount immediately in Find Order and pays it when they click Proceed to pay.</p></div>}
-                {step === 1 && <div className="grid gap-4 sm:grid-cols-2"><label className={labelClass}>Required machine detail<select className={inputClass} value={workflow.customerInputType || ''} onChange={(e) => setWorkflow((old) => ({ ...old, customerInputType: (e.target.value || undefined) as Order['customerInputType'] }))}><option value="">None</option><option>Lock Code</option><option>Hardware ID</option></select></label><label className={labelClass}>{workflow.customerInputType || 'Machine detail'}<input className={inputClass} value={workflow.customerInputValue || ''} onChange={(e) => setWorkflow((old) => ({ ...old, customerInputValue: e.target.value }))} /></label><label className={`${labelClass} sm:col-span-2`}>Activation website URL<input className={inputClass} type="url" value={workflow.activationWebsiteUrl || ''} onChange={(e) => setWorkflow((old) => ({ ...old, activationWebsiteUrl: e.target.value }))} /></label>{workflow.activationWebsiteUrl && <a className={`${secondaryButton} sm:col-span-2`} href={workflow.activationWebsiteUrl} target="_blank" rel="noreferrer">Open activation website</a>}</div>}
-                {step === 2 && <div className="grid gap-4 sm:grid-cols-2"><label className={labelClass}>Fulfilment method<select className={inputClass} value={workflow.fulfilmentMethod || 'manual'} onChange={(e) => setWorkflow((old) => ({ ...old, fulfilmentMethod: e.target.value as Order['fulfilmentMethod'] }))}><option value="manual">Manual</option><option value="automatic">Automatic</option></select></label><label className={labelClass}>Sales code (admin only)<input className={inputClass} value={workflow.salesCode || ''} onChange={(e) => setWorkflow((old) => ({ ...old, salesCode: e.target.value }))} /></label><label className={`${labelClass} sm:col-span-2`}>Licence / activation code<input className={inputClass} value={workflow.activationCodeOrKey || ''} onChange={(e) => setWorkflow((old) => ({ ...old, activationCodeOrKey: e.target.value }))} /></label></div>}
-                {step === 3 && <div className="grid gap-4 sm:grid-cols-2"><label className={labelClass}>Fulfilment status<select className={inputClass} value={workflow.fulfilmentStatus} onChange={(e) => setWorkflow((old) => ({ ...old, fulfilmentStatus: e.target.value as Order['fulfilmentStatus'] }))}>{Object.entries(bucketLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className={labelClass}>Download Software URL<input className={inputClass} type="url" value={workflow.windowsInstallerUrl || ''} onChange={(e) => setWorkflow((old) => ({ ...old, windowsInstallerUrl: e.target.value }))} /></label><label className={labelClass}>Installation guide URL<input className={inputClass} type="url" value={workflow.guideUrl || ''} onChange={(e) => setWorkflow((old) => ({ ...old, guideUrl: e.target.value }))} /></label><label className={labelClass}>Learning Resources URL<input className={inputClass} type="url" value={workflow.learningResourcesUrl || ''} onChange={(e) => setWorkflow((old) => ({ ...old, learningResourcesUrl: e.target.value }))} /></label></div>}
+                {activeStep === 'payment' && <div className="grid gap-4 sm:grid-cols-2"><label className={labelClass}>Payment status<select className={inputClass} value={workflow.paymentStatus} onChange={(e) => setWorkflow((old) => ({ ...old, paymentStatus: e.target.value as Order['paymentStatus'] }))}><option value="pending">Pending</option><option value="paid">Paid</option></select></label><label className={labelClass}>Adjusted price (GHS)<input className={inputClass} type="number" min="0.01" step="0.01" value={(workflow.amountPesewas || 0) / 100} onChange={(e) => setWorkflow((old) => ({ ...old, amountPesewas: Math.round(Number(e.target.value) * 100) }))} /></label><p className="sm:col-span-2 text-xs text-slate-500">The buyer sees this new amount immediately in Find Order and pays it when they click Proceed to pay.</p></div>}
+                {activeStep === 'activation' && <div className="grid gap-4 sm:grid-cols-2">
+                  <label className={labelClass}>{effectiveInputType}<input className={inputClass} value={workflow.customerInputValue || ''} onChange={(e) => setWorkflow((old) => ({ ...old, customerInputValue: e.target.value }))} /></label>
+                  <label className={labelClass}>Sales ID (admin only)<input className={inputClass} value={workflow.salesCode || ''} placeholder={selectedVariant?.autoFulfil ? 'Assigned automatically after payment' : 'Enter a Sales ID or choose one below'} onChange={(e) => setWorkflow((old) => ({ ...old, salesCode: e.target.value }))} /></label>
+                  {!selectedVariant?.autoFulfil && !selected.salesCode && <div className="sm:col-span-2 rounded-xl bg-slate-50 p-4"><label className={labelClass}>Suggested Sales IDs in stock<select className={inputClass} value={selectedSalesLicenceId} onChange={(e) => setSelectedSalesLicenceId(e.target.value)}><option value="">Use next available Sales ID</option>{availableCodes.map((licence) => <option key={licence.licenceId} value={licence.licenceId}>{licence.maskedCode}</option>)}</select></label><button className={`${secondaryButton} mt-3`} disabled={Boolean(busy) || selected.paymentStatus !== 'paid' || availableCodes.length === 0} onClick={() => act('sales-id', `/orders/${selected.orderId}/assign-sales-code`, selectedSalesLicenceId ? { licenceId: selectedSalesLicenceId } : {})}><KeyRound className="h-4 w-4" />Assign Sales ID from stock</button>{selected.paymentStatus !== 'paid' && <p className="mt-2 text-xs text-slate-500">Save this order as paid before assigning a Sales ID.</p>}</div>}
+                  {selectedVariant?.autoFulfil && !selected.salesCode && <p className="sm:col-span-2 rounded-xl bg-emerald-50 p-3 text-xs font-bold text-emerald-800">Automatic Sales ID delivery is on. The next available Sales ID is assigned when payment is confirmed.</p>}
+                  {activationUrl && (workflow.customerInputValue || selected.customerInputValue) && <a className={`${primaryButton} sm:col-span-2`} href={activationUrl} target="_blank" rel="noreferrer">Activation link</a>}
+                </div>}
+                {activeStep === 'licence' && <div className="rounded-xl bg-slate-50 p-4"><h4 className="font-black">Assign a licence</h4><p className="mt-1 text-xs text-slate-500">For SmartPLS, NVivo and other direct-licence software.</p>{selected.licenceId ? <p className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-800">A licence has already been assigned to this order.</p> : selectedVariant?.autoFulfil && selected.fulfilmentStatus !== 'awaiting-licence' ? <p className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-800">Automatic licence delivery is on. The next key in stock is assigned when payment is confirmed.</p> : <><input className={`${inputClass} mt-3`} placeholder="Optional manual licence key" value={manualKey} onChange={(e) => setManualKey(e.target.value)} /><button className={`${primaryButton} mt-3`} disabled={Boolean(busy) || selected.paymentStatus !== 'paid'} onClick={() => act('assign', `/orders/${selected.orderId}/assign-licence`, manualKey ? { manualKey } : {})}><KeyRound className="h-4 w-4" />{manualKey ? 'Assign licence' : 'Use next key in stock'}</button>{selected.paymentStatus !== 'paid' && <p className="mt-2 text-xs text-slate-500">Save this order as paid before assigning a licence.</p>}</>}</div>}
+                {activeStep === 'finish' && <div className="grid gap-4 sm:grid-cols-2"><label className={labelClass}>Fulfilment status<select className={inputClass} value={workflow.fulfilmentStatus} onChange={(e) => setWorkflow((old) => ({ ...old, fulfilmentStatus: e.target.value as Order['fulfilmentStatus'] }))}>{Object.entries(bucketLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>}
               </div>
-              <div className="mt-5 flex flex-wrap justify-between gap-2"><div className="flex gap-2"><button className={secondaryButton} disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))}>Back</button><button className={secondaryButton} disabled={step === 3} onClick={() => setStep((value) => Math.min(3, value + 1))}>Next / skip</button></div><div className="flex gap-2">{selected.paymentStatus !== 'paid' && <button className="inline-flex items-center gap-2 rounded-xl border border-rose-300 px-3 py-2 text-xs font-black text-rose-700" disabled={Boolean(busy)} onClick={deleteOrder}><Trash2 className="h-4 w-4" />Delete order</button>}<button className={primaryButton} disabled={Boolean(busy)} onClick={saveWorkflow}><Save className="h-4 w-4" />Save workflow</button></div></div>
+              <div className="mt-5 flex flex-wrap justify-between gap-2"><div className="flex gap-2"><button className={secondaryButton} disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))}>Back</button><button className={secondaryButton} disabled={step >= orderSteps.length - 1} onClick={() => setStep((value) => Math.min(orderSteps.length - 1, value + 1))}>Next / skip</button></div><div className="flex gap-2">{selected.paymentStatus !== 'paid' && <button className="inline-flex items-center gap-2 rounded-xl border border-rose-300 px-3 py-2 text-xs font-black text-rose-700" disabled={Boolean(busy)} onClick={deleteOrder}><Trash2 className="h-4 w-4" />Delete order</button>}<button className={primaryButton} disabled={Boolean(busy)} onClick={saveWorkflow}><Save className="h-4 w-4" />Save workflow</button></div></div>
             </section>
 
             {selected.fulfilmentHistory?.length ? <div className="mt-5"><h4 className="text-sm font-black text-slate-800">Fulfilment history</h4><ol className="mt-2 space-y-2 border-l-2 border-[#cbdcd9] pl-4">{selected.fulfilmentHistory.map((item, i) => <li key={`${item.at}-${i}`} className="text-xs"><b>{bucketLabel[item.status]}</b> · {new Date(item.at).toLocaleString()}<br /><span className="text-slate-500">{item.note}</span></li>)}</ol></div> : null}
             {selected.internalNotes?.length ? <div className="mt-5"><h4 className="text-sm font-black">Internal notes</h4>{selected.internalNotes.map((item, i) => <p key={`${item.createdAt}-${i}`} className="mt-2 rounded-xl bg-amber-50 p-3 text-xs">{item.text}<br /><span className="text-slate-500">{item.actorEmail || item.actorUid} · {new Date(item.createdAt).toLocaleString()}</span></p>)}</div> : null}
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
-              {selected.paymentStatus === 'paid' && !selected.licenceId && selected.fulfilmentType !== 'Service' && <div className="rounded-2xl border p-4"><h4 className="font-black">{ADMIN_COPY.orders.assignLicence}</h4><p className="mt-1 text-xs text-slate-500">Available for manual-delivery orders and whenever automatic delivery is turned off.</p><input className={`${inputClass} mt-3`} placeholder={ADMIN_COPY.orders.manualKey} value={manualKey} onChange={(e) => setManualKey(e.target.value)} /><div className="mt-3 flex flex-wrap gap-2"><button className={primaryButton} disabled={!!busy} onClick={() => act('assign', `/orders/${selected.orderId}/assign-licence`, manualKey ? { manualKey } : {})}><KeyRound className="h-4 w-4" />{manualKey ? ADMIN_COPY.orders.assignLicence : ADMIN_COPY.orders.usePool}</button></div></div>}
               {selected.fulfilmentStatus === 'awaiting-document' && <div className="rounded-2xl border p-4"><button className={primaryButton} disabled={!!busy} onClick={() => act('received', `/orders/${selected.orderId}/mark-document-received`)}><FileText className="h-4 w-4" />{ADMIN_COPY.orders.documentReceived}</button></div>}
-              {selected.fulfilmentStatus === 'awaiting-seller-activation' && <div className="rounded-2xl border p-4"><button className={primaryButton} disabled={!!busy} onClick={() => act('fulfil', `/orders/${selected.orderId}/fulfil`, {})}><Save className="h-4 w-4" />{ADMIN_COPY.orders.fulfil}</button></div>}
               {selected.fulfilmentStatus === 'awaiting-customer-input' && <div className="rounded-2xl border p-4"><button className={secondaryButton} disabled={!!busy} onClick={() => act('nudge', `/orders/${selected.orderId}/nudge`)}><Send className="h-4 w-4" />{ADMIN_COPY.orders.nudgeCustomer}</button></div>}
               {selected.documentPath && <div className="rounded-2xl border p-4"><button className={secondaryButton} disabled={!!busy} onClick={downloadDocument}><Download className="h-4 w-4" />{ADMIN_COPY.orders.downloadDocument}</button></div>}
               <div className="rounded-2xl border p-4"><h4 className="font-black">Email</h4><div className="mt-3 flex flex-wrap gap-2"><button className={secondaryButton} disabled={!!busy} onClick={() => act('receipt', `/orders/${selected.orderId}/resend`, { kind: 'receipt' })}><Send className="h-4 w-4" />{ADMIN_COPY.orders.resendReceipt}</button><button className={secondaryButton} disabled={!!busy} onClick={() => act('delivery', `/orders/${selected.orderId}/resend`, { kind: 'delivery' })}>{ADMIN_COPY.orders.resendDelivery}</button></div></div>
               {selected.paymentStatus !== 'paid' && <div className="rounded-2xl border p-4"><h4 className="font-black">{ADMIN_COPY.orders.offlinePayment}</h4><input className={`${inputClass} mt-3`} placeholder={ADMIN_COPY.orders.offlineReference} value={offlineReference} onChange={(e) => setOfflineReference(e.target.value)} /><input className={`${inputClass} mt-2`} placeholder={ADMIN_COPY.orders.offlineReason} value={offlineReason} onChange={(e) => setOfflineReason(e.target.value)} /><button className={`${primaryButton} mt-3`} disabled={!!busy || !offlineReference || !offlineReason} onClick={() => act('offline', `/orders/${selected.orderId}/record-offline-payment`, { reference: offlineReference, reason: offlineReason })}>{ADMIN_COPY.orders.offlinePayment}</button></div>}
               <div className="rounded-2xl border p-4"><h4 className="font-black">{ADMIN_COPY.orders.internalNote}</h4><textarea className={`${inputClass} mt-3`} placeholder={ADMIN_COPY.orders.notePlaceholder} value={note} onChange={(e) => setNote(e.target.value)} /><button className={`${secondaryButton} mt-3`} disabled={!!busy || !note.trim()} onClick={async () => { await act('note', `/orders/${selected.orderId}/note`, { text: note }); setNote(''); }}>{ADMIN_COPY.orders.internalNote}</button></div>
             </div>
+            {selected.paymentStatus === 'paid' && selected.fulfilmentStatus !== 'ready' && <div className="mt-6 rounded-2xl bg-[#014040] p-4 sm:flex sm:items-center sm:justify-between sm:gap-4"><div><h4 className="font-black text-white">Complete this order</h4><p className="mt-1 text-xs text-white/75">Marks the order fulfilled and emails the customer their next steps.</p></div><button className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-5 py-3 text-sm font-black text-[#014040] hover:bg-[#20f43d] disabled:opacity-50 sm:mt-0 sm:w-auto" disabled={Boolean(busy)} onClick={() => act('fulfil', `/orders/${selected.orderId}/fulfil`, {})}><Send className="h-4 w-4" />Mark fulfilled and email customer</button></div>}
             {message && <p className="mt-5 rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}
           </section>
         </div>
@@ -257,59 +294,54 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
   );
 }
 
-function parseCsvLine(line: string): string[] {
-  const values: string[] = [];
-  let value = '';
-  let quoted = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    if (char === '"' && quoted && line[i + 1] === '"') { value += '"'; i += 1; }
-    else if (char === '"') quoted = !quoted;
-    else if (char === ',' && !quoted) { values.push(value.trim()); value = ''; }
-    else value += char;
-  }
-  values.push(value.trim());
-  return values;
-}
-
 function LicencesSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
-  const [variantId, setVariantId] = useState(data.variants[0]?.variantId || '');
-  const [keys, setKeys] = useState('');
-  const [csvRows, setCsvRows] = useState<Array<Record<string, string>>>([]);
+  const [keysByVariant, setKeysByVariant] = useState<Record<string, string>>({});
   const [revealed, setRevealed] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<ApiValidationError[]>([]);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const stock = useMemo(() => data.variants.map((variant) => ({ ...variant, available: data.licences.filter((key) => key.variantId === variant.variantId && key.status === 'available').length })), [data]);
-  const importRows = async () => {
-    const rows = csvRows.length ? csvRows.map((row, i) => ({ row: i + 2, variantId: row.variantId, licenceCode: row.licenceCode, codeType: row.codeType, notes: row.notes })) : keys.split(/\r?\n/).map((key) => key.trim()).filter(Boolean).map((licenceCode, i) => ({ row: i + 1, variantId, licenceCode }));
+  const categoryGroups = useMemo(() => {
+    const groups = data.categories
+      .map((category) => ({ category, products: data.products.filter((product) => product.categoryId === category.categoryId) }))
+      .filter((group) => group.products.length > 0);
+    const categoryIds = new Set(data.categories.map((category) => category.categoryId));
+    const uncategorized = data.products.filter((product) => !categoryIds.has(product.categoryId));
+    if (uncategorized.length) groups.push({ category: { categoryId: 'OTHER', name: 'Other software', tagline: '', icon: '', sortOrder: 999, active: true }, products: uncategorized });
+    return groups;
+  }, [data.categories, data.products]);
+
+  const importRows = async (variant: Product['variants'][number]) => {
+    const codeType = variant.deliveryCodeType === 'sales-code' ? 'sales-code' : 'licence';
+    const rows = (keysByVariant[variant.variantId] || '').split(/\r?\n/).map((key) => key.trim()).filter(Boolean).map((licenceCode, i) => ({ row: i + 1, variantId: variant.variantId, licenceCode, codeType }));
     setBusy(true); setErrors([]); setMessage('');
     try {
       const result = await adminRequest<{ imported: number }>(user, '/licences/import', { method: 'POST', body: JSON.stringify({ rows }) });
-      setMessage(`${result.imported} licence keys imported.`); setKeys(''); setCsvRows([]); await reload();
+      setMessage(`${result.imported} ${codeType === 'sales-code' ? 'Sales IDs' : 'licences'} added to ${variant.variantId}.`);
+      setKeysByVariant((old) => ({ ...old, [variant.variantId]: '' }));
+      await reload();
     } catch (err) {
       if (err instanceof AdminApiError) setErrors(err.validationErrors || []);
       setMessage(messageOf(err));
     } finally { setBusy(false); }
   };
-  const readCsv = async (file?: File) => {
-    if (!file) return;
-    const lines = (await file.text()).split(/\r?\n/).filter(Boolean);
-    const headers = parseCsvLine(lines.shift() || '').map((h) => h.trim());
-    setCsvRows(lines.map((line) => Object.fromEntries(headers.map((header, i) => [header, parseCsvLine(line)[i] || '']))));
-    setMessage(`${lines.length} CSV rows ready to validate.`);
-  };
   const reveal = async (licence: AdminLicence) => {
-    const result = await adminRequest<{ licenceCode: string }>(user, `/licences/${encodeURIComponent(licence.licenceId)}/reveal`);
-    setRevealed((old) => ({ ...old, [licence.licenceId]: result.licenceCode }));
+    try {
+      const result = await adminRequest<{ licenceCode: string }>(user, `/licences/${encodeURIComponent(licence.licenceId)}/reveal`);
+      setRevealed((old) => ({ ...old, [licence.licenceId]: result.licenceCode }));
+    } catch (error) { setMessage(messageOf(error)); }
   };
 
   return <div className="space-y-6">
     <div><h2 className="text-2xl font-black text-[#014040]">{ADMIN_COPY.licences.title}</h2><p className="text-sm text-slate-600">{ADMIN_COPY.licences.subtitle}</p></div>
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{stock.map((item) => <div key={item.variantId} className={`rounded-2xl border bg-white p-4 ${item.available < 3 ? 'border-amber-300' : 'border-slate-200'}`}><p className="font-mono text-xs font-bold text-[#025656]">{item.variantId}</p><p className="mt-1 text-sm font-bold">{item.productName} {item.versionOrPlan}</p><p className="mt-3 text-2xl font-black">{item.available}</p>{item.available < 3 && <p className="text-xs font-bold text-amber-700">{ADMIN_COPY.licences.lowStock}</p>}</div>)}</div>
-    <section className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="text-lg font-black">{ADMIN_COPY.licences.bulkTitle}</h3><div className="mt-4 grid gap-4 md:grid-cols-2"><div><label className={labelClass}>{ADMIN_COPY.licences.variant}<select className={inputClass} value={variantId} onChange={(e) => { setVariantId(e.target.value); setCsvRows([]); }}>{data.variants.map((variant) => <option key={variant.variantId} value={variant.variantId}>{variant.variantId} — {variant.productName} {variant.versionOrPlan}</option>)}</select></label><textarea className={`${inputClass} mt-3 min-h-40 font-mono`} placeholder={ADMIN_COPY.licences.pasteHint} value={keys} onChange={(e) => { setKeys(e.target.value); setCsvRows([]); }} /></div><div className="rounded-xl border border-dashed border-slate-300 p-5"><p className="font-bold">{ADMIN_COPY.licences.csv}</p><p className="mt-1 text-xs text-slate-500">{ADMIN_COPY.licences.csvHint}</p><input className="mt-4 text-xs" type="file" accept=".csv,text/csv" onChange={(e) => readCsv(e.target.files?.[0])} />{csvRows.length > 0 && <p className="mt-3 text-sm font-bold text-[#025656]">{csvRows.length} rows ready</p>}</div></div><button className={`${primaryButton} mt-4`} disabled={busy || (!keys.trim() && !csvRows.length)} onClick={importRows}>{ADMIN_COPY.licences.import}</button>{message && <p className="mt-3 text-sm font-bold">{message}</p>}{errors.length > 0 && <ul className="mt-3 rounded-xl bg-rose-50 p-4 text-xs text-rose-800">{errors.map((error, i) => <li key={i}>Row {error.row || '—'}: {error.message}</li>)}</ul>}</section>
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">{data.licences.map((licence) => <div key={licence.licenceId} className="grid gap-2 border-b p-4 text-sm last:border-0 md:grid-cols-[130px_120px_1fr_1fr_auto] md:items-center"><span className="font-mono text-xs">{licence.variantId}</span><span className={`text-xs font-black ${licence.status === 'available' ? 'text-emerald-700' : 'text-slate-500'}`}>{licence.status}</span><span className="font-mono text-xs">{revealed[licence.licenceId] || licence.maskedCode}</span><span className="text-xs text-slate-500">{licence.assignedOrderId || 'Unassigned'}{licence.integrityWarning && <span className="mt-1 block font-bold text-rose-700"><AlertTriangle className="mr-1 inline h-3 w-3" />{licence.integrityWarning}</span>}</span><button className={secondaryButton} onClick={() => reveal(licence)}><Eye className="h-3.5 w-3.5" />{ADMIN_COPY.licences.reveal}</button></div>)}</section>
+    <p className="rounded-xl bg-[#edf5f3] p-4 text-sm text-[#014040]">Open a category, software title and version to manage stock for each operating system.</p>
+    <div className="space-y-4">{categoryGroups.map(({ category, products }) => <details key={category.categoryId} className="group rounded-2xl border border-slate-200 bg-white"><summary className="cursor-pointer list-none p-5 text-lg font-black text-[#014040]">{category.name}<span className="ml-2 text-xs font-bold text-slate-400">({products.length} software titles)</span></summary><div className="space-y-3 border-t bg-slate-50 p-3 sm:p-5">{products.map((product) => <details key={product.productId} className="rounded-xl border bg-white"><summary className="cursor-pointer list-none p-4 font-black text-slate-800">{product.productName}<span className="ml-2 font-mono text-[10px] text-slate-400">{product.productId}</span></summary><div className="space-y-3 border-t p-3">{[...new Set(product.variants.map((variant) => variant.versionOrPlan))].map((version) => <details key={version} className="rounded-xl border border-slate-200"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-black text-[#025656]">Version {version}</summary><div className="grid gap-4 border-t bg-[#f8fbfa] p-3 lg:grid-cols-2">{product.variants.filter((variant) => variant.versionOrPlan === version).map((variant) => {
+      const variantStock = data.licences.filter((licence) => licence.variantId === variant.variantId);
+      const available = variantStock.filter((licence) => licence.status === 'available').length;
+      const isSalesId = variant.deliveryCodeType === 'sales-code';
+      return <section key={variant.variantId} className={`rounded-xl border bg-white p-4 ${available < 3 ? 'border-amber-300' : 'border-slate-200'}`}><div className="flex items-start justify-between gap-3"><div><h4 className="font-black">{variant.os || 'All operating systems'}</h4><p className="font-mono text-[10px] text-slate-500">{variant.variantId}</p></div><div className="text-right"><p className="text-2xl font-black text-[#014040]">{available}</p><p className="text-[10px] font-bold uppercase text-slate-500">available {isSalesId ? 'Sales IDs' : 'licences'}</p></div></div>{available < 3 && <p className="mt-2 text-xs font-bold text-amber-700">{ADMIN_COPY.licences.lowStock}</p>}<textarea className={`${inputClass} mt-3 min-h-28 font-mono`} placeholder={`Paste one ${isSalesId ? 'Sales ID' : 'licence'} per line`} value={keysByVariant[variant.variantId] || ''} onChange={(e) => setKeysByVariant((old) => ({ ...old, [variant.variantId]: e.target.value }))} /><button className={`${primaryButton} mt-3 w-full`} disabled={busy || !(keysByVariant[variant.variantId] || '').trim()} onClick={() => importRows(variant)}><Plus className="h-4 w-4" />Add {isSalesId ? 'Sales IDs' : 'licences'} to stock</button>{variantStock.length > 0 && <div className="mt-4 divide-y rounded-lg border">{variantStock.map((licence) => <div key={licence.licenceId} className="grid gap-2 p-3 text-xs sm:grid-cols-[90px_1fr_auto] sm:items-center"><span className={`font-black ${licence.status === 'available' ? 'text-emerald-700' : 'text-slate-500'}`}>{licence.status}</span><span className="min-w-0 break-all font-mono">{revealed[licence.licenceId] || licence.maskedCode}{licence.assignedOrderId && <span className="mt-1 block font-sans text-slate-500">Order {licence.assignedOrderId}</span>}{licence.integrityWarning && <span className="mt-1 block font-sans font-bold text-rose-700"><AlertTriangle className="mr-1 inline h-3 w-3" />{licence.integrityWarning}</span>}</span><button className={secondaryButton} onClick={() => reveal(licence)}><Eye className="h-3.5 w-3.5" />Reveal</button></div>)}</div>}</section>;
+    })}</div></details>)}</div></details>)}</div></details>)}</div>
+    {message && <p className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}{errors.length > 0 && <ul className="rounded-xl bg-rose-50 p-4 text-xs text-rose-800">{errors.map((error, i) => <li key={i}>Row {error.row || '—'}: {error.message}</li>)}</ul>}
   </div>;
 }
 
@@ -381,7 +413,15 @@ function SoftwareConfigurationSection({ data, user, reload }: { data: AdminData;
   if (!draft) return <p>No software products found.</p>;
   const setVariant = (index: number, field: string, value: unknown) => setDraft((old) => ({ ...old, variants: old.variants.map((variant, i) => i === index ? { ...variant, [field]: value } : variant) }));
   const save = async () => { setBusy(true); setMessage(''); try { await adminRequest(user, `/products/${draft.productId}/configuration`, { method: 'PUT', body: JSON.stringify(draft) }); setMessage('Software configuration saved.'); await reload(); } catch (error) { setMessage(messageOf(error)); } finally { setBusy(false); } };
-  return <div className="space-y-5"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-black text-[#014040]">Software configuration</h2><p className="text-sm text-slate-600">Configure automatic delivery, machine codes, activation sites and confirmed-order resources for every version.</p></div><button className={primaryButton} disabled={busy} onClick={save}><Save className="h-4 w-4" />{busy ? 'Saving…' : 'Save configuration'}</button></div><select className={inputClass} value={productId} onChange={(e) => setProductId(e.target.value)}>{data.products.map((product) => <option key={product.productId} value={product.productId}>{product.productName}</option>)}</select><div className="space-y-4">{draft.variants.map((variant, index) => <section key={variant.variantId} className="rounded-2xl border bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-black text-[#014040]">{variant.versionOrPlan} · {variant.os}</h3><p className="font-mono text-[11px] text-slate-500">{variant.variantId}</p></div><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={variant.autoFulfil} onChange={(e) => setVariant(index, 'autoFulfil', e.target.checked)} />Automatic code delivery</label></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"><label className={labelClass}>Pool code delivers<select className={inputClass} value={variant.deliveryCodeType || 'licence'} onChange={(e) => setVariant(index, 'deliveryCodeType', e.target.value)}><option value="licence">Customer licence</option><option value="sales-code">Internal sales code</option></select></label><label className={labelClass}>Customer input<select className={inputClass} value={variant.customerInputRequired || ''} onChange={(e) => setVariant(index, 'customerInputRequired', e.target.value)}><option value="">None</option><option>Lock Code</option><option>Hardware ID</option></select></label><label className={labelClass}>Activation website<input className={inputClass} type="url" value={variant.activationWebsiteUrl || ''} onChange={(e) => setVariant(index, 'activationWebsiteUrl', e.target.value)} /></label><label className={labelClass}>Download Software URL<input className={inputClass} type="url" value={variant.windowsInstallerUrl || ''} onChange={(e) => setVariant(index, 'windowsInstallerUrl', e.target.value)} /></label><label className={labelClass}>Installation guide URL<input className={inputClass} type="url" value={variant.guideUrl || ''} onChange={(e) => setVariant(index, 'guideUrl', e.target.value)} /></label><label className={labelClass}>Learning Resources URL<input className={inputClass} type="url" value={variant.learningResourcesUrl || ''} onChange={(e) => setVariant(index, 'learningResourcesUrl', e.target.value)} /></label></div></section>)}</div>{message && <p className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}</div>;
+  return <div className="space-y-5">
+    <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-black text-[#014040]">Software setup</h2><p className="text-sm text-slate-600">Configure delivery behaviour, version-specific activation links and the resources customers receive after confirmation.</p></div><button className={primaryButton} disabled={busy} onClick={save}><Save className="h-4 w-4" />{busy ? 'Saving…' : 'Save configuration'}</button></div>
+    <select className={inputClass} value={productId} onChange={(e) => setProductId(e.target.value)}>{data.products.map((product) => <option key={product.productId} value={product.productId}>{product.productName}</option>)}</select>
+    <div className="space-y-4">{draft.variants.map((variant, index) => {
+      const isSalesId = variant.deliveryCodeType === 'sales-code';
+      return <section key={variant.variantId} className="rounded-2xl border bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-black text-[#014040]">{variant.versionOrPlan} · {variant.os}</h3><p className="font-mono text-[11px] text-slate-500">{variant.variantId}</p></div><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={variant.autoFulfil} onChange={(e) => setVariant(index, 'autoFulfil', e.target.checked)} />{isSalesId ? 'Automatically assign Sales ID' : 'Automatically deliver licence'}</label></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"><label className={labelClass}>Stock type<select className={inputClass} value={variant.deliveryCodeType || 'licence'} onChange={(e) => setVariant(index, 'deliveryCodeType', e.target.value)}><option value="licence">Customer licence</option><option value="sales-code">Sales ID (admin only)</option></select></label><label className={labelClass}>Customer activation detail<select className={inputClass} value={variant.customerInputRequired || ''} onChange={(e) => setVariant(index, 'customerInputRequired', e.target.value)}><option value="">None</option><option>Lock Code</option><option>Hardware ID</option></select></label><label className={labelClass}>Activation website URL<input className={inputClass} type="url" value={variant.activationWebsiteUrl || variant.activationLink || ''} onChange={(e) => setVariant(index, 'activationWebsiteUrl', e.target.value)} />{(variant.activationWebsiteUrl || variant.activationLink) && <a className="mt-1 block font-bold text-[#025656] hover:underline" href={variant.activationWebsiteUrl || variant.activationLink} target="_blank" rel="noreferrer">Open saved activation link</a>}</label><label className={labelClass}>Download Software URL<input className={inputClass} type="url" value={variant.windowsInstallerUrl || ''} onChange={(e) => setVariant(index, 'windowsInstallerUrl', e.target.value)} /></label><label className={labelClass}>Installation guide URL<input className={inputClass} type="url" value={variant.guideUrl || ''} onChange={(e) => setVariant(index, 'guideUrl', e.target.value)} /></label><label className={labelClass}>Learning Resources URL<input className={inputClass} type="url" value={variant.learningResourcesUrl || ''} onChange={(e) => setVariant(index, 'learningResourcesUrl', e.target.value)} /></label></div></section>;
+    })}</div>
+    {message && <p className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}
+  </div>;
 }
 
 function LaptopPropertiesSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {

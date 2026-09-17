@@ -25,6 +25,11 @@ import {
   isVariantSellable,
   resolveVariantOperatingSystem
 } from '../src/utils/pricingEngine';
+import {
+  defaultCustomerInputType,
+  defaultDeliveryCodeType,
+  effectiveActivationWebsiteUrl
+} from '../src/utils/softwareFulfilment';
 
 /** The catalogue changes rarely and every page load reads it. */
 const CACHE_TTL_MS = 60_000;
@@ -62,16 +67,11 @@ function hydrateVariant(variant: Variant, productId: string): Variant {
     variant.macViaParallels
   );
 
-  const normalizedId = productId.toUpperCase();
-  const defaultCustomerInput = /^(AMOS|SPSS)/.test(normalizedId)
-    ? 'Lock Code'
-    : /^(MPLUS|MAXQDA|EVIEWS)/.test(normalizedId)
-      ? 'Hardware ID'
-      : undefined;
   return {
     ...variant,
-    customerInputRequired: variant.customerInputRequired || defaultCustomerInput,
-    deliveryCodeType: variant.deliveryCodeType || 'licence',
+    customerInputRequired: variant.customerInputRequired || defaultCustomerInputType(productId),
+    deliveryCodeType: variant.deliveryCodeType || defaultDeliveryCodeType(productId),
+    activationWebsiteUrl: effectiveActivationWebsiteUrl(variant),
     listPricePesewas: pricing.listPesewas,
     payablePricePesewas: pricing.payablePesewas,
     promoLabel: pricing.promoLabel,

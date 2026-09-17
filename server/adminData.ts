@@ -16,6 +16,11 @@ import { invalidateCatalogueCache } from './catalogue';
 import { AdminActor } from './adminAuth';
 import { LicenceImportRow, validateLicenceRows, validateServiceDefinition } from './adminValidation';
 import { COLLECTIONS, getFirestore } from './firestore';
+import {
+  defaultCustomerInputType,
+  defaultDeliveryCodeType,
+  effectiveActivationWebsiteUrl
+} from '../src/utils/softwareFulfilment';
 
 const now = () => new Date().toISOString();
 const id = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -101,9 +106,7 @@ export async function adminBootstrap() {
   const products = productsSnap.docs
     .map((doc) => {
       const product = doc.data() as Product;
-      const normalizedId = product.productId.toUpperCase();
-      const defaultInput = /^(AMOS|SPSS)/.test(normalizedId) ? 'Lock Code' : /^(MPLUS|MAXQDA|EVIEWS)/.test(normalizedId) ? 'Hardware ID' : undefined;
-      return { ...product, variants: (product.variants || []).map((variant) => ({ ...variant, customerInputRequired: variant.customerInputRequired || defaultInput, deliveryCodeType: variant.deliveryCodeType || 'licence' })) };
+      return { ...product, variants: (product.variants || []).map((variant) => ({ ...variant, customerInputRequired: variant.customerInputRequired || defaultCustomerInputType(product.productId), deliveryCodeType: variant.deliveryCodeType || defaultDeliveryCodeType(product.productId), activationWebsiteUrl: effectiveActivationWebsiteUrl(variant) })) };
     })
     .sort((a, b) => a.productName.localeCompare(b.productName));
 
@@ -350,6 +353,49 @@ export async function assignLicence(
   });
 }
 
+export async function assignSalesCode(
+  orderId: string,
+  input: { licenceId?: string },
+  actor: AdminActor
+): Promise<Order> {
+  const db: Firestore = getFirestore();
+  const orderRef = db.collection(COLLECTIONS.orders).doc(orderId);
+  return db.runTransaction(async (tx) => {
+    const orderSnap = await tx.get(orderRef);
+    if (!orderSnap.exists) throw new Error('Order not found.');
+    const order = orderSnap.data() as Order;
+    if (order.paymentStatus !== 'paid') throw new Error('A Sales ID can only be assigned to a paid order.');
+    if (order.salesCode) throw new Error('This order already has a Sales ID.');
+    const licenceSnap = input.licenceId
+      ? await tx.get(db.collection(COLLECTIONS.licencePool).doc(input.licenceId))
+      : await tx.get(db.collection(COLLECTIONS.licencePool).where('variantId', '==', order.variantId).where('status', '==', 'available').limit(1));
+    const doc = 'docs' in licenceSnap ? licenceSnap.docs[0] : licenceSnap;
+    if (!doc?.exists) throw new Error(`No available Sales ID for ${order.variantId}.`);
+    const licence = doc.data() as LicencePoolEntry;
+    if (licence.status !== 'available' || licence.variantId !== order.variantId) {
+      throw new Error('That Sales ID is no longer available for this order.');
+    }
+    const customerInputType = order.customerInputType || defaultCustomerInputType(order.productId);
+    const status: FulfilmentStatus = customerInputType && !order.customerInputValue
+      ? 'awaiting-customer-input'
+      : 'awaiting-seller-activation';
+    const at = now();
+    const updated: Order = {
+      ...order,
+      customerInputType,
+      deliveryCodeType: 'sales-code',
+      licenceId: licence.licenceId,
+      salesCode: licence.licenceCode,
+      fulfilmentStatus: status,
+      lastUpdated: at,
+      fulfilmentHistory: [...(order.fulfilmentHistory || []), { status, at, actorUid: actor.uid, note: 'Sales ID assigned from stock by administrator.' }]
+    };
+    tx.update(doc.ref, { status: 'assigned', assignedOrderId: order.orderId, dateAssigned: at });
+    tx.update(orderRef, updated);
+    return updated;
+  });
+}
+
 export async function markDocumentReceived(orderId: string, actor: AdminActor): Promise<Order> {
   const db = getFirestore();
   const ref = db.collection(COLLECTIONS.orders).doc(orderId);
@@ -419,8 +465,7 @@ export async function updateOrderWorkflow(
   orderId: string,
   input: Partial<Pick<Order,
     'paymentStatus' | 'fulfilmentStatus' | 'amountPesewas' | 'customerInputType' |
-    'customerInputValue' | 'salesCode' | 'activationCodeOrKey' | 'activationWebsiteUrl' |
-    'windowsInstallerUrl' | 'guideUrl' | 'learningResourcesUrl' | 'fulfilmentMethod'>>,
+    'customerInputValue' | 'salesCode'>>,
   actor: AdminActor
 ): Promise<Order> {
   const db = getFirestore();
@@ -434,20 +479,13 @@ export async function updateOrderWorkflow(
     throw new Error('The adjusted price must be greater than zero.');
   }
   const clean = (value: unknown) => typeof value === 'string' ? value.trim() : value;
-  const patch: Partial<Order> = {
-    ...input,
-    customerInputValue: clean(input.customerInputValue) as string | undefined,
-    salesCode: clean(input.salesCode) as string | undefined,
-    activationCodeOrKey: clean(input.activationCodeOrKey) as string | undefined,
-    activationWebsiteUrl: clean(input.activationWebsiteUrl) as string | undefined,
-    windowsInstallerUrl: clean(input.windowsInstallerUrl) as string | undefined,
-    guideUrl: clean(input.guideUrl) as string | undefined,
-    learningResourcesUrl: clean(input.learningResourcesUrl) as string | undefined,
-    lastUpdated: now()
-  };
-  // The admin list masks existing activation codes. An empty field therefore
-  // means "leave the existing secret unchanged", not "erase it".
-  if (!String(input.activationCodeOrKey || '').trim()) delete patch.activationCodeOrKey;
+  const patch: Partial<Order> = { lastUpdated: now() };
+  if (input.paymentStatus !== undefined) patch.paymentStatus = input.paymentStatus;
+  if (input.fulfilmentStatus !== undefined) patch.fulfilmentStatus = input.fulfilmentStatus;
+  if (input.amountPesewas !== undefined) patch.amountPesewas = input.amountPesewas;
+  if (input.customerInputType !== undefined) patch.customerInputType = input.customerInputType;
+  if (input.customerInputValue !== undefined) patch.customerInputValue = clean(input.customerInputValue) as string;
+  if (input.salesCode !== undefined) patch.salesCode = clean(input.salesCode) as string;
   if (input.paymentStatus === 'paid' && order.paymentStatus !== 'paid') {
     patch.paidAt = now();
     patch.paymentMethod = 'offline';
@@ -483,6 +521,7 @@ export async function saveProductConfiguration(productId: string, input: Product
       ...variant,
       customerInputRequired: variant.customerInputRequired?.trim() || undefined,
       activationWebsiteUrl: variant.activationWebsiteUrl?.trim() || undefined,
+      activationLink: variant.activationWebsiteUrl?.trim() || variant.activationLink?.trim() || undefined,
       windowsInstallerUrl: variant.windowsInstallerUrl?.trim() || undefined,
       guideUrl: variant.guideUrl?.trim() || undefined,
       learningResourcesUrl: variant.learningResourcesUrl?.trim() || undefined,

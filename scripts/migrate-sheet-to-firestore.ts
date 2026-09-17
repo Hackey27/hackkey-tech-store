@@ -391,7 +391,7 @@ function buildVariants(rows: Row[]): Map<string, Variant[]> {
       customerInputRequired: str(row, 'Customer_Input_Required'),
       sellerOutput: str(row, 'Seller_Output'),
       activationCodeOrKey: str(row, 'Activation_Code_or_Key'),
-      activationWebsiteUrl: str(row, 'Activation_Website_URL'),
+      activationWebsiteUrl: str(row, 'Activation_Website_URL') || str(row, 'Activation_Link'),
       activationLink: str(row, 'Activation_Link'),
       activationLinkLive: bool(row, 'Activation_Link_Live'),
       windowsInstallerUrl: str(row, 'Windows_Installer_URL'),

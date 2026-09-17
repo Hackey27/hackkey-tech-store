@@ -6,6 +6,7 @@ import {
   addInternalNote,
   adminBootstrap,
   assignLicence,
+  assignSalesCode,
   importLicences,
   markDocumentReceived,
   markFulfilled,
@@ -243,6 +244,17 @@ export function createAdminRouter(): Router {
     } catch (err) {
       routeError(res, err, 'Failed to assign licence.');
     }
+  });
+
+  router.post('/orders/:orderId/assign-sales-code', async (req: AdminRequest, res) => {
+    try {
+      const order = await assignSalesCode(String(req.params.orderId), req.body || {}, actor(req));
+      await writeAdminAudit(actor(req), {
+        action: 'order.assign-sales-code', targetType: 'order', targetId: order.orderId,
+        orderId: order.orderId, details: { licenceId: order.licenceId }
+      });
+      res.json({ order });
+    } catch (err) { routeError(res, err, 'Failed to assign the Sales ID.'); }
   });
 
   router.post('/orders/:orderId/mark-document-received', async (req: AdminRequest, res) => {
