@@ -12,5 +12,8 @@ export function publicOrder(order: Order): Order {
     salesCode: _salesCode,
     ...safe
   } = order;
-  return safe as Order;
+  return {
+    ...safe,
+    reportDocuments: safe.reportDocuments?.map(({ storagePath: _storagePath, ...report }) => report)
+  } as Order;
 }

@@ -49,10 +49,17 @@ test('Turnitin progress advances from payment through report delivery', () => {
     paymentStatus: 'paid',
     documentUploadStatus: 'uploaded',
   }), 5);
+  assert.equal(turnitinOrderStep({ ...turnitinOrder, paymentStatus: 'paid', documentSubmissionMethod: 'whatsapp' }), 5);
   assert.equal(turnitinOrderStep({
     ...turnitinOrder,
     paymentStatus: 'paid',
     documentUploadStatus: 'uploaded',
     fulfilmentStatus: 'ready',
   }), 6);
+});
+
+test('admin order sorting places new orders first', async () => {
+  const { newestOrderFirst } = await import('../src/utils/orderSorting');
+  const values = [{ orderDate: '2026-09-17T10:00:00Z' }, { orderDate: '2026-09-18T10:00:00Z' }];
+  assert.deepEqual(values.sort(newestOrderFirst).map((value) => value.orderDate), ['2026-09-18T10:00:00Z', '2026-09-17T10:00:00Z']);
 });

@@ -14,7 +14,7 @@ export function turnitinDocumentUploadPolicy(order: Order, phone: string, reject
     return { ok: false, status: 403, error: 'Document upload is only available for Turnitin orders.' };
   }
   if (normalisePhone(phone) !== order.phone) return { ok: false, status: 403, error: 'The phone number does not match this order.' };
-  if (rejectExisting && (order.documentPath || order.documentUploadStatus === 'uploaded')) {
+  if (rejectExisting && (order.documentPath || order.documentReceivedAt || order.documentSubmissionMethod === 'whatsapp' || order.documentUploadStatus === 'uploaded')) {
     return { ok: false, status: 409, error: 'A document has already been received for this order.' };
   }
   return { ok: true };

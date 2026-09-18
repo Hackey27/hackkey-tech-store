@@ -24,6 +24,7 @@ import {
 } from '../src/utils/softwareFulfilment';
 import { getPricingConfig, persistPricingConfig } from './pricingConfig';
 import { resolvedDeliveryNotice } from './deliveryNotice';
+import { newestOrderFirst } from '../src/utils/orderSorting';
 
 const now = () => new Date().toISOString();
 const id = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -82,7 +83,7 @@ export async function adminBootstrap() {
 
   const orders = ordersSnap.docs
     .map((doc) => maskOrder(doc.data() as Order))
-    .sort((a, b) => (a.orderDate || '').localeCompare(b.orderDate || ''));
+    .sort(newestOrderFirst);
   const licences: MaskedLicence[] = licencesSnap.docs.map((doc) => {
     const entry = doc.data() as LicencePoolEntry;
     return {
@@ -423,11 +424,46 @@ export async function markDocumentReceived(orderId: string, actor: AdminActor): 
   if (order.fulfilmentStatus !== 'awaiting-document') throw new Error('This order is not awaiting a document.');
   const at = now();
   const patch: Partial<Order> = {
+    documentSubmissionMethod: 'whatsapp',
+    documentReceivedAt: at,
     fulfilmentStatus: 'awaiting-seller-activation',
     lastUpdated: at,
     fulfilmentHistory: [
       ...(order.fulfilmentHistory || []),
       { status: 'awaiting-seller-activation', at, actorUid: actor.uid, note: 'Document received outside the portal.' }
+    ]
+  };
+  await ref.update(patch);
+  return { ...order, ...patch } as Order;
+}
+
+export async function addTurnitinReport(
+  orderId: string,
+  input: { storagePath: string; originalName: string; label: string; sizeBytes?: number },
+  actor: AdminActor
+): Promise<Order> {
+  const db = getFirestore();
+  const ref = db.collection(COLLECTIONS.orders).doc(orderId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('Order not found.');
+  const order = snap.data() as Order;
+  if (order.paymentStatus !== 'paid') throw new Error('The order is not paid.');
+  if (order.productId !== 'TURNITIN' && order.variantId !== 'TURNITIN') throw new Error('Reports can only be attached to Turnitin orders.');
+  const uploadedAt = now();
+  const report = {
+    reportId: id('REP'),
+    label: input.label,
+    originalName: input.originalName,
+    storagePath: input.storagePath,
+    sizeBytes: input.sizeBytes,
+    uploadedAt
+  };
+  const patch: Partial<Order> = {
+    reportDocuments: [...(order.reportDocuments || []), report],
+    lastUpdated: uploadedAt,
+    internalNotes: [
+      ...(order.internalNotes || []),
+      { text: `Uploaded Turnitin report: ${report.label}`, actorUid: actor.uid, actorEmail: actor.email, createdAt: uploadedAt }
     ]
   };
   await ref.update(patch);

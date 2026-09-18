@@ -4,6 +4,7 @@ import { AdminRequest, requireAdmin } from './adminAuth';
 import { writeAdminAudit } from './adminAudit';
 import {
   addInternalNote,
+  addTurnitinReport,
   adminBootstrap,
   assignLicence,
   assignSalesCode,
@@ -32,6 +33,12 @@ import {
   MAX_CATALOGUE_IMAGE_BYTES,
   saveCatalogueImage,
   createSignedDownload,
+  createSignedReportUpload,
+  confirmUpload,
+  isReportObjectPathForOrder,
+  safeDocumentLabel,
+  safeOriginalFilename,
+  validateUpload,
   validateCatalogueImage
 } from './storage';
 
@@ -403,6 +410,63 @@ export function createAdminRouter(): Router {
       res.json({ url });
     } catch (err) {
       routeError(res, err, 'Failed to prepare the document download.');
+    }
+  });
+
+  router.post('/orders/:orderId/reports/upload-url', async (req: AdminRequest, res) => {
+    try {
+      const order = await getOrder(String(req.params.orderId));
+      if (!order) return res.status(404).json({ error: 'Order not found.' });
+      if (order.paymentStatus !== 'paid') return res.status(409).json({ error: 'The order is not paid.' });
+      if (order.productId !== 'TURNITIN' && order.variantId !== 'TURNITIN') return res.status(409).json({ error: 'This is not a Turnitin order.' });
+      const contentType = String(req.body?.contentType || '');
+      const validation = validateUpload(contentType, Number(req.body?.sizeBytes));
+      if (!validation.ok) return res.status(400).json({ error: validation.error });
+      const originalName = safeOriginalFilename(String(req.body?.originalName || ''));
+      const label = safeDocumentLabel(String(req.body?.label || ''));
+      res.json({ ...(await createSignedReportUpload(order.orderId, contentType)), originalName, label });
+    } catch (err) {
+      routeError(res, err, 'Failed to prepare the report upload.');
+    }
+  });
+
+  router.post('/orders/:orderId/reports', async (req: AdminRequest, res) => {
+    try {
+      const orderId = String(req.params.orderId);
+      const objectPath = String(req.body?.objectPath || '');
+      if (!isReportObjectPathForOrder(objectPath, orderId)) return res.status(400).json({ error: 'That report upload does not belong to this order.' });
+      const confirmed = await confirmUpload(objectPath);
+      if (!confirmed.ok) return res.status(400).json({ error: confirmed.error });
+      const order = await addTurnitinReport(orderId, {
+        storagePath: objectPath,
+        originalName: safeOriginalFilename(String(req.body?.originalName || '')),
+        label: safeDocumentLabel(String(req.body?.label || '')),
+        sizeBytes: confirmed.sizeBytes
+      }, actor(req));
+      const report = order.reportDocuments?.at(-1);
+      await writeAdminAudit(actor(req), {
+        action: 'order.report-upload', targetType: 'order', targetId: orderId, orderId,
+        details: { reportId: report?.reportId, label: report?.label }
+      });
+      res.json({ order, report });
+    } catch (err) {
+      routeError(res, err, 'Failed to attach the Turnitin report.');
+    }
+  });
+
+  router.get('/orders/:orderId/reports/:reportId', async (req: AdminRequest, res) => {
+    try {
+      const order = await getOrder(String(req.params.orderId));
+      const report = order?.reportDocuments?.find((candidate) => candidate.reportId === String(req.params.reportId));
+      if (!report?.storagePath) return res.status(404).json({ error: 'Report not found.' });
+      const url = await createSignedDownload(report.storagePath, report.originalName);
+      await writeAdminAudit(actor(req), {
+        action: 'order.report-download', targetType: 'order', targetId: order!.orderId, orderId: order!.orderId,
+        details: { reportId: report.reportId }
+      });
+      res.json({ url });
+    } catch (err) {
+      routeError(res, err, 'Failed to prepare the report download.');
     }
   });
 

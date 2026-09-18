@@ -678,10 +678,13 @@ export async function attachDocument(
     return { success: false, message: 'This order has not been paid for.' };
   }
 
+  const receivedAt = nowIso();
   const patch: Partial<Order> = {
     documentPath,
-    documentUploadedAt: nowIso(),
+    documentUploadedAt: receivedAt,
+    documentReceivedAt: receivedAt,
     documentUploadStatus: 'uploaded',
+    documentSubmissionMethod: 'upload',
     documentOriginalName: originalName,
     documentSizeBytes: sizeBytes,
     fulfilmentStatus: 'awaiting-seller-activation',

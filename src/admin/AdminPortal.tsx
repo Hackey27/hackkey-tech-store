@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
 import {
   AlertTriangle,
@@ -21,6 +21,7 @@ import {
   Send,
   Settings2,
   Trash2,
+  UploadCloud,
   X
 } from 'lucide-react';
 import { ADMIN_COPY } from '../config/storeCopy';
@@ -32,6 +33,9 @@ import { ProductImage, renderableProductImageUrl } from '../components/ProductIm
 import { adminAuth } from './firebase';
 import { AdminApiError, adminRequest, loadAdminData } from './api';
 import { AdminData, AdminLicence, ApiValidationError } from './types';
+import { isTurnitinOrder } from '../utils/orderProgress';
+import { documentContentType } from '../utils/documentFiles';
+import { newestOrderFirst } from '../utils/orderSorting';
 
 type Section = 'orders' | 'licences' | 'services' | 'software' | 'laptops' | 'announcements' | 'products' | 'landing' | 'ordering' | 'pricing';
 
@@ -123,7 +127,7 @@ const bucketLabel: Record<Order['fulfilmentStatus'], string> = {
 };
 
 function OrdersSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
-  const [filter, setFilter] = useState<'action' | 'all' | Order['fulfilmentStatus']>('action');
+  const [filter, setFilter] = useState<'action' | 'all' | Order['fulfilmentStatus']>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Order | null>(null);
   const [manualKey, setManualKey] = useState('');
@@ -135,12 +139,16 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
   const [step, setStep] = useState(0);
   const [workflow, setWorkflow] = useState<Partial<Order>>({});
   const [selectedSalesLicenceId, setSelectedSalesLicenceId] = useState('');
+  const [reportLabel, setReportLabel] = useState('Turnitin report');
+  const [reportFile, setReportFile] = useState<File | null>(null);
+  const [reportProgress, setReportProgress] = useState(0);
 
   const selectedProduct = selected
     ? data.products.find((product) => product.productId === selected.productId || product.variants.some((variant) => variant.variantId === selected.variantId))
     : undefined;
   const selectedVariant = selectedProduct?.variants.find((variant) => variant.variantId === selected?.variantId);
   const productId = String(selected?.productId || selectedProduct?.productId || '').toUpperCase();
+  const selectedIsTurnitin = Boolean(selected && isTurnitinOrder(selected));
   const effectiveInputType = (selected?.customerInputType || selectedVariant?.customerInputRequired || defaultCustomerInputType(productId)) as Order['customerInputType'];
   const usesSalesId = selected?.deliveryCodeType === 'sales-code' || selectedVariant?.deliveryCodeType === 'sales-code' || defaultDeliveryCodeType(productId) === 'sales-code';
   const usesLicence = Boolean(selectedVariant && !usesSalesId && !effectiveInputType && selected?.fulfilmentType !== 'Service');
@@ -163,6 +171,8 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
     setWorkflow({ paymentStatus: selected.paymentStatus, fulfilmentStatus: selected.fulfilmentStatus, amountPesewas: selected.amountPesewas, customerInputType: effectiveInputType, customerInputValue: selected.customerInputValue || '', salesCode: selected.salesCode || '', activationCodeOrKey: '' });
     setManualKey('');
     setSelectedSalesLicenceId('');
+    setReportFile(null);
+    setReportProgress(0);
     setStep(0);
   }, [selected?.orderId, selected?.salesCode, selected?.customerInputValue, selected?.paymentStatus, selected?.fulfilmentStatus, selected?.amountPesewas]);
 
@@ -171,7 +181,7 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
     if (filter !== 'action' && filter !== 'all' && order.fulfilmentStatus !== filter) return false;
     const haystack = `${order.phone} ${order.orderId} ${order.email}`.toLowerCase();
     return haystack.includes(search.trim().toLowerCase());
-  }).sort((a, b) => a.orderDate.localeCompare(b.orderDate)), [data.orders, filter, search]);
+  }).sort(newestOrderFirst), [data.orders, filter, search]);
 
   const act = async (name: string, path: string, body?: unknown) => {
     setBusy(name);
@@ -196,6 +206,43 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
     } catch (err) {
       setMessage(messageOf(err));
     } finally { setBusy(''); }
+  };
+
+  const downloadReport = async (reportId: string) => {
+    if (!selected) return;
+    setBusy(`report-download-${reportId}`); setMessage('');
+    try {
+      const result = await adminRequest<{ url: string }>(user, `/orders/${encodeURIComponent(selected.orderId)}/reports/${encodeURIComponent(reportId)}`);
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch (err) { setMessage(messageOf(err)); }
+    finally { setBusy(''); }
+  };
+
+  const uploadReport = async () => {
+    if (!selected || !reportFile || !reportLabel.trim()) return;
+    const contentType = documentContentType(reportFile);
+    if (!contentType) { setMessage('Choose a PDF or Word report (.pdf, .doc, or .docx).'); return; }
+    setBusy('report-upload'); setMessage(''); setReportProgress(0);
+    try {
+      const authorization = await adminRequest<{ uploadUrl: string; objectPath: string; originalName: string; label: string }>(user, `/orders/${encodeURIComponent(selected.orderId)}/reports/upload-url`, {
+        method: 'POST', body: JSON.stringify({ contentType, sizeBytes: reportFile.size, originalName: reportFile.name, label: reportLabel })
+      });
+      await new Promise<void>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open('PUT', authorization.uploadUrl);
+        request.setRequestHeader('Content-Type', contentType);
+        request.upload.onprogress = (event) => { if (event.lengthComputable) setReportProgress(Math.min(99, Math.round(event.loaded / event.total * 100))); };
+        request.onerror = () => reject(new Error('The report upload was interrupted.'));
+        request.onload = () => request.status >= 200 && request.status < 300 ? resolve() : reject(new Error('Cloud Storage rejected the report upload.'));
+        request.send(reportFile);
+      });
+      await adminRequest(user, `/orders/${encodeURIComponent(selected.orderId)}/reports`, {
+        method: 'POST', body: JSON.stringify({ contentType, objectPath: authorization.objectPath, originalName: authorization.originalName, label: authorization.label })
+      });
+      setReportProgress(100); setReportFile(null); setReportLabel('Turnitin report'); setMessage('Report uploaded and available to the customer.');
+      await reload();
+    } catch (err) { setMessage(messageOf(err)); }
+    finally { setBusy(''); }
   };
 
   const saveWorkflow = async () => {
@@ -243,7 +290,7 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
           const orderInputType = order.customerInputType || orderVariant?.customerInputRequired || defaultCustomerInputType(order.productId || orderProduct?.productId);
           const orderActivationUrl = effectiveActivationWebsiteUrl(orderVariant);
           return <div key={order.orderId} role="button" tabIndex={0} onClick={() => { setSelected(order); setMessage(''); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setSelected(order); }} className="grid w-full cursor-pointer gap-3 rounded-2xl border border-[#cbdcd9] border-b-4 border-b-[#014040] bg-white p-4 text-left shadow-sm hover:bg-[#f3faf8] md:grid-cols-[140px_1fr_1fr_140px] md:items-center">
-            <span className="font-mono text-xs font-bold text-[#014040]">{order.orderId}</span>
+            <span className="font-mono text-xs font-bold text-[#014040]">{order.orderId}<small className="mt-1 block font-sans font-normal text-slate-500">{new Date(order.orderDate).toLocaleString()}</small></span>
             <span><strong className="block text-sm text-slate-900">{order.customerName}</strong><small className="text-slate-500">{order.phone}</small></span>
             <span><strong className="block text-sm text-slate-800">{order.productName}</strong><small className="text-slate-500">{order.versionOrPlan}</small></span>
             <span className="text-xs font-bold text-amber-700">{bucketLabel[order.fulfilmentStatus]}</span>
@@ -266,8 +313,14 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
               {selected.customerInputValue && activationUrl && <div className="flex items-end"><a className={secondaryButton} href={activationUrl} target="_blank" rel="noreferrer">Activation link</a></div>}
               {selected.activationCodeOrKey && <div className="md:col-span-3"><b>Attached licence / activation code</b><p className="break-all font-mono text-xs">{selected.activationCodeOrKey}</p></div>}
               {selected.serviceAnswers && <div className="md:col-span-3"><b>Service answers</b><pre className="mt-1 overflow-auto whitespace-pre-wrap rounded-lg bg-white p-3 text-xs">{JSON.stringify(selected.serviceAnswers, null, 2)}</pre></div>}
-              {(selected.documentUploadStatus === 'uploaded' || selected.documentUploadedAt) && <div className="md:col-span-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3"><b className="text-emerald-900">Document received: Yes</b><p className="mt-1 text-xs text-emerald-900">File name: {selected.documentOriginalName || 'Uploaded document'}<br />Uploaded: {selected.documentUploadedAt ? new Date(selected.documentUploadedAt).toLocaleString() : 'Recorded'}</p></div>}
+              {(selected.documentReceivedAt || selected.documentSubmissionMethod === 'whatsapp' || selected.documentUploadStatus === 'uploaded' || selected.documentUploadedAt) && <div className="md:col-span-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3"><b className="text-emerald-900">Document received: Yes</b><p className="mt-1 text-xs text-emerald-900">Method: {selected.documentSubmissionMethod === 'whatsapp' ? 'WhatsApp' : 'Website upload'}<br />{selected.documentSubmissionMethod !== 'whatsapp' && <>File name: {selected.documentOriginalName || 'Uploaded document'}<br /></>}Received: {selected.documentReceivedAt || selected.documentUploadedAt ? new Date(selected.documentReceivedAt || selected.documentUploadedAt!).toLocaleString() : 'Recorded'}</p></div>}
             </div>
+
+            {selectedIsTurnitin && <section className="mt-5 rounded-2xl border border-[#cbdcd9] bg-[#f8fbfa] p-4 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-black text-[#014040]">Turnitin documents and reports</h3><p className="mt-1 text-xs text-slate-600">Download the submitted document, then upload any number of labelled reports for the customer.</p></div>{selected.documentPath && <button className={secondaryButton} disabled={Boolean(busy)} onClick={downloadDocument}><Download className="h-4 w-4" />Download submitted document</button>}</div>
+              {!selected.documentPath && selected.documentSubmissionMethod === 'whatsapp' && <p className="mt-4 rounded-xl bg-white p-3 text-xs text-slate-600">The customer submitted this document through WhatsApp, so no portal file is available to download.</p>}
+              {selected.reportDocuments?.length ? <div className="mt-4 space-y-2">{selected.reportDocuments.map((report) => <div key={report.reportId} className="flex flex-col gap-3 rounded-xl bg-white p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><b className="block text-sm text-slate-900">{report.label}</b><p className="truncate text-xs text-slate-500">{report.originalName} · {new Date(report.uploadedAt).toLocaleString()}</p></div><button className={secondaryButton} disabled={Boolean(busy)} onClick={() => void downloadReport(report.reportId)}><Download className="h-4 w-4" />{busy === `report-download-${report.reportId}` ? 'Preparing…' : 'Download report'}</button></div>)}</div> : <p className="mt-4 rounded-xl bg-white p-3 text-xs text-slate-500">No reports have been uploaded yet.</p>}
+              <div className="mt-4 grid gap-3 rounded-xl border bg-white p-4 md:grid-cols-[1fr_1fr_auto] md:items-end"><label className={labelClass}>Report label<input className={inputClass} value={reportLabel} placeholder="e.g. Similarity report" onChange={(event) => setReportLabel(event.target.value)} /></label><label className={labelClass}>PDF or Word report<input className={inputClass} type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setReportFile(event.target.files?.[0] || null)} /></label><button className={primaryButton} disabled={Boolean(busy) || selected.paymentStatus !== 'paid' || !reportFile || !reportLabel.trim()} onClick={() => void uploadReport()}><UploadCloud className="h-4 w-4" />{busy === 'report-upload' ? `Uploading ${reportProgress}%` : 'Upload labelled report'}</button>{busy === 'report-upload' && <div className="h-2 overflow-hidden rounded-full bg-slate-200 md:col-span-3"><div className="h-full bg-[#05ef28]" style={{ width: `${reportProgress}%` }} /></div>}</div>
+            </section>}
 
             <section className="mt-5 rounded-2xl border border-[#cbdcd9] p-4 sm:p-5"><div className="flex flex-wrap gap-2">{orderSteps.map((item, index) => <button key={item.id} type="button" onClick={() => setStep(index)} className={`rounded-full px-3 py-2 text-xs font-black ${step === index ? 'bg-[#014040] text-white' : 'bg-slate-100 text-slate-600'}`}>{index + 1}. {item.label}</button>)}</div>
               <div className="mt-5">
@@ -290,9 +343,9 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
             {selected.internalNotes?.length ? <div className="mt-5"><h4 className="text-sm font-black">Internal notes</h4>{selected.internalNotes.map((item, i) => <p key={`${item.createdAt}-${i}`} className="mt-2 rounded-xl bg-amber-50 p-3 text-xs">{item.text}<br /><span className="text-slate-500">{item.actorEmail || item.actorUid} · {new Date(item.createdAt).toLocaleString()}</span></p>)}</div> : null}
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
-              {selected.fulfilmentStatus === 'awaiting-document' && <div className="rounded-2xl border p-4"><button className={primaryButton} disabled={!!busy} onClick={() => act('received', `/orders/${selected.orderId}/mark-document-received`)}><FileText className="h-4 w-4" />{ADMIN_COPY.orders.documentReceived}</button></div>}
+              {selected.fulfilmentStatus === 'awaiting-document' && <div className="rounded-2xl border p-4"><button className={primaryButton} disabled={!!busy} onClick={() => act('received', `/orders/${selected.orderId}/mark-document-received`)}><FileText className="h-4 w-4" />{selectedIsTurnitin ? 'Mark WhatsApp document received' : ADMIN_COPY.orders.documentReceived}</button></div>}
               {selected.fulfilmentStatus === 'awaiting-customer-input' && <div className="rounded-2xl border p-4"><button className={secondaryButton} disabled={!!busy} onClick={() => act('nudge', `/orders/${selected.orderId}/nudge`)}><Send className="h-4 w-4" />{ADMIN_COPY.orders.nudgeCustomer}</button></div>}
-              {selected.documentPath && <div className="rounded-2xl border p-4"><button className={secondaryButton} disabled={!!busy} onClick={downloadDocument}><Download className="h-4 w-4" />{ADMIN_COPY.orders.downloadDocument}</button></div>}
+              {selected.documentPath && !selectedIsTurnitin && <div className="rounded-2xl border p-4"><button className={secondaryButton} disabled={!!busy} onClick={downloadDocument}><Download className="h-4 w-4" />{ADMIN_COPY.orders.downloadDocument}</button></div>}
               <div className="rounded-2xl border p-4"><h4 className="font-black">Email</h4><div className="mt-3 flex flex-wrap gap-2"><button className={secondaryButton} disabled={!!busy} onClick={() => act('receipt', `/orders/${selected.orderId}/resend`, { kind: 'receipt' })}><Send className="h-4 w-4" />{ADMIN_COPY.orders.resendReceipt}</button><button className={secondaryButton} disabled={!!busy} onClick={() => act('delivery', `/orders/${selected.orderId}/resend`, { kind: 'delivery' })}>{ADMIN_COPY.orders.resendDelivery}</button></div></div>
               {selected.paymentStatus !== 'paid' && <div className="rounded-2xl border p-4"><h4 className="font-black">{ADMIN_COPY.orders.offlinePayment}</h4><input className={`${inputClass} mt-3`} placeholder={ADMIN_COPY.orders.offlineReference} value={offlineReference} onChange={(e) => setOfflineReference(e.target.value)} /><input className={`${inputClass} mt-2`} placeholder={ADMIN_COPY.orders.offlineReason} value={offlineReason} onChange={(e) => setOfflineReason(e.target.value)} /><button className={`${primaryButton} mt-3`} disabled={!!busy || !offlineReference || !offlineReason} onClick={() => act('offline', `/orders/${selected.orderId}/record-offline-payment`, { reference: offlineReference, reason: offlineReason })}>{ADMIN_COPY.orders.offlinePayment}</button></div>}
               <div className="rounded-2xl border p-4"><h4 className="font-black">{ADMIN_COPY.orders.internalNote}</h4><textarea className={`${inputClass} mt-3`} placeholder={ADMIN_COPY.orders.notePlaceholder} value={note} onChange={(e) => setNote(e.target.value)} /><button className={`${secondaryButton} mt-3`} disabled={!!busy || !note.trim()} onClick={async () => { await act('note', `/orders/${selected.orderId}/note`, { text: note }); setNote(''); }}>{ADMIN_COPY.orders.internalNote}</button></div>
@@ -734,14 +787,19 @@ export default function AdminPortal() {
     setUser(next); setChecking(false);
   }), []);
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     if (!user) return;
     setLoading(true); setError('');
     try { setData(await loadAdminData(user)); }
     catch (err) { setError(messageOf(err)); if (err instanceof AdminApiError && err.status === 401) await signOut(adminAuth); }
     finally { setLoading(false); }
-  };
-  useEffect(() => { if (user) void reload(); }, [user]);
+  }, [user]);
+  useEffect(() => { if (user) void reload(); }, [user, reload]);
+  useEffect(() => {
+    if (!user || section !== 'orders') return;
+    const timer = window.setInterval(() => { void reload(); }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [user, section, reload]);
 
   if (checking) return <div className="min-h-screen bg-[#f7faf9] p-8 text-[#014040]">{ADMIN_COPY.loading}</div>;
   if (!user) return <SignIn />;

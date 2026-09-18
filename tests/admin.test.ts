@@ -91,6 +91,22 @@ test('the document download route returns 401 without admin authentication', asy
   }
 });
 
+test('the report upload route returns 401 without admin authentication', async () => {
+  const app = express();
+  app.use(express.json());
+  app.use('/api/admin', createAdminRouter());
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => server.once('listening', resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === 'object');
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/admin/orders/example/reports/upload-url`, { method: 'POST' });
+    assert.equal(response.status, 401);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
 test('licence imports report unknown variants and both kinds of duplicates per row', () => {
   const errors = validateLicenceRows([
     { row: 1, variantId: 'PLS01', licenceCode: 'DUP' },

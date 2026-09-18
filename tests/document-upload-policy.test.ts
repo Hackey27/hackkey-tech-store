@@ -22,4 +22,5 @@ test('non-Turnitin, wrong-phone and already-received uploads are rejected', () =
   assert.equal(turnitinDocumentUploadPolicy({ ...paidTurnitin, productId: 'SPSS', variantId: 'SPSS01' }, paidTurnitin.phone).ok, false);
   assert.equal(turnitinDocumentUploadPolicy(paidTurnitin, '0550000000').ok, false);
   assert.equal(turnitinDocumentUploadPolicy({ ...paidTurnitin, documentUploadStatus: 'uploaded' }, paidTurnitin.phone, true).status, 409);
+  assert.equal(turnitinDocumentUploadPolicy({ ...paidTurnitin, documentSubmissionMethod: 'whatsapp' }, paidTurnitin.phone, true).status, 409);
 });

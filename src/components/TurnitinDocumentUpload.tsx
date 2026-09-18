@@ -2,21 +2,9 @@ import React, { DragEvent, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, FileText, RefreshCw, UploadCloud } from 'lucide-react';
 import { Order } from '../types';
 import { FulfilmentTimeNotice } from './FulfilmentTimeNotice';
-
-const ACCEPTED = new Set([
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-]);
-
-function uploadContentType(file: File): string | undefined {
-  if (ACCEPTED.has(file.type)) return file.type;
-  const extension = file.name.toLowerCase().split('.').pop();
-  if (extension === 'pdf') return 'application/pdf';
-  if (extension === 'doc') return 'application/msword';
-  if (extension === 'docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-  return undefined;
-}
+import { documentContentType } from '../utils/documentFiles';
+import { whatsAppDocumentLink } from '../utils/whatsapp';
+import { WhatsAppIcon } from './WhatsAppIcon';
 
 function fileSize(bytes?: number): string {
   if (!bytes) return '';
@@ -33,7 +21,7 @@ export function TurnitinDocumentUpload({ order, phone, onComplete }: { order: Or
 
   const upload = async (nextFile: File) => {
     setFile(nextFile); setError(''); setProgress(0);
-    const contentType = uploadContentType(nextFile);
+    const contentType = documentContentType(nextFile);
     if (!contentType) {
       setStatus('error'); setError('Choose a PDF or Word document (.pdf, .doc, or .docx).'); return;
     }
@@ -79,8 +67,8 @@ export function TurnitinDocumentUpload({ order, phone, onComplete }: { order: Or
   const receivedName = order.documentOriginalName || file?.name || 'Your document';
   const receivedSize = order.documentSizeBytes || file?.size;
 
-  if (status === 'success' || order.documentUploadedAt || order.documentUploadStatus === 'uploaded') {
-    return <div className="space-y-4"><div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900"><div className="flex items-center gap-2 text-base font-black"><CheckCircle2 className="h-6 w-6 text-[#0d6520]" />{order.documentUploadedAt ? 'Document received' : 'Upload complete'}</div><p className="mt-2 break-all text-sm font-bold">{receivedName}</p>{receivedSize ? <p className="mt-1 text-xs">{fileSize(receivedSize)}</p> : null}{order.fulfilmentStatus === 'ready' && <p className="mt-3 rounded-xl bg-[#014040] p-3 text-sm font-black text-white">Your report is ready.</p>}</div>{order.fulfilmentStatus !== 'ready' && order.showDeliveryNotice !== false && <FulfilmentTimeNotice kind="report" postUpload />}</div>;
+  if (status === 'success' || order.documentReceivedAt || order.documentUploadedAt || order.documentUploadStatus === 'uploaded' || order.documentSubmissionMethod === 'whatsapp') {
+    return <div className="space-y-4"><div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900"><div className="flex items-center gap-2 text-base font-black"><CheckCircle2 className="h-6 w-6 text-[#0d6520]" />{order.documentSubmissionMethod === 'whatsapp' ? 'Document received via WhatsApp' : order.documentUploadedAt ? 'Document received' : 'Upload complete'}</div>{order.documentSubmissionMethod !== 'whatsapp' && <p className="mt-2 break-all text-sm font-bold">{receivedName}</p>}{receivedSize ? <p className="mt-1 text-xs">{fileSize(receivedSize)}</p> : null}{order.fulfilmentStatus === 'ready' && <p className="mt-3 rounded-xl bg-[#014040] p-3 text-sm font-black text-white">Your report is ready.</p>}</div>{order.fulfilmentStatus !== 'ready' && order.showDeliveryNotice !== false && <FulfilmentTimeNotice kind="report" postUpload />}</div>;
   }
 
   return <section className="space-y-3">
@@ -90,6 +78,8 @@ export function TurnitinDocumentUpload({ order, phone, onComplete }: { order: Or
       <input ref={inputRef} className="sr-only" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => { choose(event.target.files); event.currentTarget.value = ''; }} />
     </div>
     {file && <div className="rounded-xl border bg-white p-4"><div className="flex justify-between gap-3 text-xs"><span className="min-w-0 truncate font-bold">{status === 'uploading' ? `Uploading ${file.name}` : file.name}</span><span>{fileSize(file.size)}</span></div>{status === 'uploading' && <><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-[#05ef28] transition-[width]" style={{ width: `${progress}%` }} /></div><p className="mt-1 text-right text-xs font-black text-[#014040]">{progress}%</p></>}</div>}
-    {status === 'error' && <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800"><p className="flex items-start gap-2"><AlertCircle className="h-4 w-4 shrink-0" />{error}</p>{file && uploadContentType(file) && <button type="button" onClick={() => void upload(file)} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 font-black"><RefreshCw className="h-3.5 w-3.5" />Retry upload</button>}</div>}
+    {status === 'error' && <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800"><p className="flex items-start gap-2"><AlertCircle className="h-4 w-4 shrink-0" />{error}</p>{file && documentContentType(file) && <button type="button" onClick={() => void upload(file)} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 font-black"><RefreshCw className="h-3.5 w-3.5" />Retry upload</button>}</div>}
+    <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-wider text-slate-400"><span className="h-px flex-1 bg-slate-200" />or<span className="h-px flex-1 bg-slate-200" /></div>
+    <a href={whatsAppDocumentLink(order.orderId, order.productName)} target="_blank" rel="noopener noreferrer" className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#25d366] px-4 py-3 text-sm font-black text-white hover:bg-[#1fb855]"><WhatsAppIcon className="h-5 w-5" />Submit document via WhatsApp</a>
   </section>;
 }

@@ -381,6 +381,16 @@ export type FulfilmentStatus =
 
 export type FulfilmentMethod = 'automatic' | 'manual';
 
+export interface TurnitinReportDocument {
+  reportId: string;
+  label: string;
+  originalName: string;
+  /** Private Cloud Storage path. Removed at the public order boundary. */
+  storagePath?: string;
+  sizeBytes?: number;
+  uploadedAt: string;
+}
+
 export interface Order {
   orderId: string;
   cartId: string;
@@ -444,6 +454,10 @@ export interface Order {
   documentUploadStatus?: 'pending' | 'uploaded' | 'failed';
   documentOriginalName?: string;
   documentSizeBytes?: number;
+  documentSubmissionMethod?: 'upload' | 'whatsapp';
+  documentReceivedAt?: string;
+  /** Admin-delivered Turnitin reports. More than one labelled file may be attached. */
+  reportDocuments?: TurnitinReportDocument[];
   /** Snapshotted when the order is created so later admin changes do not alter an existing promise. */
   showDeliveryNotice?: boolean;
   fulfilmentNoticeKind?: 'licence' | 'account' | 'report';

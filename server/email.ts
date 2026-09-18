@@ -92,9 +92,12 @@ function whatsAppLink(order: Order): string {
 
 /** Next steps that actually match where the order now sits. */
 function customerNextSteps(order: Order): string[] {
+  const isTurnitin = order.productId === 'TURNITIN' || order.variantId === 'TURNITIN';
   switch (order.fulfilmentStatus) {
     case 'ready':
-      return ['Your licence is ready. The details are on the "Find my order" page.'];
+      return [isTurnitin
+        ? 'Your Turnitin report is ready. Download it from the "Find my order" page.'
+        : 'Your licence is ready. The details are on the "Find my order" page.'];
     case 'awaiting-licence':
       return [
         'Your licence is being issued by our team and we will contact you as soon',
@@ -166,6 +169,7 @@ export async function sendCustomerDelivery(order: Order): Promise<void> {
     order.activationCodeOrKey ? `Licence / activation code: ${order.activationCodeOrKey}` : '',
     order.windowsInstallerUrl ? `Installer: ${order.windowsInstallerUrl}` : '',
     order.guideUrl ? `Guide: ${order.guideUrl}` : '',
+    order.reportDocuments?.length ? `Your labelled report files are available on the "Find my order" page.` : '',
     ``,
     `If you need help, reply to this email or contact ${STORE_COPY.brand.phone}.`
   ].filter(Boolean);

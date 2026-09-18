@@ -28,6 +28,7 @@ import {
 import {
   catalogueImageFile,
   confirmUpload,
+  createSignedDownload,
   createSignedUpload,
   isDocumentObjectPathForOrder,
   safeOriginalFilename,
@@ -393,6 +394,20 @@ async function startServer() {
       res.json({ ...result, order: result.order ? publicOrder(result.order) : undefined });
     } catch (err) {
       failed(res, err, 'Failed to record the document');
+    }
+  });
+
+  app.get('/api/orders/:orderId/reports/:reportId', async (req: Request, res: Response) => {
+    try {
+      const order = await getOrder(String(req.params.orderId));
+      if (!order) return res.status(404).json({ error: 'Order not found.' });
+      const policy = turnitinDocumentUploadPolicy(order, String(req.query.phone || ''));
+      if (!policy.ok) return res.status(policy.status || 403).json({ error: policy.error });
+      const report = order.reportDocuments?.find((candidate) => candidate.reportId === String(req.params.reportId));
+      if (!report?.storagePath) return res.status(404).json({ error: 'Report not found.' });
+      res.json({ url: await createSignedDownload(report.storagePath, report.originalName) });
+    } catch (err) {
+      failed(res, err, 'Failed to prepare the report download');
     }
   });
 

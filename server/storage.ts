@@ -160,11 +160,28 @@ export function documentObjectPath(orderId: string, contentType: string, randomI
 
 export function isDocumentObjectPathForOrder(objectPath: string, orderId: string): boolean {
   const safeOrderId = orderId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
-  return objectPath.startsWith(`orders/${safeOrderId}/`) && !objectPath.includes('..');
+  const prefix = `orders/${safeOrderId}/`;
+  return objectPath.startsWith(prefix) && !objectPath.startsWith(`${prefix}reports/`) && !objectPath.includes('..');
+}
+
+export function reportObjectPath(orderId: string, contentType: string, randomId = crypto.randomUUID()): string {
+  const extension = ALLOWED_UPLOAD_TYPES[contentType] || 'bin';
+  const safeOrderId = orderId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
+  const safeRandomId = randomId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+  return `orders/${safeOrderId}/reports/${safeRandomId}.${extension}`;
+}
+
+export function isReportObjectPathForOrder(objectPath: string, orderId: string): boolean {
+  const safeOrderId = orderId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
+  return objectPath.startsWith(`orders/${safeOrderId}/reports/`) && !objectPath.includes('..');
 }
 
 export function safeOriginalFilename(value: string): string {
   return value.replace(/[\u0000-\u001f\u007f]/g, '').replace(/[\\/]/g, '-').trim().slice(0, 180) || 'document';
+}
+
+export function safeDocumentLabel(value: string): string {
+  return value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 100) || 'Turnitin report';
 }
 
 export interface SignedUpload {
@@ -204,6 +221,21 @@ export async function createSignedUpload(
     expiresAt: new Date(expires).toISOString(),
     maxBytes: MAX_UPLOAD_BYTES
   };
+}
+
+export async function createSignedReportUpload(
+  orderId: string,
+  contentType: string
+): Promise<SignedUpload> {
+  const objectPath = reportObjectPath(orderId, contentType);
+  const expires = Date.now() + UPLOAD_URL_TTL_MS;
+  const [uploadUrl] = await getStorage().bucket(bucketName()).file(objectPath).getSignedUrl({
+    version: 'v4',
+    action: 'write',
+    expires,
+    contentType
+  });
+  return { uploadUrl, objectPath, expiresAt: new Date(expires).toISOString(), maxBytes: MAX_UPLOAD_BYTES };
 }
 
 /**

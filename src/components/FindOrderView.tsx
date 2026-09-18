@@ -22,6 +22,8 @@ import { STORE_COPY } from '../config/storeCopy';
 import { cedisToPesewas, formatPesewas } from '../utils/money';
 import { TurnitinDocumentUpload } from './TurnitinDocumentUpload';
 import { isTurnitinOrder, turnitinOrderStep } from '../utils/orderProgress';
+import { TurnitinReportDownloads } from './TurnitinReportDownloads';
+import { whatsAppDocumentLink } from '../utils/whatsapp';
 
 /** The stored statuses are kebab-case; these are what the customer reads. */
 const FULFILMENT_LABELS: Record<string, string> = {
@@ -40,11 +42,6 @@ const fulfilmentLabel = (status: string) => FULFILMENT_LABELS[status] || status;
  * document arrives identifying the order it belongs to rather than as an
  * anonymous file.
  */
-function whatsAppSubmissionLink(orderId: string, productName: string): string {
-  const text = `Order ${orderId} — ${productName}. Here is my document.`;
-  return `${STORE_COPY.brand.whatsAppUrl}?text=${encodeURIComponent(text)}`;
-}
-
 export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPhone?: string; focusOrderId?: string }> = ({ catalogItems = [], initialPhone = '', focusOrderId }) => {
   const [phoneNumber, setPhoneNumber] = useState(initialPhone);
   const [hasSearched, setHasSearched] = useState(false);
@@ -299,7 +296,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
                         We have your payment. Send us your document and we will get started.
                       </p>
                       <a
-                        href={whatsAppSubmissionLink(order.orderId, order.productName)}
+                        href={whatsAppDocumentLink(order.orderId, order.productName)}
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}
@@ -312,6 +309,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
                   )}
 
                   {isTurnitin && order.paymentStatus === 'paid' && <TurnitinDocumentUpload order={order} phone={phoneNumber} onComplete={(updated) => setOrders((previous) => previous.map((candidate) => candidate.orderId === updated.orderId ? updated : candidate))} />}
+                  {isTurnitin && order.paymentStatus === 'paid' && <TurnitinReportDownloads order={order} phone={phoneNumber} />}
 
                   {/* Stepped Progress Bar matching exact specification */}
                   <div className="pt-1">
@@ -544,10 +542,10 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
                   )}
 
                   {/* Device Lock Warning (Past tense, Section 9.3) */}
-                  <div className="p-4 bg-[#fffaf0] border-l-4 border-[#e0a800] rounded-r-xl text-xs text-[#8a5b00] leading-relaxed flex items-start gap-2.5">
+                  {!isTurnitin && <div className="p-4 bg-[#fffaf0] border-l-4 border-[#e0a800] rounded-r-xl text-xs text-[#8a5b00] leading-relaxed flex items-start gap-2.5">
                     <AlertCircle className="w-4 h-4 text-[#8a5b00] shrink-0 mt-0.5" />
                     <span>{STORE_COPY.deviceLock.after}</span>
-                  </div>
+                  </div>}
                 </div>
               );
             })}</>

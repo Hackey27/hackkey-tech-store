@@ -7,7 +7,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateServiceAnswers, validateUpload, documentObjectPath, isDocumentObjectPathForOrder, MAX_UPLOAD_BYTES, safeOriginalFilename } from '../server/storage';
+import { validateServiceAnswers, validateUpload, documentObjectPath, isDocumentObjectPathForOrder, isReportObjectPathForOrder, MAX_UPLOAD_BYTES, reportObjectPath, safeDocumentLabel, safeOriginalFilename } from '../server/storage';
+import { documentContentType } from '../src/utils/documentFiles';
 import { TURNITIN_FIELDS } from '../server/seed/turnitin';
 
 test('a hidden conditional field is not treated as missing', () => {
@@ -97,5 +98,15 @@ test('object paths are namespaced per order, so one customer cannot reach anothe
   assert.equal(isDocumentObjectPathForOrder('orders/HK-111111/random-one.pdf', 'HK-111111'), true);
   assert.equal(isDocumentObjectPathForOrder('orders/HK-222222/random-two.pdf', 'HK-111111'), false);
   assert.equal(isDocumentObjectPathForOrder('orders/HK-111111/../HK-222222/file.pdf', 'HK-111111'), false);
+  assert.equal(isDocumentObjectPathForOrder('orders/HK-111111/reports/report-one.pdf', 'HK-111111'), false);
   assert.equal(safeOriginalFilename('../../thesis.docx'), '..-..-thesis.docx');
+  assert.equal(reportObjectPath('HK-111111', 'application/pdf', 'report-one'), 'orders/HK-111111/reports/report-one.pdf');
+  assert.equal(isReportObjectPathForOrder('orders/HK-111111/reports/report-one.pdf', 'HK-111111'), true);
+  assert.equal(isReportObjectPathForOrder('orders/HK-222222/reports/report-one.pdf', 'HK-111111'), false);
+  assert.equal(safeDocumentLabel('  Similarity report  '), 'Similarity report');
+});
+
+test('mobile files with an empty MIME type use an extension hint before server byte validation', () => {
+  assert.equal(documentContentType({ name: 'thesis.docx', type: '' }), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  assert.equal(documentContentType({ name: 'photo.png', type: '' }), undefined);
 });
