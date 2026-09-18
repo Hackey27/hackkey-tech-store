@@ -20,6 +20,7 @@ import {
   serviceTargetIds
 } from '../src/utils/money';
 import { getPricingConfig } from './pricingConfig';
+import { fulfilmentNoticeKind } from './deliveryNotice';
 
 /** Orders for a service are fulfilled by hand and never touch the licence pool. */
 export const SERVICE_FULFILMENT_TYPE = 'Service';
@@ -159,6 +160,8 @@ async function createServiceOrder(
     fulfilmentStatus: 'pending-payment',
     fulfilmentType: SERVICE_FULFILMENT_TYPE,
     fulfilmentMethod: 'manual',
+    showDeliveryNotice: service.showDeliveryNotice === true,
+    fulfilmentNoticeKind: service.serviceId === 'TURNITIN' ? 'report' : undefined,
     receiptSent: false
   };
 }
@@ -259,6 +262,8 @@ async function createBundleOrders(
     windowsInstallerUrl: found?.variant.windowsInstallerUrl,
     guideUrl: found?.variant.guideUrl,
     learningResourcesUrl: found?.variant.learningResourcesUrl,
+    showDeliveryNotice: found?.variant.showDeliveryNotice === true,
+    fulfilmentNoticeKind: fulfilmentNoticeKind(found?.variant.fulfilmentType),
     macViaParallels: found?.variant.macViaParallels,
     notes: `Part of bundle ${bundle.bundleId} (${bundle.name}).`,
     receiptSent: false
@@ -379,6 +384,8 @@ export async function createOrders(request: CheckoutRequest): Promise<Order[]> {
         windowsInstallerUrl: variant.windowsInstallerUrl,
         guideUrl: variant.guideUrl,
         learningResourcesUrl: variant.learningResourcesUrl,
+        showDeliveryNotice: variant.showDeliveryNotice === true,
+        fulfilmentNoticeKind: fulfilmentNoticeKind(variant.fulfilmentType),
         macViaParallels: variant.macViaParallels,
         quantity: 1,
         receiptSent: false
@@ -655,7 +662,9 @@ export async function submitCustomerInput(
  */
 export async function attachDocument(
   orderId: string,
-  documentPath: string
+  documentPath: string,
+  originalName: string,
+  sizeBytes?: number
 ): Promise<{ success: boolean; message: string; order?: Order }> {
   const db = getFirestore();
   const ref = db.collection(COLLECTIONS.orders).doc(orderId);
@@ -672,12 +681,22 @@ export async function attachDocument(
   const patch: Partial<Order> = {
     documentPath,
     documentUploadedAt: nowIso(),
+    documentUploadStatus: 'uploaded',
+    documentOriginalName: originalName,
+    documentSizeBytes: sizeBytes,
     fulfilmentStatus: 'awaiting-seller-activation',
     lastUpdated: nowIso()
   };
 
   await ref.update(patch);
   return { success: true, message: 'Document received.', order: { ...order, ...patch } as Order };
+}
+
+export async function markDocumentUploadPending(orderId: string): Promise<void> {
+  await getFirestore().collection(COLLECTIONS.orders).doc(orderId).update({
+    documentUploadStatus: 'pending',
+    lastUpdated: nowIso()
+  });
 }
 
 /** Store the customer's answers to a service's submission form. */

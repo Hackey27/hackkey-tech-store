@@ -3,6 +3,9 @@ import { CheckCircle, Clock, RefreshCw, AlertCircle } from 'lucide-react';
 import { Order } from '../types';
 import { formatPesewas } from '../utils/money';
 import { STORE_COPY } from '../config/storeCopy';
+import { TurnitinDocumentUpload } from './TurnitinDocumentUpload';
+import { OrderProgressBar } from './OrderProgressBar';
+import { isTurnitinOrder, turnitinOrderStep } from '../utils/orderProgress';
 
 /**
  * Where Paystack sends the customer back to.
@@ -107,6 +110,8 @@ export const PaymentReturnView: React.FC<{ onDone: (order?: Order) => void }> = 
               Keep this reference — it is how we find your order. Questions:{' '}
               {STORE_COPY.brand.phone}
             </p>
+
+            {confirmed && isTurnitinOrder(order) && <div className="space-y-4"><OrderProgressBar machineCodeType="turnitin" currentStep={turnitinOrderStep(order)} /><TurnitinDocumentUpload order={order} phone={order.phone} onComplete={setOrder} /></div>}
 
             <div className="flex flex-wrap gap-3">
               {!confirmed && (

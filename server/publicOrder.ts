@@ -1,7 +1,8 @@
 import { Order } from '../src/types';
 
-/** The phone lookup is public. Seller notes, documents and sales codes never
- * cross this boundary, even if a future UI accidentally tries to render them. */
+/** The phone lookup is public. Seller notes, private storage paths and sales
+ * codes never cross this boundary. Safe document receipt metadata does, so a
+ * returning Turnitin customer is not asked to upload twice. */
 export function publicOrder(order: Order): Order {
   const {
     internalNotes: _internalNotes,

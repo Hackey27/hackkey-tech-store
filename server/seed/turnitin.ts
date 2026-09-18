@@ -72,6 +72,7 @@ export const TURNITIN_SERVICE: Service = {
   fields: TURNITIN_FIELDS,
   ctaLabel: 'Buy a check',
   active: true,
+  showDeliveryNotice: true,
   sortOrder: 0,
   minQty: 1,
   maxQty: 50,

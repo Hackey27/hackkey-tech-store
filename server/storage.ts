@@ -11,13 +11,15 @@ import { ServiceField } from '../src/types';
  *    browser never holds broad write access — it gets a short-lived signed URL
  *    for one object. Without this the bucket is an open drop box for anyone who
  *    finds the endpoint.
- * 2. The size and type limits are enforced here, on the server, as a condition
- *    of the signed URL. A client-side check is a convenience, not a control.
+ * 2. The size and type limits are enforced here before authorization and are
+ *    verified again against the stored object. Client checks are convenience,
+ *    never the security control.
  * 3. Retrieval is server-mediated through a signed download URL. `storage.rules`
  *    denies all client access, matching Firestore.
  */
 
-export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB
+const configuredUploadMb = Number(process.env.MAX_DOCUMENT_UPLOAD_MB || 20);
+export const MAX_UPLOAD_BYTES = Math.max(1, Number.isFinite(configuredUploadMb) ? configuredUploadMb : 20) * 1024 * 1024;
 export const MAX_CATALOGUE_IMAGE_BYTES = 2 * 1024 * 1024; // resized browser output
 
 /** PDF, DOC and DOCX only. */
@@ -128,9 +130,9 @@ export interface UploadValidation {
 /**
  * Validate an upload request before any URL is issued.
  *
- * Size and type are checked here rather than trusted from the browser. The
- * signed URL is then bound to the same content type and length, so a client
- * cannot ask for one file and send another.
+ * Size and type are checked before authorization and then checked again from
+ * the stored object's metadata after upload. The signed URL is bound to the
+ * requested content type.
  */
 export function validateUpload(contentType: string, sizeBytes: number): UploadValidation {
   if (!ALLOWED_UPLOAD_TYPES[contentType]) {
@@ -143,15 +145,26 @@ export function validateUpload(contentType: string, sizeBytes: number): UploadVa
     return { ok: false, error: 'A file size is required.' };
   }
   if (sizeBytes > MAX_UPLOAD_BYTES) {
-    return { ok: false, error: 'That file is larger than the 20 MB limit.' };
+    return { ok: false, error: `That file is larger than the ${MAX_UPLOAD_BYTES / 1024 / 1024} MB limit.` };
   }
   return { ok: true };
 }
 
 /** Objects are namespaced by order, so one customer's path is not another's. */
-export function documentObjectPath(orderId: string, contentType: string): string {
+export function documentObjectPath(orderId: string, contentType: string, randomId = crypto.randomUUID()): string {
   const extension = ALLOWED_UPLOAD_TYPES[contentType] || 'bin';
-  return `orders/${orderId}/document.${extension}`;
+  const safeOrderId = orderId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
+  const safeRandomId = randomId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+  return `orders/${safeOrderId}/${safeRandomId}.${extension}`;
+}
+
+export function isDocumentObjectPathForOrder(objectPath: string, orderId: string): boolean {
+  const safeOrderId = orderId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
+  return objectPath.startsWith(`orders/${safeOrderId}/`) && !objectPath.includes('..');
+}
+
+export function safeOriginalFilename(value: string): string {
+  return value.replace(/[\u0000-\u001f\u007f]/g, '').replace(/[\\/]/g, '-').trim().slice(0, 180) || 'document';
 }
 
 export interface SignedUpload {
@@ -164,9 +177,8 @@ export interface SignedUpload {
 /**
  * A short-lived URL for uploading exactly one object.
  *
- * The signature covers the content type and length, so the limits validated
- * above are carried into the upload itself rather than merely checked before
- * it.
+ * The signature covers the content type. The file size is checked before this
+ * URL is issued and independently against Cloud Storage metadata afterward.
  */
 export async function createSignedUpload(
   orderId: string,
@@ -183,8 +195,7 @@ export async function createSignedUpload(
       version: 'v4',
       action: 'write',
       expires,
-      contentType,
-      extensionHeaders: { 'x-goog-content-length-range': `0,${sizeBytes}` }
+      contentType
     });
 
   return {
@@ -221,18 +232,28 @@ export async function confirmUpload(
     return { ok: false, error: validation.error };
   }
 
+  const [header] = await file.download({ start: 0, end: 7 });
+  const isPdf = contentType === 'application/pdf' && header.subarray(0, 5).toString() === '%PDF-';
+  const isDoc = contentType === 'application/msword' && header.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+  const isDocx = contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' && header.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+  if (!isPdf && !isDoc && !isDocx) {
+    await file.delete({ ignoreNotFound: true });
+    return { ok: false, error: 'The uploaded file contents do not match a PDF or Word document.' };
+  }
+
   return { ok: true, sizeBytes };
 }
 
 /** A short-lived read URL. Documents are never public. */
-export async function createSignedDownload(objectPath: string): Promise<string> {
+export async function createSignedDownload(objectPath: string, originalName?: string): Promise<string> {
   const [url] = await getStorage()
     .bucket(bucketName())
     .file(objectPath)
     .getSignedUrl({
       version: 'v4',
       action: 'read',
-      expires: Date.now() + DOWNLOAD_URL_TTL_MS
+      expires: Date.now() + DOWNLOAD_URL_TTL_MS,
+      ...(originalName ? { responseDisposition: `attachment; filename="${safeOriginalFilename(originalName).replace(/"/g, '')}"` } : {})
     });
   return url;
 }

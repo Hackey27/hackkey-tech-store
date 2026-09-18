@@ -8,6 +8,7 @@ import { ProductGallery } from './ProductGallery';
 import { ProductImage, renderableProductImageUrl } from './ProductImage';
 import { QuoteRequestForm } from './QuoteRequestForm';
 import { PromotionCountdown } from './PromotionCountdown';
+import { FulfilmentTimeNotice } from './FulfilmentTimeNotice';
 
 interface ProductDetailViewProps {
   product: CatalogueItem;
@@ -82,6 +83,12 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   const mobileBannerUrl = renderableProductImageUrl(product.mobileBannerImageUrl);
   const needsVariant = variants.length > 0;
   const canBuy = !needsVariant || Boolean(selectedVariant?.available);
+  const noticeEnabled = product.kind === 'service'
+    ? product.showDeliveryNotice === true
+    : selectedVariant?.showDeliveryNotice === true;
+  const noticeKind = product.kind === 'service'
+    ? 'report' as const
+    : /account/i.test(selectedVariant?.fulfilmentType || '') ? 'account' as const : 'licence' as const;
 
   const showAdded = () => {
     setAddedNotice(true);
@@ -203,6 +210,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
           )}
 
           {addedNotice && <p role="status" className="mt-4 flex items-center gap-2 rounded-xl border border-[#b2f0bf] bg-[#d9ffe0] p-3 text-xs font-bold text-[#0d6520]"><Check className="h-4 w-4" />{STORE_COPY.product.addedToCartTitle}</p>}
+          {noticeEnabled && <div className="mt-4"><FulfilmentTimeNotice kind={noticeKind} /></div>}
         </aside>
       </div>
 

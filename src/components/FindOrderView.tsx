@@ -20,6 +20,8 @@ import { CatalogueItem, Order } from '../types';
 import { ProductImage } from './ProductImage';
 import { STORE_COPY } from '../config/storeCopy';
 import { cedisToPesewas, formatPesewas } from '../utils/money';
+import { TurnitinDocumentUpload } from './TurnitinDocumentUpload';
+import { isTurnitinOrder, turnitinOrderStep } from '../utils/orderProgress';
 
 /** The stored statuses are kebab-case; these are what the customer reads. */
 const FULFILMENT_LABELS: Record<string, string> = {
@@ -152,6 +154,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
 
   // Maps order state to numeric step for progress bar
   const getOrderCurrentStep = (order: Order): number => {
+    if (isTurnitinOrder(order)) return turnitinOrderStep(order);
     if (order.paymentStatus !== 'paid') return 2; // Step 2: Payment Received / Pending
     if (order.fulfilmentStatus === 'ready') return 5;
     if (order.salesCode) return 4;
@@ -227,6 +230,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
                 ? 'lock-code'
                 : 'none';
               const currentStep = getOrderCurrentStep(order);
+              const isTurnitin = isTurnitinOrder(order);
 
               return (
                 <div
@@ -289,7 +293,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
                   {/* Paid, but nothing received yet. The customer either
                       uploads, or sends it on WhatsApp with the reference
                       already filled in. */}
-                  {order.fulfilmentStatus === 'awaiting-document' && (
+                  {order.fulfilmentStatus === 'awaiting-document' && !isTurnitin && (
                     <div className="p-3.5 rounded-xl bg-[#f0f9f7] border border-[#cbdcd9] space-y-2">
                       <p className="text-xs text-slate-700 leading-relaxed">
                         We have your payment. Send us your document and we will get started.
@@ -307,10 +311,12 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
                     </div>
                   )}
 
+                  {isTurnitin && order.paymentStatus === 'paid' && <TurnitinDocumentUpload order={order} phone={phoneNumber} onComplete={(updated) => setOrders((previous) => previous.map((candidate) => candidate.orderId === updated.orderId ? updated : candidate))} />}
+
                   {/* Stepped Progress Bar matching exact specification */}
                   <div className="pt-1">
                     <OrderProgressBar
-                      machineCodeType={machineTypeForProgress}
+                      machineCodeType={isTurnitin ? 'turnitin' : machineTypeForProgress}
                       currentStep={currentStep}
                     />
                   </div>

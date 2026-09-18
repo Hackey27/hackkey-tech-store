@@ -12,7 +12,7 @@
 export type CustomerInputType = 'Lock Code' | 'Hardware ID';
 
 /** What the customer must supply before an activation can be completed. */
-export type MachineCodeType = 'lock-code' | 'hardware-id' | 'none' | 'service';
+export type MachineCodeType = 'lock-code' | 'hardware-id' | 'none' | 'service' | 'turnitin';
 
 /** What a catalogue entry actually is. Products, bundles, services and laptops
  *  all appear in the catalogue; the frontend renders them by `kind`. */
@@ -79,6 +79,8 @@ export interface Variant {
   windowsInstallerUrl?: string;
   guideUrl?: string;
   learningResourcesUrl?: string;
+  /** Admin-controlled customer-facing 20–40 minute fulfilment notice. */
+  showDeliveryNotice?: boolean;
   notes?: string;
 
   // Resolved at read time. Integer pesewas: `priceGhs` above is the
@@ -222,6 +224,8 @@ export interface Service {
   bannerImagePath?: string;
   mobileBannerImagePath?: string;
   screenshots?: string[];
+  /** Turnitin uses report-specific wording; other services may leave this off. */
+  showDeliveryNotice?: boolean;
 }
 
 // ==========================================
@@ -305,6 +309,8 @@ export interface CatalogueItem {
   promoLabel?: string;
   promoPercent?: number;
   promoEndsAt?: string;
+  /** Resolved from service configuration or its available software variants. */
+  showDeliveryNotice?: boolean;
   availabilitySentence?: string;
   /** Display name of the item's category, resolved from the category document
    *  so the card does not have to look it up. */
@@ -435,6 +441,12 @@ export interface Order {
    *  server-mediated: these are customers' unpublished academic documents. */
   documentPath?: string;
   documentUploadedAt?: string;
+  documentUploadStatus?: 'pending' | 'uploaded' | 'failed';
+  documentOriginalName?: string;
+  documentSizeBytes?: number;
+  /** Snapshotted when the order is created so later admin changes do not alter an existing promise. */
+  showDeliveryNotice?: boolean;
+  fulfilmentNoticeKind?: 'licence' | 'account' | 'report';
   /** Answers to the service's enquiry form. */
   serviceAnswers?: Record<string, unknown>;
   /** Seller-only notes. Never returned by the public phone lookup. */

@@ -10,6 +10,7 @@ import {
   getOrderByPaystackReference,
   getOrdersByCartId,
   lookupOrdersByPhone,
+  markDocumentUploadPending,
   normalisePhone,
   recordPaystackReference,
   saveServiceAnswers,
@@ -28,12 +29,14 @@ import {
   catalogueImageFile,
   confirmUpload,
   createSignedUpload,
-  documentObjectPath,
+  isDocumentObjectPathForOrder,
+  safeOriginalFilename,
   validateServiceAnswers,
   validateUpload
 } from './server/storage';
 import { createAdminRouter } from './server/adminRoutes';
 import { publicOrder } from './server/publicOrder';
+import { turnitinDocumentUploadPolicy } from './server/documentUploadPolicy';
 
 // Cloud Run injects PORT (8080 by default); 3000 keeps local dev unchanged.
 const PORT = Number(process.env.PORT) || 3000;
@@ -337,9 +340,9 @@ async function startServer() {
   // and type limits are enforced here rather than trusted from the browser.
 
   app.post('/api/orders/:orderId/document-url', async (req: Request, res: Response) => {
-    const { contentType, sizeBytes } = req.body;
-    if (!contentType || sizeBytes === undefined) {
-      return res.status(400).json({ error: 'contentType and sizeBytes are required.' });
+    const { contentType, sizeBytes, originalName, phone } = req.body;
+    if (!contentType || sizeBytes === undefined || !originalName || !phone) {
+      return res.status(400).json({ error: 'File details and the order phone number are required.' });
     }
 
     try {
@@ -347,16 +350,17 @@ async function startServer() {
       if (!order) return res.status(404).json({ error: 'Order not found.' });
 
       // No upload URL exists for an unpaid order.
-      if (order.paymentStatus !== 'paid') {
-        return res.status(403).json({ error: 'This order has not been paid for.' });
-      }
+      const policy = turnitinDocumentUploadPolicy(order, String(phone), true);
+      if (!policy.ok) return res.status(policy.status || 403).json({ error: policy.error });
 
       const validation = validateUpload(String(contentType), Number(sizeBytes));
       if (!validation.ok) {
         return res.status(400).json({ error: validation.error });
       }
 
-      res.json(await createSignedUpload(order.orderId, String(contentType), Number(sizeBytes)));
+      const signed = await createSignedUpload(order.orderId, String(contentType), Number(sizeBytes));
+      await markDocumentUploadPending(order.orderId);
+      res.json({ ...signed, originalName: safeOriginalFilename(String(originalName)) });
     } catch (err) {
       failed(res, err, 'Failed to prepare the upload');
     }
@@ -365,25 +369,26 @@ async function startServer() {
   // Called once the browser has finished uploading. The order advances only on
   // the strength of what is actually in the bucket.
   app.post('/api/orders/:orderId/document', async (req: Request, res: Response) => {
-    const { contentType } = req.body;
-    if (!contentType) {
-      return res.status(400).json({ error: 'contentType is required.' });
+    const { contentType, objectPath, originalName, phone } = req.body;
+    if (!contentType || !objectPath || !originalName || !phone) {
+      return res.status(400).json({ error: 'Upload confirmation details are required.' });
     }
 
     try {
       const order = await getOrder(String(req.params.orderId));
       if (!order) return res.status(404).json({ error: 'Order not found.' });
-      if (order.paymentStatus !== 'paid') {
-        return res.status(403).json({ error: 'This order has not been paid for.' });
+      const policy = turnitinDocumentUploadPolicy(order, String(phone));
+      if (!policy.ok) return res.status(policy.status || 403).json({ error: policy.error });
+      if (!isDocumentObjectPathForOrder(String(objectPath), order.orderId)) {
+        return res.status(400).json({ error: 'That upload does not belong to this order.' });
       }
 
-      const objectPath = documentObjectPath(order.orderId, String(contentType));
-      const confirmed = await confirmUpload(objectPath);
+      const confirmed = await confirmUpload(String(objectPath));
       if (!confirmed.ok) {
         return res.status(400).json({ error: confirmed.error });
       }
 
-      const result = await attachDocument(order.orderId, objectPath);
+      const result = await attachDocument(order.orderId, String(objectPath), safeOriginalFilename(String(originalName)), confirmed.sizeBytes);
       if (!result.success) return res.status(400).json({ error: result.message });
       res.json({ ...result, order: result.order ? publicOrder(result.order) : undefined });
     } catch (err) {

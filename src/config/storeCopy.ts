@@ -109,6 +109,7 @@ export const STORE_COPY = {
     standardSoftware: ['Your Selection', 'Your Details', 'Payment', 'Licence Delivery'],
     // Exact 4-step for services / laptops:
     nonLicence: ['Your Selection', 'Your Details', 'Payment', 'Delivery'],
+    turnitin: ['Your Selection', 'Your Details', 'Payment', 'Upload Document', 'Report Processing', 'Report Ready'],
     mobileSummary: (current: number, total: number, label: string) =>
       `Step ${current} of ${total}: ${label}`,
   },

@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateServiceAnswers, validateUpload, documentObjectPath, MAX_UPLOAD_BYTES } from '../server/storage';
+import { validateServiceAnswers, validateUpload, documentObjectPath, isDocumentObjectPathForOrder, MAX_UPLOAD_BYTES, safeOriginalFilename } from '../server/storage';
 import { TURNITIN_FIELDS } from '../server/seed/turnitin';
 
 test('a hidden conditional field is not treated as missing', () => {
@@ -88,10 +88,14 @@ test('upload limits are enforced by type and size', () => {
 });
 
 test('object paths are namespaced per order, so one customer cannot reach another', () => {
-  assert.equal(documentObjectPath('HK-111111', 'application/pdf'), 'orders/HK-111111/document.pdf');
-  assert.equal(documentObjectPath('HK-222222', 'application/pdf'), 'orders/HK-222222/document.pdf');
+  assert.equal(documentObjectPath('HK-111111', 'application/pdf', 'random-one'), 'orders/HK-111111/random-one.pdf');
+  assert.equal(documentObjectPath('HK-222222', 'application/pdf', 'random-two'), 'orders/HK-222222/random-two.pdf');
   assert.notEqual(
-    documentObjectPath('HK-111111', 'application/pdf'),
-    documentObjectPath('HK-222222', 'application/pdf')
+    documentObjectPath('HK-111111', 'application/pdf', 'random-one'),
+    documentObjectPath('HK-222222', 'application/pdf', 'random-two')
   );
+  assert.equal(isDocumentObjectPathForOrder('orders/HK-111111/random-one.pdf', 'HK-111111'), true);
+  assert.equal(isDocumentObjectPathForOrder('orders/HK-222222/random-two.pdf', 'HK-111111'), false);
+  assert.equal(isDocumentObjectPathForOrder('orders/HK-111111/../HK-222222/file.pdf', 'HK-111111'), false);
+  assert.equal(safeOriginalFilename('../../thesis.docx'), '..-..-thesis.docx');
 });

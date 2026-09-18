@@ -19,6 +19,9 @@ export function getStepsForMachineCodeType(type?: MachineCodeType): StepDefiniti
   let labels: readonly string[];
 
   switch (type) {
+    case 'turnitin':
+      labels = STORE_COPY.orderProgress.turnitin;
+      break;
     case 'lock-code':
       labels = STORE_COPY.orderProgress.amosSpss;
       break;

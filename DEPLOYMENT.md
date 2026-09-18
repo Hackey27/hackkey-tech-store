@@ -126,6 +126,21 @@ firebase deploy --only storage   # uses storage.rules (deny-all, like Firestore)
 ```
 
 Set `DOCUMENTS_BUCKET` if you use a bucket other than the project default.
+Set `MAX_DOCUMENT_UPLOAD_MB` to change the Turnitin document limit (default:
+20 MB). The value is enforced when upload authorization is requested and again
+after Cloud Storage confirms the object.
+
+The browser uploads directly to the private bucket through a short-lived signed
+PUT URL, so configure bucket CORS once:
+
+```bash
+gcloud storage buckets update "gs://${DOCUMENTS_BUCKET:-${PROJECT_ID}.appspot.com}" \
+  --cors-file=storage.cors.json
+```
+
+This permits PUT only from the live store and local development origins; it
+does not make objects public. The runtime service account still needs
+`roles/storage.objectAdmin` and `roles/iam.serviceAccountTokenCreator` as above.
 
 Submitted documents are retrieved only from their order in the authenticated
 admin portal. The server verifies the Firebase admin claim, audits the click,

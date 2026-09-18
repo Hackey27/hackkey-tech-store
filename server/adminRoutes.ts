@@ -393,7 +393,7 @@ export function createAdminRouter(): Router {
     try {
       const order = await getOrder(String(req.params.orderId));
       if (!order?.documentPath) return res.status(404).json({ error: 'No document on this order.' });
-      const url = await createSignedDownload(order.documentPath);
+      const url = await createSignedDownload(order.documentPath, order.documentOriginalName);
       await writeAdminAudit(actor(req), {
         action: 'order.document-download',
         targetType: 'order',

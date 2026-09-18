@@ -31,6 +31,7 @@ import {
   defaultDeliveryCodeType,
   effectiveActivationWebsiteUrl
 } from '../src/utils/softwareFulfilment';
+import { resolvedDeliveryNotice } from './deliveryNotice';
 
 /** The catalogue changes rarely and every page load reads it. */
 const CACHE_TTL_MS = 60_000;
@@ -78,6 +79,7 @@ function hydrateVariant(variant: Variant, productId: string, categoryId: string,
     promoLabel: pricing.promoLabel,
     promoPercent: pricing.promoPercent,
     promoEndsAt: pricing.promoEndsAt,
+    showDeliveryNotice: resolvedDeliveryNotice(variant),
     osList: os.osList,
     requiresOsChoice: os.requiresChoice
   };
@@ -139,6 +141,7 @@ function productToCatalogueItem(product: Product, config: PricingConfig): Catalo
     promoLabel: cheapest?.promoLabel,
     promoPercent: cheapest?.promoPercent,
     promoEndsAt: cheapest?.promoEndsAt,
+    showDeliveryNotice: variants.some((variant) => variant.showDeliveryNotice),
     availabilitySentence: osSentence,
     osList: [...new Set(variants.flatMap((v) => v.osList || []))],
     machineCodeType: machineCodeType(variants),
@@ -231,6 +234,7 @@ function serviceToCatalogueItem(service: Service, config: PricingConfig): Catalo
     promoLabel: pricing?.promoLabel,
     promoPercent: pricing?.promoPercent,
     promoEndsAt: pricing?.promoEndsAt,
+    showDeliveryNotice: service.showDeliveryNotice === true,
     // A service is never licence-delivered, so the fulfilment workflow must not
     // offer a licence step for it.
     machineCodeType: 'service',

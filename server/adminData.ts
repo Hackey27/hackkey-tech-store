@@ -23,6 +23,7 @@ import {
   effectiveActivationWebsiteUrl
 } from '../src/utils/softwareFulfilment';
 import { getPricingConfig, persistPricingConfig } from './pricingConfig';
+import { resolvedDeliveryNotice } from './deliveryNotice';
 
 const now = () => new Date().toISOString();
 const id = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -109,7 +110,7 @@ export async function adminBootstrap() {
   const products = productsSnap.docs
     .map((doc) => {
       const product = doc.data() as Product;
-      return { ...product, variants: (product.variants || []).map((variant) => ({ ...variant, customerInputRequired: variant.customerInputRequired || defaultCustomerInputType(product.productId), deliveryCodeType: variant.deliveryCodeType || defaultDeliveryCodeType(product.productId), activationWebsiteUrl: effectiveActivationWebsiteUrl(variant) })) };
+      return { ...product, variants: (product.variants || []).map((variant) => ({ ...variant, customerInputRequired: variant.customerInputRequired || defaultCustomerInputType(product.productId), deliveryCodeType: variant.deliveryCodeType || defaultDeliveryCodeType(product.productId), activationWebsiteUrl: effectiveActivationWebsiteUrl(variant), showDeliveryNotice: resolvedDeliveryNotice(variant) })) };
     })
     .sort((a, b) => a.productName.localeCompare(b.productName));
 

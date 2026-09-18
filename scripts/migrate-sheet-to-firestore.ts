@@ -397,6 +397,9 @@ function buildVariants(rows: Row[]): Map<string, Variant[]> {
       windowsInstallerUrl: str(row, 'Windows_Installer_URL'),
       guideUrl: str(row, 'Guide_URL'),
       learningResourcesUrl: str(row, 'Learning_Resources_URL'),
+      showDeliveryNotice: cell(row, 'Show_Delivery_Notice', 'Show Delivery Notice') !== undefined
+        ? bool(row, 'Show_Delivery_Notice', 'Show Delivery Notice')
+        : ['MXQ01', 'EV01'].includes(variantId),
       notes: str(row, 'Notes')
     };
 
@@ -568,6 +571,7 @@ function buildServices(rows: Row[]): Service[] {
       fields: parseServiceFields(str(row, 'Fields'), serviceId),
       ctaLabel: str(row, 'CTA_Label') || 'Request this service',
       ctaNote: str(row, 'CTA_Note'),
+      showDeliveryNotice: bool(row, 'Show_Delivery_Notice', 'Show Delivery Notice'),
       // Price lives on the option, never on the service. A sheet row with a
       // Price_GHS column is reported rather than silently dropped.
       active: bool(row, 'Status', 'Active'),
