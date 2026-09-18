@@ -29,6 +29,7 @@ import {
   PackageCheck
 } from 'lucide-react';
 import { WhatsAppIcon } from './components/WhatsAppIcon';
+import { PromotionCountdown } from './components/PromotionCountdown';
 
 type StoreRoute =
   | { view: 'home' }
@@ -333,6 +334,8 @@ export const App: React.FC = () => {
                 onFindOrderClick={() => setActiveTab('find-order')}
               />
             </div>
+
+            {catalog?.activePromotion && <div className="bg-[#014040] px-4 py-3 text-center text-sm font-black text-white"><span className="text-[#05ef28]">{catalog.activePromotion.label}</span><span className="mx-2 text-white/50">•</span><span>{catalog.activePromotion.percent}% off</span><span className="mx-2 text-white/50">•</span><PromotionCountdown endsAt={catalog.activePromotion.endsAt} className="text-[#d9ffe0]" /></div>}
 
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-12">
               {/* Browse by Category Section */}

@@ -19,7 +19,7 @@ import {
   priceServiceLine,
   serviceTargetIds
 } from '../src/utils/money';
-import { PRICING_CONFIG } from './pricingConfig';
+import { getPricingConfig } from './pricingConfig';
 
 /** Orders for a service are fulfilled by hand and never touch the licence pool. */
 export const SERVICE_FULFILMENT_TYPE = 'Service';
@@ -127,10 +127,11 @@ async function createServiceOrder(
   // Priced in integer pesewas; the store's pricing rules apply on top of the
   // resolved total, the same way variant targets work.
   const line = priceServiceLine(option, quantity);
+  const pricingConfig = await getPricingConfig();
   const applied = applyPricingRules(
-    line.totalPesewas,
-    serviceTargetIds(service.serviceId, option.optionId),
-    PRICING_CONFIG
+    line.unitPricePesewas,
+    [...serviceTargetIds(service.serviceId, option.optionId), `CATEGORY:${service.categoryId}`],
+    pricingConfig
   );
 
   return {
@@ -152,8 +153,8 @@ async function createServiceOrder(
     serviceOptionId: option.optionId,
     quantity,
     deliveryOs: '',
-    amountPesewas: applied.payablePesewas,
-    originalAmountPesewas: applied.listPesewas,
+    amountPesewas: applied.payablePesewas * quantity,
+    originalAmountPesewas: applied.listPesewas * quantity,
     paymentStatus: 'pending',
     fulfilmentStatus: 'pending-payment',
     fulfilmentType: SERVICE_FULFILMENT_TYPE,
@@ -180,10 +181,11 @@ async function createBundleOrders(
   if (!bundle.active) throw new Error(`Bundle ${bundle.bundleId} is not available.`);
 
   const quantity = Math.max(1, Math.floor(item.quantity || 1) || 1);
+  const pricingConfig = await getPricingConfig();
   const applied = applyPricingRules(
     cedisToPesewas(bundle.priceGhs),
-    [bundle.bundleId],
-    PRICING_CONFIG
+    [bundle.bundleId, `CATEGORY:${bundle.categoryId}`],
+    pricingConfig
   );
   const totalPesewas = applied.payablePesewas * quantity;
 
@@ -278,10 +280,11 @@ async function createLaptopOrder(
   }
 
   const quantity = Math.max(1, Math.floor(item.quantity || 1) || 1);
+  const pricingConfig = await getPricingConfig();
   const applied = applyPricingRules(
     cedisToPesewas(laptop.priceGhs),
-    [laptop.laptopId],
-    PRICING_CONFIG
+    [laptop.laptopId, `CATEGORY:${laptop.categoryId}`],
+    pricingConfig
   );
 
   return {

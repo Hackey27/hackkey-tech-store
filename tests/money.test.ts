@@ -212,6 +212,50 @@ test('a promotion aimed at another service does not apply', () => {
   );
 });
 
+test('silent percentage and fixed adjustments can apply together without a promo label', () => {
+  const config: PricingConfig = {
+    ...neutral,
+    silentAdjustment: {
+      active: true,
+      percent: 10,
+      targetIds: ['CATEGORY:SOFTWARE'],
+      fixedAdjustmentsGhs: { SMARTPLS: -5 }
+    }
+  };
+  const applied = applyPricingRules(10_000, ['SMARTPLS', 'CATEGORY:SOFTWARE'], config);
+  assert.equal(applied.listPesewas, 10_500);
+  assert.equal(applied.payablePesewas, 10_500);
+  assert.equal(applied.promoLabel, undefined);
+});
+
+test('a current item promotion overrides the global promotion and carries its countdown date', () => {
+  const endsAt = new Date(Date.now() + 86_400_000).toISOString();
+  const config: PricingConfig = {
+    ...neutral,
+    globalPromotion: { active: true, percent: 10, label: 'Global', targetIds: [] },
+    itemSpecificPromotion: { active: true, percent: 0, label: '', targetIds: [] },
+    itemSpecificPromotions: [{ active: true, percent: 25, label: 'SmartPLS special', targetId: 'SMARTPLS', targetIds: ['SMARTPLS'], endsAt }]
+  };
+  const applied = applyPricingRules(10_000, ['SMARTPLS'], config);
+  assert.equal(applied.payablePesewas, 7_500);
+  assert.equal(applied.promoLabel, 'SmartPLS special');
+  assert.equal(applied.promoEndsAt, endsAt);
+});
+
+test('an expired promotion never changes the checkout price', () => {
+  const config: PricingConfig = {
+    ...neutral,
+    globalPromotion: {
+      active: true,
+      percent: 50,
+      label: 'Expired',
+      targetIds: [],
+      endsAt: new Date(Date.now() - 60_000).toISOString()
+    }
+  };
+  assert.equal(applyPricingRules(10_000, ['SMARTPLS'], config).payablePesewas, 10_000);
+});
+
 // ---------------------------------------------------------------------------
 // The seeded Turnitin data is what the spec specifies
 // ---------------------------------------------------------------------------

@@ -10,7 +10,8 @@ import {
   Service,
   Laptop,
   LandingSettings,
-  CatalogueItemKind
+  CatalogueItemKind,
+  PricingConfig
 } from '../src/types';
 import { invalidateCatalogueCache } from './catalogue';
 import { AdminActor } from './adminAuth';
@@ -21,6 +22,7 @@ import {
   defaultDeliveryCodeType,
   effectiveActivationWebsiteUrl
 } from '../src/utils/softwareFulfilment';
+import { getPricingConfig, persistPricingConfig } from './pricingConfig';
 
 const now = () => new Date().toISOString();
 const id = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -63,7 +65,7 @@ export async function listVariantSummaries(): Promise<VariantSummary[]> {
 
 export async function adminBootstrap() {
   const db = getFirestore();
-  const [ordersSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, bundlesSnap, laptopsSnap, categoriesSnap, landingSnap, variants] = await Promise.all([
+  const [ordersSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, bundlesSnap, laptopsSnap, categoriesSnap, landingSnap, variants, pricing] = await Promise.all([
     db.collection(COLLECTIONS.orders).get(),
     db.collection(COLLECTIONS.licencePool).get(),
     db.collection(COLLECTIONS.services).get(),
@@ -73,7 +75,8 @@ export async function adminBootstrap() {
     db.collection(COLLECTIONS.laptops).get(),
     db.collection(COLLECTIONS.categories).get(),
     db.collection(COLLECTIONS.storeSettings).doc('landing').get(),
-    listVariantSummaries()
+    listVariantSummaries(),
+    getPricingConfig()
   ]);
 
   const orders = ordersSnap.docs
@@ -121,7 +124,13 @@ export async function adminBootstrap() {
     ...categories.map((item) => ({ kind: 'category' as const, itemId: item.categoryId, name: item.name, imagePath: item.imagePath, iconImagePath: item.iconImagePath, sortOrder: item.sortOrder }))
   ].sort((a, b) => a.name.localeCompare(b.name));
 
-  return { orders, licences, services, announcements, products, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {} };
+  return { orders, licences, services, announcements, products, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {}, pricing };
+}
+
+export async function savePricingConfiguration(input: Partial<PricingConfig>): Promise<PricingConfig> {
+  const pricing = await persistPricingConfig(input);
+  invalidateCatalogueCache();
+  return pricing;
 }
 
 const mediaCollection: Record<CatalogueItemKind | 'category', string> = {

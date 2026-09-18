@@ -7,6 +7,7 @@ import { ServicePurchasePanel } from './ServicePurchasePanel';
 import { ProductGallery } from './ProductGallery';
 import { ProductImage, renderableProductImageUrl } from './ProductImage';
 import { QuoteRequestForm } from './QuoteRequestForm';
+import { PromotionCountdown } from './PromotionCountdown';
 
 interface ProductDetailViewProps {
   product: CatalogueItem;
@@ -76,6 +77,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   const listPrice = selectedVariant?.listPricePesewas ?? product.listPricePesewas;
   const promoLabel = selectedVariant?.promoLabel ?? product.promoLabel;
   const promoPercent = selectedVariant?.promoPercent ?? product.promoPercent;
+  const promoEndsAt = selectedVariant?.promoEndsAt ?? product.promoEndsAt;
   const bannerUrl = renderableProductImageUrl(product.bannerImageUrl);
   const mobileBannerUrl = renderableProductImageUrl(product.mobileBannerImageUrl);
   const needsVariant = variants.length > 0;
@@ -141,6 +143,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
               <span className="text-3xl font-black sm:text-4xl">{price > 0 ? formatPesewas(price) : STORE_COPY.product.askForPrice}</span>
               {listPrice && listPrice > price && <span className="pb-1 text-sm font-bold text-white/70 line-through">{formatPesewas(listPrice)}</span>}
               {(promoLabel || promoPercent) && <span className="mb-1 rounded-full bg-[#05ef28] px-2.5 py-1 text-xs font-black text-[#014040]">{promoLabel || STORE_COPY.product.promotion(promoPercent)}</span>}
+              {(promoLabel || promoPercent) && <PromotionCountdown endsAt={promoEndsAt} className="mb-1 text-xs font-bold text-[#d9ffe0]" />}
             </div>
           </div>
         </section>

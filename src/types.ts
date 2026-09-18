@@ -88,6 +88,7 @@ export interface Variant {
   payablePricePesewas?: number;
   promoLabel?: string;
   promoPercent?: number;
+  promoEndsAt?: string;
   osList?: string[];
   requiresOsChoice?: boolean;
 }
@@ -303,6 +304,7 @@ export interface CatalogueItem {
   listPricePesewas?: number;
   promoLabel?: string;
   promoPercent?: number;
+  promoEndsAt?: string;
   availabilitySentence?: string;
   /** Display name of the item's category, resolved from the category document
    *  so the card does not have to look it up. */
@@ -332,6 +334,8 @@ export interface SilentAdjustmentRule {
   active: boolean;
   percent: number;
   targetIds: string[]; // empty means all
+  /** Signed cedi amount per catalogue item. Positive increases; negative decreases. */
+  fixedAdjustmentsGhs?: Record<string, number>;
 }
 
 export interface PromotionRule {
@@ -345,7 +349,9 @@ export interface PromotionRule {
 export interface PricingConfig {
   silentAdjustment: SilentAdjustmentRule;
   globalPromotion: PromotionRule;
+  /** Feature-level switch retained for backwards compatibility with the first pricing schema. */
   itemSpecificPromotion: PromotionRule;
+  itemSpecificPromotions?: Array<PromotionRule & { targetId: string }>;
 }
 
 // ==========================================
@@ -555,6 +561,11 @@ export interface CatalogResponse {
   landing?: {
     desktopImageUrl?: string;
     mobileImageUrl?: string;
+  };
+  activePromotion?: {
+    label: string;
+    percent: number;
+    endsAt?: string;
   };
 }
 

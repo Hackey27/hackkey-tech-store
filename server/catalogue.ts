@@ -9,15 +9,16 @@ import {
   Laptop,
   MachineCodeType,
   Product,
+  PricingConfig,
   Service,
   Variant
 } from '../src/types';
 import { COLLECTIONS, getFirestore, toIsoString } from './firestore';
-import { PRICING_CONFIG } from './pricingConfig';
+import { getPricingConfig } from './pricingConfig';
 import {
   applyPricingRules,
   cedisToPesewas,
-  cheapestOptionPesewas,
+  pesewasToCedis,
   serviceTargetIds
 } from '../src/utils/money';
 import {
@@ -52,13 +53,13 @@ async function readCollection<T>(db: Firestore, name: string): Promise<T[]> {
 }
 
 /** Resolve pricing and OS options for one variant. */
-function hydrateVariant(variant: Variant, productId: string): Variant {
+function hydrateVariant(variant: Variant, productId: string, categoryId: string, config: PricingConfig): Variant {
   // The workbook price is cedis; it becomes pesewas here, at the single
   // boundary, and every calculation downstream is integer arithmetic.
   const pricing = applyPricingRules(
     cedisToPesewas(variant.priceGhs),
-    [productId, variant.variantId],
-    PRICING_CONFIG
+    [productId, variant.variantId, `CATEGORY:${categoryId}`],
+    config
   );
   const os = resolveVariantOperatingSystem(
     variant.os,
@@ -76,6 +77,7 @@ function hydrateVariant(variant: Variant, productId: string): Variant {
     payablePricePesewas: pricing.payablePesewas,
     promoLabel: pricing.promoLabel,
     promoPercent: pricing.promoPercent,
+    promoEndsAt: pricing.promoEndsAt,
     osList: os.osList,
     requiresOsChoice: os.requiresChoice
   };
@@ -97,8 +99,8 @@ function catalogueImageUrl(value?: string): string | undefined {
   return `/api/catalog/images?path=${encodeURIComponent(value)}`;
 }
 
-function productToCatalogueItem(product: Product): CatalogueItem {
-  const variants = (product.variants || []).map((v) => hydrateVariant(v, product.productId));
+function productToCatalogueItem(product: Product, config: PricingConfig): CatalogueItem {
+  const variants = (product.variants || []).map((v) => hydrateVariant(v, product.productId, product.categoryId, config));
   const sellable = variants.filter(isVariantSellable);
 
   // The cheapest sellable variant is what the card advertises. A product with
@@ -136,6 +138,7 @@ function productToCatalogueItem(product: Product): CatalogueItem {
     listPricePesewas: cheapest?.listPricePesewas,
     promoLabel: cheapest?.promoLabel,
     promoPercent: cheapest?.promoPercent,
+    promoEndsAt: cheapest?.promoEndsAt,
     availabilitySentence: osSentence,
     osList: [...new Set(variants.flatMap((v) => v.osList || []))],
     machineCodeType: machineCodeType(variants),
@@ -143,11 +146,11 @@ function productToCatalogueItem(product: Product): CatalogueItem {
   };
 }
 
-function bundleToCatalogueItem(bundle: Bundle, products: Product[]): CatalogueItem {
+function bundleToCatalogueItem(bundle: Bundle, products: Product[], config: PricingConfig): CatalogueItem {
   const pricing = applyPricingRules(
     cedisToPesewas(bundle.priceGhs),
-    [bundle.bundleId],
-    PRICING_CONFIG
+    [bundle.bundleId, `CATEGORY:${bundle.categoryId}`],
+    config
   );
 
   const productMap = new Map(products.map((product) => [product.productId, product]));
@@ -180,20 +183,36 @@ function bundleToCatalogueItem(bundle: Bundle, products: Product[]): CatalogueIt
     listPricePesewas: pricing.listPesewas,
     promoLabel: pricing.promoLabel,
     promoPercent: pricing.promoPercent,
+    promoEndsAt: pricing.promoEndsAt,
     bundleContents,
     bundle
   };
 }
 
-function serviceToCatalogueItem(service: Service): CatalogueItem {
+function serviceToCatalogueItem(service: Service, config: PricingConfig): CatalogueItem {
   // A service with options is purchasable and advertises a "from" price taken
   // from its cheapest option. A service without them is quote-only and has no
   // price at all, which must stay absent rather than become 0.
-  const cheapest = service.options?.length ? cheapestOptionPesewas(service.options) : undefined;
-  const pricing =
-    cheapest != null
-      ? applyPricingRules(cheapest, serviceTargetIds(service.serviceId), PRICING_CONFIG)
+  const pricedOptions = service.options?.map((option) => {
+    const targets = [...serviceTargetIds(service.serviceId, option.optionId), `CATEGORY:${service.categoryId}`];
+    const unit = applyPricingRules(cedisToPesewas(option.unitPriceGhs), targets, config);
+    const bulk = option.bulkPriceGhs != null
+      ? applyPricingRules(cedisToPesewas(option.bulkPriceGhs), targets, config)
       : undefined;
+    return {
+      option: {
+        ...option,
+        unitPriceGhs: pesewasToCedis(unit.payablePesewas),
+        ...(bulk ? { bulkPriceGhs: pesewasToCedis(bulk.payablePesewas) } : {})
+      },
+      pricing: unit
+    };
+  }) || [];
+  const cheapest = pricedOptions.reduce<typeof pricedOptions[number] | undefined>(
+    (minimum, entry) => !minimum || entry.pricing.payablePesewas < minimum.pricing.payablePesewas ? entry : minimum,
+    undefined
+  );
+  const pricing = cheapest?.pricing;
 
   return {
     kind: 'service',
@@ -211,12 +230,13 @@ function serviceToCatalogueItem(service: Service): CatalogueItem {
     listPricePesewas: pricing?.listPesewas,
     promoLabel: pricing?.promoLabel,
     promoPercent: pricing?.promoPercent,
+    promoEndsAt: pricing?.promoEndsAt,
     // A service is never licence-delivered, so the fulfilment workflow must not
     // offer a licence step for it.
     machineCodeType: 'service',
     // Carried to the frontend so the option picker, quantity selector and the
     // disclaimer can all render before purchase.
-    options: service.options?.slice().sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+    options: pricedOptions.map((entry) => entry.option).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
     minQty: service.minQty ?? 1,
     maxQty: service.maxQty ?? 50,
     disclaimer: service.disclaimer,
@@ -224,10 +244,10 @@ function serviceToCatalogueItem(service: Service): CatalogueItem {
   };
 }
 
-function laptopToCatalogueItem(laptop: Laptop): CatalogueItem {
+function laptopToCatalogueItem(laptop: Laptop, config: PricingConfig): CatalogueItem {
   const pricing =
     typeof laptop.priceGhs === 'number' && laptop.priceGhs > 0
-      ? applyPricingRules(cedisToPesewas(laptop.priceGhs), [laptop.laptopId], PRICING_CONFIG)
+      ? applyPricingRules(cedisToPesewas(laptop.priceGhs), [laptop.laptopId, `CATEGORY:${laptop.categoryId}`], config)
       : undefined;
 
   const spec = [laptop.processor, laptop.ram, laptop.storage, laptop.screen]
@@ -253,6 +273,7 @@ function laptopToCatalogueItem(laptop: Laptop): CatalogueItem {
     listPricePesewas: pricing?.listPesewas,
     promoLabel: pricing?.promoLabel,
     promoPercent: pricing?.promoPercent,
+    promoEndsAt: pricing?.promoEndsAt,
     availabilitySentence: laptop.availability,
     laptop
   };
@@ -292,14 +313,15 @@ function matchesSearch(item: CatalogueItem, query: string): boolean {
 async function buildCatalogue(): Promise<CatalogResponse> {
   const db = getFirestore();
 
-  const [categories, products, bundles, services, laptops, announcements, landingSnap] = await Promise.all([
+  const [categories, products, bundles, services, laptops, announcements, landingSnap, pricingConfig] = await Promise.all([
     readCollection<Category>(db, COLLECTIONS.categories),
     readCollection<Product>(db, COLLECTIONS.products),
     readCollection<Bundle>(db, COLLECTIONS.bundles),
     readCollection<Service>(db, COLLECTIONS.services),
     readCollection<Laptop>(db, COLLECTIONS.laptops),
     readCollection<Announcement>(db, COLLECTIONS.announcements),
-    db.collection(COLLECTIONS.storeSettings).doc('landing').get()
+    db.collection(COLLECTIONS.storeSettings).doc('landing').get(),
+    getPricingConfig()
   ]);
 
   const activeProducts = products.filter((p) => p.active);
@@ -311,7 +333,7 @@ async function buildCatalogue(): Promise<CatalogResponse> {
   // with its kind. Without this the Services, Bundles and Laptops categories
   // render empty however much data Firestore holds.
   const items: CatalogueItem[] = [
-    ...activeProducts.map(productToCatalogueItem).filter((item) =>
+    ...activeProducts.map((product) => productToCatalogueItem(product, pricingConfig)).filter((item) =>
       isProductSellable({
         productId: item.itemId,
         productName: item.name,
@@ -320,9 +342,9 @@ async function buildCatalogue(): Promise<CatalogResponse> {
         variants: item.variants || []
       })
     ),
-    ...activeBundles.map((bundle) => bundleToCatalogueItem(bundle, activeProducts)),
-    ...activeServices.map(serviceToCatalogueItem),
-    ...activeLaptops.map(laptopToCatalogueItem)
+    ...activeBundles.map((bundle) => bundleToCatalogueItem(bundle, activeProducts, pricingConfig)),
+    ...activeServices.map((service) => serviceToCatalogueItem(service, pricingConfig)),
+    ...activeLaptops.map((laptop) => laptopToCatalogueItem(laptop, pricingConfig))
   ].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 
   const categoryNames = new Map(categories.map((c) => [c.categoryId, c.name]));
@@ -359,6 +381,14 @@ async function buildCatalogue(): Promise<CatalogResponse> {
       ? {
           desktopImageUrl: catalogueImageUrl((landingSnap.data() as LandingSettings).desktopImagePath),
           mobileImageUrl: catalogueImageUrl((landingSnap.data() as LandingSettings).mobileImagePath)
+        }
+      : undefined,
+    activePromotion: pricingConfig.globalPromotion.active && pricingConfig.globalPromotion.percent > 0 &&
+      (!pricingConfig.globalPromotion.endsAt || new Date(pricingConfig.globalPromotion.endsAt).getTime() > Date.now())
+      ? {
+          label: pricingConfig.globalPromotion.label || 'Limited-time promotion',
+          percent: pricingConfig.globalPromotion.percent,
+          endsAt: pricingConfig.globalPromotion.endsAt
         }
       : undefined
   };
@@ -432,12 +462,15 @@ export async function findVariant(
   variantId: string
 ): Promise<{ product: Product; variant: Variant } | null> {
   const db = getFirestore();
-  const products = await readCollection<Product>(db, COLLECTIONS.products);
+  const [products, pricingConfig] = await Promise.all([
+    readCollection<Product>(db, COLLECTIONS.products),
+    getPricingConfig()
+  ]);
 
   for (const product of products) {
     const variant = (product.variants || []).find((v) => v.variantId === variantId);
     if (variant) {
-      return { product, variant: hydrateVariant(variant, product.productId) };
+      return { product, variant: hydrateVariant(variant, product.productId, product.categoryId, pricingConfig) };
     }
   }
   return null;

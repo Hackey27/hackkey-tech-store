@@ -75,11 +75,18 @@ export interface AppliedPricing {
   payablePesewas: number;
   promoLabel?: string;
   promoPercent?: number;
+  promoEndsAt?: string;
 }
 
 function ruleApplies(rule: { targetIds: string[] }, targetIds: string[], matchAll: boolean): boolean {
   if (rule.targetIds.length === 0) return matchAll;
   return rule.targetIds.some((id) => targetIds.includes(id));
+}
+
+function promotionIsCurrent(rule: PromotionRule, now = Date.now()): boolean {
+  if (!rule.endsAt) return true;
+  const end = new Date(rule.endsAt).getTime();
+  return Number.isFinite(end) && end > now;
 }
 
 /**
@@ -109,18 +116,31 @@ export function applyPricingRules(
   if (sa?.active && sa.percent !== 0 && ruleApplies(sa, targetIds, true)) {
     listPesewas = Math.ceil(basePesewas * (1 + sa.percent / 100));
   }
+  if (sa?.active && sa.fixedAdjustmentsGhs) {
+    const fixedGhs = targetIds.reduce(
+      (sum, targetId) => sum + (Number(sa.fixedAdjustmentsGhs?.[targetId]) || 0),
+      0
+    );
+    listPesewas += cedisToPesewas(fixedGhs);
+  }
   listPesewas = Math.max(1, Math.ceil(listPesewas));
 
   let promo: PromotionRule | null = null;
 
+  if (config.itemSpecificPromotion?.active) {
+    promo = (config.itemSpecificPromotions || []).find(
+      (rule) => rule.active && rule.percent > 0 && targetIds.includes(rule.targetId) && promotionIsCurrent(rule)
+    ) || null;
+  }
+
   const isp = config.itemSpecificPromotion;
-  if (isp?.active && isp.percent > 0 && ruleApplies(isp, targetIds, false)) {
+  if (!promo && isp?.active && isp.percent > 0 && ruleApplies(isp, targetIds, false) && promotionIsCurrent(isp)) {
     promo = isp;
   }
 
   if (!promo) {
     const gp = config.globalPromotion;
-    if (gp?.active && gp.percent > 0 && ruleApplies(gp, targetIds, true)) {
+    if (gp?.active && gp.percent > 0 && ruleApplies(gp, targetIds, true) && promotionIsCurrent(gp)) {
       promo = gp;
     }
   }
@@ -134,7 +154,8 @@ export function applyPricingRules(
     listPesewas,
     payablePesewas,
     promoLabel: promo.label,
-    promoPercent: promo.percent
+    promoPercent: promo.percent,
+    promoEndsAt: promo.endsAt
   };
 }
 

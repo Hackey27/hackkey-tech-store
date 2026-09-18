@@ -371,6 +371,7 @@ export const ADMIN_COPY = {
     products: 'Product media',
     landing: 'Landing banners',
     ordering: 'Catalogue order',
+    pricing: 'Pricing & promotions',
   },
   orders: {
     title: 'Orders needing attention',

@@ -5,6 +5,7 @@ import {
   ArrowDown,
   ArrowUp,
   Bell,
+  BadgePercent,
   Boxes,
   ClipboardList,
   Download,
@@ -23,7 +24,7 @@ import {
   X
 } from 'lucide-react';
 import { ADMIN_COPY } from '../config/storeCopy';
-import { Announcement, Laptop as LaptopType, Order, Product, Service, ServiceField, ServiceFieldType, ServiceOption } from '../types';
+import { Announcement, Laptop as LaptopType, Order, PricingConfig, Product, Service, ServiceField, ServiceFieldType, ServiceOption } from '../types';
 import { formatPesewas } from '../utils/money';
 import { defaultCustomerInputType, defaultDeliveryCodeType, effectiveActivationWebsiteUrl } from '../utils/softwareFulfilment';
 import { AnnouncementModal } from '../components/AnnouncementModal';
@@ -32,7 +33,7 @@ import { adminAuth } from './firebase';
 import { AdminApiError, adminRequest, loadAdminData } from './api';
 import { AdminData, AdminLicence, ApiValidationError } from './types';
 
-type Section = 'orders' | 'licences' | 'services' | 'software' | 'laptops' | 'announcements' | 'products' | 'landing' | 'ordering';
+type Section = 'orders' | 'licences' | 'services' | 'software' | 'laptops' | 'announcements' | 'products' | 'landing' | 'ordering' | 'pricing';
 
 const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#014040] focus:ring-2 focus:ring-[#014040]/10';
 const labelClass = 'space-y-1 text-xs font-bold text-slate-700';
@@ -593,6 +594,102 @@ async function resizeBannerExact(file: File, width: number, height: number): Pro
   } finally { URL.revokeObjectURL(source); }
 }
 
+function pricingTargetId(item: AdminData['mediaItems'][number]): string {
+  return item.kind === 'service' ? `SERVICE:${item.itemId}` : item.itemId;
+}
+
+function dateTimeLocal(value?: string): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '';
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function PricingPromotionsSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
+  const catalogueItems = data.mediaItems.filter((item) => item.kind !== 'category');
+  const [pricing, setPricing] = useState<PricingConfig>(() => structuredClone(data.pricing));
+  const [silentDirection, setSilentDirection] = useState<'increase' | 'decrease'>(() => data.pricing.silentAdjustment.percent < 0 ? 'decrease' : 'increase');
+  const [fixedDirections, setFixedDirections] = useState<Record<string, 'increase' | 'decrease'>>(() => Object.fromEntries(
+    Object.entries(data.pricing.silentAdjustment.fixedAdjustmentsGhs || {}).map(([targetId, amount]) => [targetId, amount < 0 ? 'decrease' : 'increase'])
+  ));
+  const [selectedItemId, setSelectedItemId] = useState(() => catalogueItems[0] ? pricingTargetId(catalogueItems[0]) : '');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const itemRules = pricing.itemSpecificPromotions || [];
+  const selectedRule = itemRules.find((rule) => rule.targetId === selectedItemId) || {
+    targetId: selectedItemId,
+    active: false,
+    percent: 0,
+    label: '',
+    targetIds: [selectedItemId]
+  };
+
+  const setSelectedRule = (patch: Partial<typeof selectedRule>) => {
+    const next = { ...selectedRule, ...patch, targetId: selectedItemId, targetIds: [selectedItemId] };
+    setPricing((old) => ({
+      ...old,
+      itemSpecificPromotions: [...(old.itemSpecificPromotions || []).filter((rule) => rule.targetId !== selectedItemId), next]
+    }));
+  };
+
+  const toggleGlobalTarget = (targetId: string) => setPricing((old) => {
+    const targets = old.globalPromotion.targetIds.includes(targetId)
+      ? old.globalPromotion.targetIds.filter((id) => id !== targetId)
+      : [...old.globalPromotion.targetIds, targetId];
+    return { ...old, globalPromotion: { ...old.globalPromotion, targetIds: targets } };
+  });
+
+  const toggleSilentCategory = (categoryId: string) => setPricing((old) => {
+    const targetId = `CATEGORY:${categoryId}`;
+    const targets = old.silentAdjustment.targetIds.includes(targetId)
+      ? old.silentAdjustment.targetIds.filter((id) => id !== targetId)
+      : [...old.silentAdjustment.targetIds, targetId];
+    return { ...old, silentAdjustment: { ...old.silentAdjustment, targetIds: targets } };
+  });
+
+  const setFixedAdjustment = (targetId: string, amount: number) => setPricing((old) => ({
+    ...old,
+    silentAdjustment: {
+      ...old.silentAdjustment,
+      fixedAdjustmentsGhs: { ...(old.silentAdjustment.fixedAdjustmentsGhs || {}), [targetId]: amount }
+    }
+  }));
+
+  const save = async () => {
+    setBusy(true); setMessage('');
+    try {
+      await adminRequest(user, '/pricing', { method: 'PUT', body: JSON.stringify(pricing) });
+      setMessage('Pricing and promotion rules saved. Store prices have been refreshed.');
+      await reload();
+    } catch (error) { setMessage(messageOf(error)); }
+    finally { setBusy(false); }
+  };
+
+  return <div className="space-y-6">
+    <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-black text-[#014040]">Pricing & promotions</h2><p className="text-sm text-slate-600">Adjust live prices, schedule promotions, and choose exactly where each rule applies.</p></div><button className={primaryButton} disabled={busy} onClick={save}><Save className="h-4 w-4" />{busy ? 'Saving…' : 'Save pricing rules'}</button></div>
+
+    <section className="space-y-4 rounded-2xl border bg-white p-5">
+      <div className="flex items-center justify-between gap-4"><div><h3 className="text-lg font-black text-[#014040]">Global promotion</h3><p className="text-xs text-slate-500">Customers see the promotion and a live countdown. Leave every item unchecked to apply it store-wide.</p></div><label className="inline-flex items-center gap-2 text-xs font-black"><input type="checkbox" checked={pricing.globalPromotion.active} onChange={(event) => setPricing((old) => ({ ...old, globalPromotion: { ...old.globalPromotion, active: event.target.checked } }))} />{pricing.globalPromotion.active ? 'On' : 'Off'}</label></div>
+      <div className="grid gap-3 md:grid-cols-3"><label className={labelClass}>Discount (%)<input className={inputClass} type="number" min="0" max="100" value={pricing.globalPromotion.percent} onChange={(event) => setPricing((old) => ({ ...old, globalPromotion: { ...old.globalPromotion, percent: Number(event.target.value) } }))} /></label><label className={labelClass}>Promotion description<input className={inputClass} value={pricing.globalPromotion.label} placeholder="Back to school promo" onChange={(event) => setPricing((old) => ({ ...old, globalPromotion: { ...old.globalPromotion, label: event.target.value } }))} /></label><label className={labelClass}>End date and time<input className={inputClass} type="datetime-local" value={dateTimeLocal(pricing.globalPromotion.endsAt)} onChange={(event) => setPricing((old) => ({ ...old, globalPromotion: { ...old.globalPromotion, endsAt: event.target.value ? new Date(event.target.value).toISOString() : undefined } }))} /></label></div>
+      <details className="rounded-xl bg-slate-50 p-3"><summary className="cursor-pointer text-sm font-black text-[#014040]">Choose products and services ({pricing.globalPromotion.targetIds.length || 'all'})</summary><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"><label className="flex items-center gap-2 rounded-lg bg-white p-2 text-xs font-bold"><input type="checkbox" checked={pricing.globalPromotion.targetIds.length === 0} onChange={() => setPricing((old) => ({ ...old, globalPromotion: { ...old.globalPromotion, targetIds: [] } }))} />All catalogue items</label>{catalogueItems.map((item) => { const targetId = pricingTargetId(item); return <label key={`${item.kind}:${item.itemId}`} className="flex items-center gap-2 rounded-lg bg-white p-2 text-xs"><input type="checkbox" checked={pricing.globalPromotion.targetIds.includes(targetId)} onChange={() => toggleGlobalTarget(targetId)} /><span><b>{item.name}</b><small className="ml-1 uppercase text-slate-400">{item.kind}</small></span></label>; })}</div></details>
+    </section>
+
+    <section className="space-y-4 rounded-2xl border bg-white p-5">
+      <div className="flex items-center justify-between gap-4"><div><h3 className="text-lg font-black text-[#014040]">Item-specific promotions</h3><p className="text-xs text-slate-500">An active item promotion overrides the global promotion for that item.</p></div><label className="inline-flex items-center gap-2 text-xs font-black"><input type="checkbox" checked={pricing.itemSpecificPromotion.active} onChange={(event) => setPricing((old) => ({ ...old, itemSpecificPromotion: { ...old.itemSpecificPromotion, active: event.target.checked } }))} />{pricing.itemSpecificPromotion.active ? 'On' : 'Off'}</label></div>
+      <label className={labelClass}>Product or service<select className={inputClass} value={selectedItemId} onChange={(event) => setSelectedItemId(event.target.value)}>{catalogueItems.map((item) => <option key={`${item.kind}:${item.itemId}`} value={pricingTargetId(item)}>{item.name} · {item.kind}</option>)}</select></label>
+      <div className="grid gap-3 md:grid-cols-[110px_1fr_1fr_1fr]"><label className={labelClass}>This promo<label className="flex h-[38px] items-center gap-2 rounded-xl border px-3"><input type="checkbox" checked={selectedRule.active} onChange={(event) => setSelectedRule({ active: event.target.checked })} />{selectedRule.active ? 'On' : 'Off'}</label></label><label className={labelClass}>Discount (%)<input className={inputClass} type="number" min="0" max="100" value={selectedRule.percent} onChange={(event) => setSelectedRule({ percent: Number(event.target.value) })} /></label><label className={labelClass}>Description<input className={inputClass} value={selectedRule.label} placeholder="Special offer" onChange={(event) => setSelectedRule({ label: event.target.value })} /></label><label className={labelClass}>End date and time<input className={inputClass} type="datetime-local" value={dateTimeLocal(selectedRule.endsAt)} onChange={(event) => setSelectedRule({ endsAt: event.target.value ? new Date(event.target.value).toISOString() : undefined })} /></label></div>
+    </section>
+
+    <section className="space-y-4 rounded-2xl border bg-white p-5">
+      <div className="flex items-center justify-between gap-4"><div><h3 className="text-lg font-black text-[#014040]">Silent price adjustment</h3><p className="text-xs text-slate-500">Changes the selling price without showing a promotion badge. Percentage and fixed adjustments can be combined.</p></div><label className="inline-flex items-center gap-2 text-xs font-black"><input type="checkbox" checked={pricing.silentAdjustment.active} onChange={(event) => setPricing((old) => ({ ...old, silentAdjustment: { ...old.silentAdjustment, active: event.target.checked } }))} />{pricing.silentAdjustment.active ? 'On' : 'Off'}</label></div>
+      <div className="grid gap-3 md:grid-cols-[180px_180px_1fr]"><label className={labelClass}>Direction<select className={inputClass} value={silentDirection} onChange={(event) => { const direction = event.target.value as 'increase' | 'decrease'; setSilentDirection(direction); setPricing((old) => ({ ...old, silentAdjustment: { ...old.silentAdjustment, percent: Math.abs(old.silentAdjustment.percent) * (direction === 'decrease' ? -1 : 1) } })); }}><option value="increase">Increase</option><option value="decrease">Decrease</option></select></label><label className={labelClass}>Global adjustment (%)<input className={inputClass} type="number" min="0" max="1000" value={Math.abs(pricing.silentAdjustment.percent)} onChange={(event) => setPricing((old) => ({ ...old, silentAdjustment: { ...old.silentAdjustment, percent: Number(event.target.value) * (silentDirection === 'decrease' ? -1 : 1) } }))} /></label><div><p className="mb-1 text-xs font-bold text-slate-700">Categories</p><div className="flex flex-wrap gap-2"><label className="rounded-lg border px-3 py-2 text-xs font-bold"><input className="mr-2" type="checkbox" checked={pricing.silentAdjustment.targetIds.length === 0} onChange={() => setPricing((old) => ({ ...old, silentAdjustment: { ...old.silentAdjustment, targetIds: [] } }))} />All</label>{data.categories.map((category) => <label key={category.categoryId} className="rounded-lg border px-3 py-2 text-xs font-bold"><input className="mr-2" type="checkbox" checked={pricing.silentAdjustment.targetIds.includes(`CATEGORY:${category.categoryId}`)} onChange={() => toggleSilentCategory(category.categoryId)} />{category.name}</label>)}</div></div></div>
+      <details className="rounded-xl bg-slate-50 p-3"><summary className="cursor-pointer text-sm font-black text-[#014040]">Fixed adjustments by product or service</summary><p className="mt-2 text-xs text-slate-500">Choose Increase or Decrease and enter a cedi amount. Set the amount to 0 to disable the fixed adjustment.</p><div className="mt-3 space-y-4">{data.categories.map((category) => { const items = catalogueItems.filter((item) => item.categoryId === category.categoryId); if (!items.length) return null; return <div key={category.categoryId}><h4 className="mb-2 text-xs font-black uppercase tracking-wider text-[#014040]">{category.name}</h4><div className="space-y-2">{items.map((item) => { const targetId = pricingTargetId(item); const signed = pricing.silentAdjustment.fixedAdjustmentsGhs?.[targetId] || 0; const direction = fixedDirections[targetId] || (signed < 0 ? 'decrease' : 'increase'); return <div key={`${item.kind}:${item.itemId}`} className="grid items-center gap-2 rounded-lg bg-white p-2 sm:grid-cols-[1fr_130px_150px]"><span className="text-xs font-bold">{item.name}<small className="ml-1 uppercase text-slate-400">{item.kind}</small></span><select className={inputClass} value={direction} onChange={(event) => { const nextDirection = event.target.value as 'increase' | 'decrease'; setFixedDirections((old) => ({ ...old, [targetId]: nextDirection })); setFixedAdjustment(targetId, Math.abs(signed) * (nextDirection === 'decrease' ? -1 : 1)); }}><option value="increase">Increase</option><option value="decrease">Decrease</option></select><label className="flex items-center gap-2 text-xs font-bold">GHS<input className={inputClass} type="number" min="0" step="0.01" value={Math.abs(signed)} onChange={(event) => setFixedAdjustment(targetId, Number(event.target.value) * (direction === 'decrease' ? -1 : 1))} /></label></div>; })}</div></div>; })}</div></details>
+    </section>
+    {message && <p role="status" className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}
+  </div>;
+}
+
 function LandingBannersSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
   const [busy, setBusy] = useState(''); const [message, setMessage] = useState('');
   const upload = async (role: 'desktop' | 'mobile', files?: FileList | null) => {
@@ -645,6 +742,17 @@ export default function AdminPortal() {
 
   if (checking) return <div className="min-h-screen bg-[#f7faf9] p-8 text-[#014040]">{ADMIN_COPY.loading}</div>;
   if (!user) return <SignIn />;
-  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'licences', icon: <Boxes /> }, { id: 'software', icon: <KeyRound /> }, { id: 'laptops', icon: <Settings2 /> }, { id: 'services', icon: <Settings2 /> }, { id: 'products', icon: <Images /> }, { id: 'landing', icon: <ImagePlus /> }, { id: 'ordering', icon: <ArrowUp /> }, { id: 'announcements', icon: <Bell /> }];
-  return <div className="min-h-screen bg-[#f7faf9] text-slate-900"><header className="border-b border-[#cbdcd9] bg-[#014040] text-white"><div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-4 sm:px-6"><div><p className="text-lg font-black">{ADMIN_COPY.brand}</p><p className="text-xs text-slate-300">{user.email}</p></div><div className="flex gap-2"><button className="rounded-xl border border-white/20 p-2 hover:bg-white/10" onClick={reload} aria-label={ADMIN_COPY.refresh}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button><button className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 text-xs font-bold hover:bg-white/10" onClick={() => signOut(adminAuth)}><LogOut className="h-4 w-4" />{ADMIN_COPY.signOut}</button></div></div></header><div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[210px_1fr]"><nav className="flex h-fit gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 lg:flex-col">{nav.map((item) => <button key={item.id} onClick={() => setSection(item.id)} className={`inline-flex min-w-fit items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black ${section === item.id ? 'bg-[#014040] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{React.cloneElement(item.icon as React.ReactElement, { className: 'h-4 w-4' })}{ADMIN_COPY.sections[item.id]}</button>)}</nav><main>{error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-sm font-bold text-rose-800">{error}</p>}{!data ? <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">{ADMIN_COPY.loading}</div> : section === 'orders' ? <OrdersSection data={data} user={user} reload={reload} /> : section === 'licences' ? <LicencesSection data={data} user={user} reload={reload} /> : section === 'software' ? <SoftwareConfigurationSection data={data} user={user} reload={reload} /> : section === 'laptops' ? <LaptopPropertiesSection data={data} user={user} reload={reload} /> : section === 'services' ? <ServicesSection data={data} user={user} reload={reload} /> : section === 'products' ? <ProductMediaSection data={data} user={user} reload={reload} /> : section === 'landing' ? <LandingBannersSection data={data} user={user} reload={reload} /> : section === 'ordering' ? <CatalogueOrderSection data={data} user={user} reload={reload} /> : <AnnouncementsSection data={data} user={user} reload={reload} />}</main></div></div>;
+  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'licences', icon: <Boxes /> }, { id: 'software', icon: <KeyRound /> }, { id: 'laptops', icon: <Settings2 /> }, { id: 'services', icon: <Settings2 /> }, { id: 'pricing', icon: <BadgePercent /> }, { id: 'products', icon: <Images /> }, { id: 'landing', icon: <ImagePlus /> }, { id: 'ordering', icon: <ArrowUp /> }, { id: 'announcements', icon: <Bell /> }];
+  const content = !data ? <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">{ADMIN_COPY.loading}</div>
+    : section === 'orders' ? <OrdersSection data={data} user={user} reload={reload} />
+    : section === 'licences' ? <LicencesSection data={data} user={user} reload={reload} />
+    : section === 'software' ? <SoftwareConfigurationSection data={data} user={user} reload={reload} />
+    : section === 'laptops' ? <LaptopPropertiesSection data={data} user={user} reload={reload} />
+    : section === 'services' ? <ServicesSection data={data} user={user} reload={reload} />
+    : section === 'pricing' ? <PricingPromotionsSection data={data} user={user} reload={reload} />
+    : section === 'products' ? <ProductMediaSection data={data} user={user} reload={reload} />
+    : section === 'landing' ? <LandingBannersSection data={data} user={user} reload={reload} />
+    : section === 'ordering' ? <CatalogueOrderSection data={data} user={user} reload={reload} />
+    : <AnnouncementsSection data={data} user={user} reload={reload} />;
+  return <div className="min-h-screen bg-[#f7faf9] text-slate-900"><header className="border-b border-[#cbdcd9] bg-[#014040] text-white"><div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-4 sm:px-6"><div><p className="text-lg font-black">{ADMIN_COPY.brand}</p><p className="text-xs text-slate-300">{user.email}</p></div><div className="flex gap-2"><button className="rounded-xl border border-white/20 p-2 hover:bg-white/10" onClick={reload} aria-label={ADMIN_COPY.refresh}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button><button className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 text-xs font-bold hover:bg-white/10" onClick={() => signOut(adminAuth)}><LogOut className="h-4 w-4" />{ADMIN_COPY.signOut}</button></div></div></header><div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[210px_1fr]"><nav className="flex h-fit gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 lg:flex-col">{nav.map((item) => <button key={item.id} onClick={() => setSection(item.id)} className={`inline-flex min-w-fit items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black ${section === item.id ? 'bg-[#014040] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{React.cloneElement(item.icon as React.ReactElement, { className: 'h-4 w-4' })}{ADMIN_COPY.sections[item.id]}</button>)}</nav><main>{error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-sm font-bold text-rose-800">{error}</p>}{content}</main></div></div>;
 }

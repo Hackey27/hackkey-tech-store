@@ -20,7 +20,8 @@ import {
   updateOrderWorkflow,
   deleteUnpaidOrder,
   saveProductConfiguration,
-  saveLaptop
+  saveLaptop,
+  savePricingConfiguration
 } from './adminData';
 import { getOrder } from './orders';
 import { applyOfflinePayment } from './payments';
@@ -435,6 +436,23 @@ export function createAdminRouter(): Router {
       await writeAdminAudit(actor(req), { action: 'laptop.save', targetType: 'laptop', targetId: laptop.laptopId });
       res.json({ laptop });
     } catch (err) { routeError(res, err, 'Failed to save laptop properties.'); }
+  });
+
+  router.put('/pricing', async (req: AdminRequest, res) => {
+    try {
+      const pricing = await savePricingConfiguration(req.body || {});
+      await writeAdminAudit(actor(req), {
+        action: 'pricing.configuration-save',
+        targetType: 'settings',
+        targetId: 'pricing',
+        details: {
+          silentAdjustmentActive: pricing.silentAdjustment.active,
+          globalPromotionActive: pricing.globalPromotion.active,
+          itemSpecificPromotionActive: pricing.itemSpecificPromotion.active
+        }
+      });
+      res.json({ pricing });
+    } catch (err) { routeError(res, err, 'Failed to save pricing and promotions.'); }
   });
 
   const saveAnnouncementHandler = async (req: AdminRequest, res: any) => {
