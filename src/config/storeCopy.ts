@@ -70,7 +70,7 @@ export const STORE_COPY = {
     viewOptions: 'View options',
     recommended: 'Recommended',
     latest: 'Latest',
-    fromPrice: (priceStr: string) => `From ${priceStr}`,
+    fromPrice: (priceStr: string) => `Starts at ${priceStr}`,
     askForPrice: 'Ask for price',
     fromPrefix: 'From',
     chooseOperatingSystem: '1. Choose your operating system',

@@ -263,7 +263,7 @@ function laptopToCatalogueItem(laptop: Laptop, config: PricingConfig): Catalogue
     itemId: laptop.laptopId,
     name: laptop.title,
     categoryId: laptop.categoryId,
-    description: spec,
+    description: laptop.description?.trim() || spec,
     imageUrl: catalogueImageUrl(laptop.imagePath) || laptop.picturesUrl?.[0],
     cardImageUrl: catalogueImageUrl(laptop.cardImagePath),
     bannerImageUrl: catalogueImageUrl(laptop.bannerImagePath),

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
 import { CategoryCard } from './components/CategoryCard';
@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { PromotionCountdown } from './components/PromotionCountdown';
 import { SearchResultsOverlay } from './components/SearchResultsOverlay';
+import { searchCatalogue } from './utils/catalogueSearch';
 
 type StoreRoute =
   | { view: 'home' }
@@ -64,46 +65,35 @@ export const App: React.FC = () => {
   const [showAllSoftware, setShowAllSoftware] = useState(false);
   const [announcementOpen, setAnnouncementOpen] = useState(false);
   const announcementHandledRef = useRef(false);
-  const catalogueRequestRef = useRef(0);
   const [nextSteps, setNextSteps] = useState<{ phone: string; orderId: string } | null>(null);
   const [requestLaunchMode, setRequestLaunchMode] = useState<'software' | 'laptop' | null>(null);
 
   // Fetch catalog from Phase 1 backend endpoint /api/catalog
-  const fetchCatalogData = async (search?: string) => {
-    const requestId = ++catalogueRequestRef.current;
+  const fetchCatalogData = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (search && search.trim().length > 0) {
-        params.append('q', search.trim());
-      }
-
-      const queryString = params.toString() ? `?${params.toString()}` : '';
-      const res = await fetch(`/api/catalog${queryString}`);
+      const res = await fetch('/api/catalog');
       if (!res.ok) {
         throw new Error(`Server returned HTTP ${res.status}: Failed to fetch catalog`);
       }
       const data: CatalogResponse = await res.json();
-      if (requestId !== catalogueRequestRef.current) return;
       setCatalog(data);
       if (data.announcement && !announcementHandledRef.current && shouldShowAnnouncement(data.announcement)) {
         announcementHandledRef.current = true;
         setAnnouncementOpen(true);
       }
     } catch (err: any) {
-      if (requestId !== catalogueRequestRef.current) return;
       console.error('[App] Failed to load catalog:', err);
       setError(err.message || 'Error connecting to catalogue service');
     } finally {
-      if (requestId === catalogueRequestRef.current) setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void fetchCatalogData(searchQuery); }, searchQuery.trim() ? 180 : 0);
-    return () => window.clearTimeout(timer);
-  }, [searchQuery]);
+    void fetchCatalogData();
+  }, []);
 
   useEffect(() => {
     window.history.scrollRestoration = 'manual';
@@ -210,6 +200,7 @@ export const App: React.FC = () => {
 
   // Featured software filtering logic
   const allProducts = catalog?.products || [];
+  const searchResults = useMemo(() => searchCatalogue(allProducts, searchQuery), [allProducts, searchQuery]);
   const softwareProducts = allProducts.filter((item) => item.kind === 'product');
   const isFiltering = searchQuery.trim().length > 0;
   
@@ -218,7 +209,7 @@ export const App: React.FC = () => {
     .filter((item) => item.featuredOrder != null)
     .sort((a, b) => (a.featuredOrder ?? 999) - (b.featuredOrder ?? 999));
   const displayedProducts = isFiltering
-    ? allProducts
+    ? searchResults
     : showAllSoftware
       ? softwareProducts
       : (featuredSoftware.length ? featuredSoftware : softwareProducts).slice(0, 3);
@@ -294,7 +285,7 @@ export const App: React.FC = () => {
 
       <SearchResultsOverlay
         query={searchQuery}
-        items={allProducts}
+        items={searchResults}
         loading={isLoading}
         onClose={() => setSearchQuery('')}
         onSelect={(item) => { setSearchQuery(''); openProduct(item); }}
@@ -439,7 +430,7 @@ export const App: React.FC = () => {
                     <h3 className="text-base font-bold text-slate-800">Unable to load catalogue items</h3>
                     <p className="text-xs text-slate-600 max-w-md mx-auto">{error}</p>
                     <button
-                      onClick={() => fetchCatalogData(searchQuery)}
+                      onClick={() => fetchCatalogData()}
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#014040] text-white text-xs font-bold hover:bg-[#025656] transition-colors"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />

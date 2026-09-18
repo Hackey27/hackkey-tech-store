@@ -7,6 +7,8 @@ import {
   MAX_CATALOGUE_IMAGE_BYTES,
   validateCatalogueImage
 } from '../server/storage';
+import { searchCatalogue } from '../src/utils/catalogueSearch';
+import type { CatalogueItem } from '../src/types';
 
 test('Google Drive share links become renderable image URLs', () => {
   assert.equal(
@@ -43,4 +45,20 @@ test('catalogue image paths stay inside their dedicated product prefix', () => {
   assert.equal(isCatalogueImagePath(path), true);
   assert.equal(isCatalogueImagePath('orders/ORDER-1/document.pdf'), false);
   assert.equal(isCatalogueImagePath('catalogue/../orders/document.pdf'), false);
+});
+
+test('catalogue search matches version, operating system and laptop specifications locally', () => {
+  const items = [
+    {
+      kind: 'product', itemId: 'SPSS', name: 'IBM SPSS', categoryId: 'DATA', sortOrder: 1,
+      variants: [{ variantId: 'SPSS-31-MAC', versionOrPlan: '31', os: 'macOS', available: true }]
+    },
+    {
+      kind: 'laptop', itemId: 'LAP-1', name: 'EliteBook', categoryId: 'LAPTOP', sortOrder: 2,
+      laptop: { brand: 'HP', model: '840 G8', processor: 'Core i7', ram: '16 GB', storage: '512 GB SSD' }
+    }
+  ] as CatalogueItem[];
+  assert.deepEqual(searchCatalogue(items, 'spss mac'), [items[0]]);
+  assert.deepEqual(searchCatalogue(items, '840 16 gb'), [items[1]]);
+  assert.deepEqual(searchCatalogue(items, 'missing'), []);
 });

@@ -60,6 +60,7 @@ export const AnnouncementModal: React.FC<AnnouncementModalProps> = ({ announceme
             </a>
           )}
           {announcement.showOnce && <label className="mt-5 flex cursor-pointer items-center gap-2 rounded-xl bg-[#edf5f3] p-3 text-sm font-bold text-[#014040]"><input type="checkbox" checked={dontShowAgain} onChange={(event) => setDontShowAgain(event.target.checked)} />Don&apos;t show this announcement again</label>}
+          <button type="button" onClick={dismiss} className="mt-5 w-full rounded-xl bg-[#05ef28] px-5 py-3 text-sm font-black text-[#014040] transition hover:bg-[#20f43d]">Got it</button>
         </div>
       </section>
     </div>

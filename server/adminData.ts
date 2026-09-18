@@ -116,7 +116,7 @@ export async function adminBootstrap() {
     })
     .sort((a, b) => a.productName.localeCompare(b.productName));
 
-  const bundles = bundlesSnap.docs.map((doc) => doc.data() as Bundle);
+  const bundles = bundlesSnap.docs.map((doc) => doc.data() as Bundle).sort((a, b) => a.name.localeCompare(b.name));
   const laptops = laptopsSnap.docs.map((doc) => doc.data() as Laptop);
   const categories = categoriesSnap.docs.map((doc) => doc.data() as Category);
   const mediaItems = [
@@ -127,7 +127,7 @@ export async function adminBootstrap() {
     ...categories.map((item) => ({ kind: 'category' as const, itemId: item.categoryId, name: item.name, imagePath: item.imagePath, iconImagePath: item.iconImagePath, sortOrder: item.sortOrder }))
   ].sort((a, b) => a.name.localeCompare(b.name));
 
-  return { orders, licences, services, announcements, products, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {}, pricing };
+  return { orders, licences, services, announcements, products, bundles, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {}, pricing };
 }
 
 export async function savePricingConfiguration(input: Partial<PricingConfig>): Promise<PricingConfig> {
@@ -603,6 +603,40 @@ export async function saveProductConfiguration(productId: string, input: Product
   await getFirestore().collection(COLLECTIONS.products).doc(productId).set(product);
   invalidateCatalogueCache();
   return product;
+}
+
+export async function saveCategory(categoryId: string, input: Category): Promise<Category> {
+  if (!input.name?.trim()) throw new Error('Category name is required.');
+  const category: Category = {
+    ...input,
+    categoryId,
+    name: input.name.trim(),
+    tagline: input.tagline?.trim() || '',
+    icon: input.icon?.trim() || '',
+    active: input.active !== false,
+    sortOrder: Number.isFinite(input.sortOrder) ? Math.max(0, Math.floor(input.sortOrder)) : 100
+  };
+  await getFirestore().collection(COLLECTIONS.categories).doc(categoryId).set(category, { merge: true });
+  invalidateCatalogueCache();
+  return category;
+}
+
+export async function saveBundle(bundleId: string, input: Bundle): Promise<Bundle> {
+  if (!input.name?.trim()) throw new Error('Bundle name is required.');
+  const bundle: Bundle = {
+    ...input,
+    bundleId,
+    name: input.name.trim(),
+    description: input.description?.trim() || '',
+    priceGhs: Math.max(0, Number(input.priceGhs) || 0),
+    categoryId: input.categoryId || 'BUNDLE',
+    active: input.active !== false,
+    sortOrder: Number.isFinite(input.sortOrder) ? Math.max(0, Math.floor(input.sortOrder)) : 100,
+    items: input.items || []
+  };
+  await getFirestore().collection(COLLECTIONS.bundles).doc(bundleId).set(bundle, { merge: true });
+  invalidateCatalogueCache();
+  return bundle;
 }
 
 export async function saveLaptop(laptopId: string, input: Laptop): Promise<Laptop> {

@@ -21,6 +21,8 @@ import {
   updateOrderWorkflow,
   deleteUnpaidOrder,
   saveProductConfiguration,
+  saveCategory,
+  saveBundle,
   saveLaptop,
   savePricingConfiguration
 } from './adminData';
@@ -492,6 +494,22 @@ export function createAdminRouter(): Router {
       await writeAdminAudit(actor(req), { action: 'product.configuration-save', targetType: 'product', targetId: product.productId });
       res.json({ product });
     } catch (err) { routeError(res, err, 'Failed to save product configuration.'); }
+  });
+
+  router.put('/categories/:categoryId', async (req: AdminRequest, res) => {
+    try {
+      const category = await saveCategory(String(req.params.categoryId), req.body);
+      await writeAdminAudit(actor(req), { action: 'category.configuration-save', targetType: 'category', targetId: category.categoryId });
+      res.json({ category });
+    } catch (err) { routeError(res, err, 'Failed to save category configuration.'); }
+  });
+
+  router.put('/bundles/:bundleId', async (req: AdminRequest, res) => {
+    try {
+      const bundle = await saveBundle(String(req.params.bundleId), req.body);
+      await writeAdminAudit(actor(req), { action: 'bundle.configuration-save', targetType: 'bundle', targetId: bundle.bundleId });
+      res.json({ bundle });
+    } catch (err) { routeError(res, err, 'Failed to save bundle configuration.'); }
   });
 
   router.put('/laptops/:laptopId', async (req: AdminRequest, res) => {

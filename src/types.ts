@@ -253,6 +253,8 @@ export interface Laptop {
   picturesUrl: string[];
   availability: string; // 'Available' | 'Preorder'
   notes?: string;
+  /** Optional customer-facing copy for the “About this laptop” section. */
+  description?: string;
   active: boolean; // Status: 'Published' -> true
   sortOrder: number;
   imagePath?: string;
