@@ -91,6 +91,8 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   const noticeKind = product.kind === 'service'
     ? 'report' as const
     : /account/i.test(selectedVariant?.fulfilmentType || '') ? 'account' as const : 'licence' as const;
+  const noticeInputLabel = selectedVariant?.customerInputRequired?.trim()
+    || (machineCodeType === 'lock-code' ? 'Lock Code' : machineCodeType === 'hardware-id' ? 'Hardware ID' : undefined);
 
   const showAdded = () => {
     setAddedNotice(true);
@@ -171,7 +173,6 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
             <div>
               <div className="sticky top-[116px] z-20 -mx-5 mb-5 border-b border-[#d8e7e4] bg-white px-5 pb-3 pt-1 shadow-sm sm:static sm:mx-0 sm:border-0 sm:p-0 sm:shadow-none">
                 {allOsList.length > 0 && <div className="mb-3 sm:mb-5"><p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-600">{STORE_COPY.product.chooseOperatingSystem}</p><div className="flex flex-wrap gap-2">{allOsList.map((os) => <button key={os} type="button" onClick={() => selectOs(os)} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold ${selectedOs === os ? 'bg-[#014040] text-white' : 'bg-[#edf5f3] text-[#014040]'}`}><Monitor className="h-3.5 w-3.5" />{os}</button>)}</div></div>}
-                <div className="sm:hidden">{softwareActions}</div>
               </div>
               <div className="mb-4">
                 <h2 className="text-lg font-black text-[#014040]">{STORE_COPY.product.chooseVersion}</h2>
@@ -206,6 +207,9 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
                 })}
               </div>
 
+              <div className="h-[68px] sm:hidden" aria-hidden="true" />
+              <div className="fixed inset-x-0 bottom-[63px] z-40 border-t border-[#d8e7e4] bg-white/95 px-4 py-2 shadow-[0_-6px_18px_rgba(1,64,64,0.10)] backdrop-blur-md sm:hidden"><div className="mx-auto max-w-lg">{softwareActions}</div></div>
+
               <div className="mt-5 hidden sm:block">{softwareActions}</div>
             </div>
           ) : product.kind === 'bundle' ? (
@@ -218,7 +222,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
           )}
 
           {addedNotice && <p role="status" className="mt-4 flex items-center gap-2 rounded-xl border border-[#b2f0bf] bg-[#d9ffe0] p-3 text-xs font-bold text-[#0d6520]"><Check className="h-4 w-4" />{STORE_COPY.product.addedToCartTitle}</p>}
-          {noticeEnabled && <div className="mt-4"><FulfilmentTimeNotice kind={noticeKind} beforePayment /></div>}
+          {noticeEnabled && <div className="mt-4"><FulfilmentTimeNotice kind={noticeKind} beforePayment customerInputLabel={noticeInputLabel} /></div>}
         </aside>
       </div>
 
