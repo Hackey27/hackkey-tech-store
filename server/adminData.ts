@@ -11,7 +11,8 @@ import {
   Laptop,
   LandingSettings,
   CatalogueItemKind,
-  PricingConfig
+  PricingConfig,
+  TurnitinReportDocument
 } from '../src/types';
 import { invalidateCatalogueCache } from './catalogue';
 import { AdminActor } from './adminAuth';
@@ -437,6 +438,28 @@ export async function markDocumentReceived(orderId: string, actor: AdminActor): 
   return { ...order, ...patch } as Order;
 }
 
+export function turnitinReportReadyPatch(
+  order: Order,
+  report: TurnitinReportDocument,
+  actor: AdminActor,
+  uploadedAt: string
+): Partial<Order> {
+  return {
+    reportDocuments: [...(order.reportDocuments || []), report],
+    fulfilmentStatus: 'ready',
+    fulfilledAt: uploadedAt,
+    lastUpdated: uploadedAt,
+    fulfilmentHistory: [
+      ...(order.fulfilmentHistory || []),
+      { status: 'ready', at: uploadedAt, actorUid: actor.uid, note: 'Turnitin report uploaded and order marked ready.' }
+    ],
+    internalNotes: [
+      ...(order.internalNotes || []),
+      { text: `Uploaded Turnitin report: ${report.label}`, actorUid: actor.uid, actorEmail: actor.email, createdAt: uploadedAt }
+    ]
+  };
+}
+
 export async function addTurnitinReport(
   orderId: string,
   input: { storagePath: string; originalName: string; label: string; sizeBytes?: number },
@@ -450,7 +473,7 @@ export async function addTurnitinReport(
   if (order.paymentStatus !== 'paid') throw new Error('The order is not paid.');
   if (order.productId !== 'TURNITIN' && order.variantId !== 'TURNITIN') throw new Error('Reports can only be attached to Turnitin orders.');
   const uploadedAt = now();
-  const report = {
+  const report: TurnitinReportDocument = {
     reportId: id('REP'),
     label: input.label,
     originalName: input.originalName,
@@ -458,14 +481,7 @@ export async function addTurnitinReport(
     sizeBytes: input.sizeBytes,
     uploadedAt
   };
-  const patch: Partial<Order> = {
-    reportDocuments: [...(order.reportDocuments || []), report],
-    lastUpdated: uploadedAt,
-    internalNotes: [
-      ...(order.internalNotes || []),
-      { text: `Uploaded Turnitin report: ${report.label}`, actorUid: actor.uid, actorEmail: actor.email, createdAt: uploadedAt }
-    ]
-  };
+  const patch = turnitinReportReadyPatch(order, report, actor, uploadedAt);
   await ref.update(patch);
   return { ...order, ...patch } as Order;
 }

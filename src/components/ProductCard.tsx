@@ -24,6 +24,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const hasMultipleVariants = product.variants && product.variants.length > 1;
   const [laptopPreviewFailed, setLaptopPreviewFailed] = useState(false);
   const [showLaptopAvailability, setShowLaptopAvailability] = useState(false);
+  const [hoverLaptopAvailability, setHoverLaptopAvailability] = useState(false);
 
   const productName = product.name || STORE_COPY.product.softwareFallback;
   const cardName = product.kind === 'laptop' && product.laptop
@@ -57,6 +58,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const availabilityMessage = isPreorder
     ? 'This laptop will be shipped after purchase and delivered within 2 to 4 weeks after payment. Pay 70% now and the remaining 30% when the laptop arrives.'
     : 'This laptop is available with us and can be delivered as soon as your purchase is made.';
+  const laptopAvailabilityVisible = showLaptopAvailability || hoverLaptopAvailability;
 
   return (
     <article
@@ -71,14 +73,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {(!laptopPreviewUrl || laptopPreviewFailed) && <div className="flex h-full items-center justify-center px-6 text-center text-2xl font-black text-white">{cardName}</div>}
           <div className="absolute inset-0 bg-gradient-to-t from-[#014040]/95 via-[#014040]/35 to-black/5" aria-hidden="true" />
           {showCategoryLabel && <span className="absolute left-3 top-3 rounded-full border border-white/30 bg-[#014040]/75 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white backdrop-blur-sm">{product.categoryName || 'Laptop'}</span>}
-          <button type="button" onClick={(event) => { event.stopPropagation(); setShowLaptopAvailability((value) => !value); }} className={`absolute right-3 top-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider shadow-sm ${isPreorder ? 'bg-amber-300 text-amber-950' : 'bg-[#05ef28] text-[#014040]'}`} aria-expanded={showLaptopAvailability}><Info className="h-3 w-3" />{isPreorder ? 'Pre-order' : 'Available'}</button>
+          <div
+            className="absolute right-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-col items-end"
+            onMouseEnter={() => setHoverLaptopAvailability(true)}
+            onMouseLeave={() => setHoverLaptopAvailability(false)}
+            onFocus={() => setHoverLaptopAvailability(true)}
+            onBlur={() => setHoverLaptopAvailability(false)}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button type="button" onClick={() => setShowLaptopAvailability((value) => !value)} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider shadow-sm ${isPreorder ? 'bg-amber-300 text-amber-950' : 'bg-[#05ef28] text-[#014040]'}`} aria-expanded={laptopAvailabilityVisible} aria-describedby={`laptop-availability-${product.itemId}`}><Info className="h-3 w-3" />{isPreorder ? 'Pre-order' : 'Available'}</button>
+            {laptopAvailabilityVisible && <div id={`laptop-availability-${product.itemId}`} role="tooltip" className="mt-2 w-64 max-w-[calc(100vw-3rem)] rounded-xl border border-[#cbdcd9] bg-white/95 p-3 text-left text-xs font-semibold normal-case leading-5 tracking-normal text-slate-700 shadow-xl backdrop-blur-sm">{availabilityMessage}</div>}
+          </div>
           <div className="absolute inset-x-0 bottom-0 p-5 text-white"><h3 className="text-xl font-black leading-tight sm:text-2xl">{cardName}</h3><p className="mt-1 text-2xl font-black text-[#05ef28]">{displayPrice}</p>{(product.promoLabel || product.promoPercent) && <p className="mt-1 text-[10px] font-black text-[#d9ffe0]">{product.promoLabel || `${product.promoPercent}% off`} · <PromotionCountdown endsAt={product.promoEndsAt} /></p>}</div>
         </div> : product.cardImageUrl ? <div className="relative -mx-5 -mt-5 mb-5 aspect-[3/2] overflow-hidden bg-[#edf5f3] sm:-mx-6 sm:-mt-6"><img src={product.cardImageUrl} alt="" width="900" height="600" loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" /><div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" /><div className="absolute bottom-3 left-3"><ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} size="sm" /></div>{showCategoryLabel && <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-black uppercase text-[#014040]">{product.categoryName || STORE_COPY.product.softwareFallback}</span>}</div> : <div className="mb-4 flex items-start justify-between gap-3">
           <div className="rounded-2xl transition-transform group-hover:scale-105 motion-reduce:transition-none"><ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} /></div>
           <div className="text-right">{showCategoryLabel && <span className="inline-block rounded-full border border-[#d0e4e0] bg-[#edf5f3] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-[#014040]">{product.categoryName || STORE_COPY.product.softwareFallback}</span>}{hasMultipleVariants && <span className="mt-1 block text-[10px] font-medium text-slate-500">{STORE_COPY.product.versionsAvailable(product.variants?.length || 0)}</span>}</div>
         </div>}
-        {product.kind === 'laptop' && showLaptopAvailability && <div className="mb-4 rounded-xl border border-[#cbdcd9] bg-[#edf5f3] p-3 text-left text-xs font-semibold leading-5 text-slate-700" onClick={(event) => event.stopPropagation()}>{availabilityMessage}</div>}
-
         {/* Product Name */}
         {product.kind !== 'laptop' && <h3
           className="text-base sm:text-lg font-bold text-[#014040] tracking-tight group-hover:text-[#025656] transition-colors leading-snug"

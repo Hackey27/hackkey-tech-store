@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { AlertCircle, Check, CreditCard, Minus, Plus, ShoppingCart } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, CreditCard, Minus, Plus, ShoppingCart } from 'lucide-react';
 import { CatalogueItem, ServiceOption } from '../types';
+import { STORE_COPY } from '../config/storeCopy';
 import { formatPesewas, priceServiceLine } from '../utils/money';
+import { isTurnitinAiCheck } from '../utils/turnitin';
 
 interface ServicePurchasePanelProps {
   item: CatalogueItem;
@@ -23,6 +25,7 @@ export const ServicePurchasePanel: React.FC<ServicePurchasePanelProps> = ({ item
   const minQty = item.minQty ?? 1;
   const maxQty = item.maxQty ?? 50;
   const [quantity, setQuantity] = useState<number>(minQty);
+  const [showImportantInformation, setShowImportantInformation] = useState(false);
 
   if (!options.length || !selected) return null;
 
@@ -116,13 +119,29 @@ export const ServicePurchasePanel: React.FC<ServicePurchasePanelProps> = ({ item
         </div>
       </div>
 
-      {/* Rendered verbatim, before purchase. It manages a real expectation gap:
-          a customer whose similarity index differs from their university's
-          would otherwise reasonably believe the check was wrong. */}
+      {/* Keep the two Turnitin notices together so customers see the similarity
+          explanation first and the AI-only word limit immediately after it. */}
       {item.disclaimer && (
-        <div className="flex gap-2.5 p-3.5 rounded-xl bg-[#fffbeb] border border-[#fde68a]">
-          <AlertCircle className="w-4 h-4 text-[#b45309] shrink-0 mt-0.5" />
-          <p className="text-xs text-[#78350f] leading-relaxed">{item.disclaimer}</p>
+        <div className="overflow-hidden rounded-xl border border-[#fde68a] bg-[#fffbeb]">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-3 p-3.5 text-left text-xs font-black leading-relaxed text-[#78350f]"
+            onClick={() => setShowImportantInformation((value) => !value)}
+            aria-expanded={showImportantInformation}
+            aria-controls={`important-information-${item.itemId}`}
+          >
+            <span className="flex items-start gap-2.5">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#b45309]" />
+              {STORE_COPY.turnitin.importantInformation}
+            </span>
+            <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${showImportantInformation ? 'rotate-180' : ''}`} />
+          </button>
+          {showImportantInformation && (
+            <div id={`important-information-${item.itemId}`} className="space-y-3 border-t border-[#fde68a] px-4 py-3.5 text-xs leading-relaxed text-[#78350f]">
+              <p>{item.disclaimer}</p>
+              {isTurnitinAiCheck(selected.optionId) && <p>{STORE_COPY.turnitin.aiWordLimit}</p>}
+            </div>
+          )}
         </div>
       )}
 

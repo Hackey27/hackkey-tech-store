@@ -17,6 +17,8 @@ import {
 } from '../src/utils/money';
 import { PricingConfig, ServiceOption } from '../src/types';
 import { TURNITIN_SERVICE } from '../server/seed/turnitin';
+import { STORE_COPY } from '../src/config/storeCopy';
+import { isTurnitinAiCheck } from '../src/utils/turnitin';
 
 const PLAG_AI: ServiceOption = {
   optionId: 'PLAG_AI',
@@ -295,6 +297,14 @@ test('the disclaimer is stored verbatim', () => {
     'because institutions may include private or local repositories in their ' +
     'Turnitin configuration that we do not have access to.';
   assert.equal(TURNITIN_SERVICE.disclaimer, expected);
+});
+
+test('the AI word-limit notice applies only to the combined Turnitin check', () => {
+  assert.equal(isTurnitinAiCheck('PLAG_AI'), true);
+  assert.equal(isTurnitinAiCheck('PLAG'), false);
+  assert.match(STORE_COPY.turnitin.aiWordLimit, /29,990 words/);
+  assert.match(STORE_COPY.turnitin.aiWordLimit, /reference list and appendix/);
+  assert.match(STORE_COPY.turnitin.aiWordLimit, /quantity to 2/);
 });
 
 test('the catalogue card shows the cheapest option', () => {

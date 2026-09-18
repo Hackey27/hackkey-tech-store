@@ -2,10 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { bearerToken, requireAdmin, validateAdminClaims } from '../server/adminAuth';
 import { validateLicenceRows, validateServiceDefinition } from '../server/adminValidation';
-import { Service } from '../src/types';
+import { Order, Service, TurnitinReportDocument } from '../src/types';
 import express from 'express';
 import { createAdminRouter } from '../server/adminRoutes';
 import { announcementStorageKey, shouldShowAnnouncement } from '../src/components/AnnouncementModal';
+import { turnitinReportReadyPatch } from '../server/adminData';
 
 const PROJECT = 'hack-key-tech-store-staging';
 const validClaims = {
@@ -105,6 +106,25 @@ test('the report upload route returns 401 without admin authentication', async (
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
+});
+
+test('attaching a Turnitin report automatically makes the order ready', () => {
+  const order = {
+    orderId: 'ORDER-1', cartId: 'CART-1', orderDate: '2026-09-18T10:00:00.000Z', lastUpdated: '2026-09-18T10:00:00.000Z',
+    customerName: 'Customer', phone: '0540000000', email: 'customer@example.com', variantId: 'TURNITIN', productId: 'TURNITIN',
+    productName: 'Turnitin', versionOrPlan: 'Plagiarism + AI Check', deliveryOs: 'N/A', amountPesewas: 5000,
+    paymentStatus: 'paid', fulfilmentStatus: 'awaiting-seller-activation',
+    reportDocuments: [{ reportId: 'REP-OLD', label: 'Similarity report', originalName: 'old.pdf', uploadedAt: '2026-09-18T10:05:00.000Z' }],
+    fulfilmentHistory: [{ status: 'awaiting-seller-activation', at: '2026-09-18T10:05:00.000Z' }]
+  } as Order;
+  const uploadedAt = '2026-09-18T10:10:00.000Z';
+  const report: TurnitinReportDocument = { reportId: 'REP-NEW', label: 'AI report', originalName: 'ai.pdf', storagePath: 'reports/ORDER-1/ai.pdf', uploadedAt };
+  const patch = turnitinReportReadyPatch(order, report, { uid: 'admin-1', email: 'admin@example.com' }, uploadedAt);
+
+  assert.equal(patch.fulfilmentStatus, 'ready');
+  assert.equal(patch.fulfilledAt, uploadedAt);
+  assert.deepEqual(patch.reportDocuments?.map((item) => item.reportId), ['REP-OLD', 'REP-NEW']);
+  assert.equal(patch.fulfilmentHistory?.at(-1)?.status, 'ready');
 });
 
 test('licence imports report unknown variants and both kinds of duplicates per row', () => {

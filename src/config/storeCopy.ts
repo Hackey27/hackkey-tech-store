@@ -114,6 +114,12 @@ export const STORE_COPY = {
       `Step ${current} of ${total}: ${label}`,
   },
 
+  turnitin: {
+    importantInformation: 'Important information, please read before you place your order',
+    aiWordLimit:
+      'AI checking is limited to 29,990 words. Please make sure your document contains 29,990 words or fewer. If it is slightly above the limit, remove the reference list and appendix before uploading. If it still exceeds the limit, split the document into two files and increase your order quantity to 2 so both parts can be checked.',
+  },
+
   // Device Lock Disclaimers
   deviceLock: {
     before:
