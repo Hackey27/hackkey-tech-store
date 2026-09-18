@@ -57,7 +57,7 @@ export function resolveVariantOperatingSystem(
 
   // Section 1.3: If macViaParallels is true and macOS not in list, add macOS and require choice
   if (macViaParallels && !osList.includes('macOS')) {
-    osList.push('macOS (via Parallels)');
+    osList.push('Mac via Parallels — no extra cost');
     requiresChoice = true;
   }
 

@@ -442,7 +442,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
                   )}
 
                   {/* STATE 4: READY (Section 4 & 7) -> Licence code with Copy button and Resource Links */}
-                  {order.paymentStatus === 'paid' && (order.activationCodeOrKey || order.windowsInstallerUrl || order.guideUrl || order.learningResourcesUrl) && (
+                  {order.paymentStatus === 'paid' && (order.activationCodeOrKey || order.windowsInstallerUrl || order.parallelsInstallerUrl || order.windows11DownloadUrl || order.guideUrl || order.learningResourcesUrl) && (
                     <div className="space-y-4">
                       {order.activationCodeOrKey && <div className="p-5 rounded-2xl bg-[#014040] text-white space-y-2 shadow-xs">
                         <div className="flex items-center justify-between">
@@ -482,20 +482,24 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
                         <div className="flex flex-wrap gap-2 pt-1">
                           {order.macViaParallels ? (
                             <>
-                              <a
-                                href={order.windowsInstallerUrl || '#'}
+                              {(order.parallelsInstallerUrl || order.windowsInstallerUrl) && <a
+                                href={order.parallelsInstallerUrl || order.windowsInstallerUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#cbdcd9] text-xs font-bold text-[#014040] hover:bg-[#edf5f3] shadow-2xs"
                               >
                                 <Download className="w-3.5 h-3.5 text-[#014040]" />
                                 <span>Download Parallels Desktop Software</span>
-                              </a>
-                              <a
-                                href="#"
+                              </a>}
+                              {order.windows11DownloadUrl && <a
+                                href={order.windows11DownloadUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#cbdcd9] text-xs font-bold text-[#014040] hover:bg-[#edf5f3] shadow-2xs"
                               >
                                 <Download className="w-3.5 h-3.5 text-[#014040]" />
                                 <span>Download Windows 11 File</span>
-                              </a>
+                              </a>}
                               <a
                                 href="https://download.teamviewer.com/download/TeamViewer_Setup.exe"
                                 target="_blank"

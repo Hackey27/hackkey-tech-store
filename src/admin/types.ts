@@ -1,4 +1,4 @@
-import { Announcement, Bundle, CatalogueItemKind, Category, LandingSettings, Laptop, LicencePoolEntry, Order, PricingConfig, Product, Service } from '../types';
+import { Announcement, Bundle, CatalogueItemKind, Category, CustomerRequest, LandingSettings, Laptop, LicencePoolEntry, Order, PricingConfig, Product, Service } from '../types';
 
 export interface AdminMediaItem {
   kind: CatalogueItemKind | 'category';
@@ -29,6 +29,7 @@ export interface VariantSummary {
 
 export interface AdminData {
   orders: Order[];
+  requests: CustomerRequest[];
   licences: AdminLicence[];
   services: Service[];
   announcements: Announcement[];

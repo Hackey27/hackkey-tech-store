@@ -29,6 +29,9 @@ import {
 import { PromotionCountdown } from './components/PromotionCountdown';
 import { SearchResultsOverlay } from './components/SearchResultsOverlay';
 import { searchCatalogue } from './utils/catalogueSearch';
+import { fulfilmentTimeState } from './utils/fulfilmentTime';
+import { cartDeliveryNotice } from './utils/cartDeliveryNotice';
+import { DeliveryWindowGate } from './components/DeliveryWindowGate';
 
 type StoreRoute =
   | { view: 'home' }
@@ -59,6 +62,7 @@ export const App: React.FC = () => {
   // Cart state
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [buyNowItem, setBuyNowItem] = useState<CartItem | null>(null);
+  const [pendingBuyNowItem, setPendingBuyNowItem] = useState<CartItem | null>(null);
 
   // "Featured software" filter toggle:
   // Requirement: "Show a small number of products only" and "Include a View all software control"
@@ -185,7 +189,7 @@ export const App: React.FC = () => {
 
   const handleBuyNow = (product: CatalogueItem, variant?: Variant, selectedOs?: string, serviceOption?: ServiceOption, quantity = 1, bundleSelections?: Record<string, string>) => {
     const fallback = defaultSelection(product);
-    setBuyNowItem({
+    const item: CartItem = {
       id: `buy-${product.itemId}`,
       product,
       variant: variant || fallback.variant,
@@ -193,7 +197,12 @@ export const App: React.FC = () => {
       serviceOption: serviceOption || fallback.serviceOption,
       quantity,
       bundleSelections: bundleSelections || fallback.bundleSelections
-    });
+    };
+    if (cartDeliveryNotice(item).enabled && !fulfilmentTimeState(new Date()).insideWindow) {
+      setPendingBuyNowItem(item);
+      return;
+    }
+    setBuyNowItem(item);
   };
 
   const openProduct = (product: CatalogueItem) => navigate(`/product/${encodeURIComponent(product.itemId)}`);
@@ -522,6 +531,7 @@ export const App: React.FC = () => {
       )}
 
       {buyNowItem && <DirectCheckoutModal item={buyNowItem} onClose={() => setBuyNowItem(null)} />}
+      {pendingBuyNowItem && <DeliveryWindowGate item={pendingBuyNowItem} onCancel={() => setPendingBuyNowItem(null)} onConfirm={() => { setBuyNowItem(pendingBuyNowItem); setPendingBuyNowItem(null); }} />}
 
       {/* Mobile Fixed Bottom Navigation */}
       <BottomNav
@@ -535,7 +545,7 @@ export const App: React.FC = () => {
       />
 
       {/* Storefront footer */}
-      <footer className="border-t border-[#025656] bg-[#014040] pb-24 pt-9 text-xs text-white md:pb-8">
+      <footer className={`${route.view === 'home' && activeTab === 'home' ? '' : 'hidden md:block'} border-t border-[#025656] bg-[#014040] pb-24 pt-9 text-xs text-white md:pb-8`}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 gap-8 border-b border-white/20 pb-7 md:grid-cols-3">
             <div className="space-y-3">

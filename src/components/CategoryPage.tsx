@@ -46,8 +46,8 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({
       const preorder = items.length - available;
       return `${available} available${preorder ? ` · ${preorder} on pre-order` : ''}`;
     }
-    const noun = kinds.size === 1 && kinds.has('service') ? 'service' : kinds.size === 1 && kinds.has('bundle') ? 'bundle' : kinds.size === 1 && kinds.has('product') ? 'software title' : 'product';
-    return `${items.length} ${noun}${items.length === 1 ? '' : 's'} available`;
+    const noun = kinds.size === 1 && kinds.has('service') ? 'service' : kinds.size === 1 && kinds.has('bundle') ? 'bundle' : kinds.size === 1 && kinds.has('product') ? 'software' : 'product';
+    return `${items.length} ${noun}${noun === 'software' || items.length === 1 ? '' : 's'} available`;
   })();
   const showCustomBundle = kinds.has('bundle') || category.categoryId.toLowerCase().includes('bundle');
 

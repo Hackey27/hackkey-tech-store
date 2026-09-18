@@ -72,10 +72,10 @@ export const STORE_COPY = {
     latest: 'Latest',
     fromPrice: (priceStr: string) => `Starts at ${priceStr}`,
     askForPrice: 'Ask for price',
-    fromPrefix: 'From',
+    fromPrefix: 'Starts at',
     chooseOperatingSystem: '1. Choose your operating system',
     chooseVersion: 'Choose a version',
-    versionsAvailable: (count: number) => `${count} version(s) available`,
+    versionsAvailable: (count: number) => `${count} ${count === 1 ? 'version' : 'versions'} available`,
     platform: 'Platform:',
     priceLabel: 'Price (GHS)',
     addToCart: 'Add to Cart',
@@ -238,7 +238,7 @@ export const STORE_COPY = {
       submitBtn: 'Send request',
       successTitle: 'Request received.',
       successDesc: (software: string, phone: string) =>
-        `We have your request for ${software} and will contact you on ${phone}, usually on WhatsApp.`,
+        `We have your request for ${software}. We will contact you on ${phone} within 24 hours, usually on WhatsApp.`,
     },
 
     // Laptop Request (from openLaptopRequest in authoritative Apps Script)
@@ -299,7 +299,7 @@ export const STORE_COPY = {
       submitBtn: 'Submit my request',
       successTitle: (name?: string) => `Thank you${name ? `, ${name}` : ''}.`,
       successDesc: (ref: string) =>
-        `We will review your requirements and contact you within 24 to 48 hours with suitable options and prices.\n\nYour reference is ${ref}.`,
+        `We have received your details and will contact you within 24 hours with suitable options and prices.\n\nYour reference is ${ref}.`,
     },
   },
 
@@ -370,6 +370,7 @@ export const ADMIN_COPY = {
   cancel: 'Cancel',
   sections: {
     orders: 'Orders',
+    requests: 'Requests',
     categories: 'Category setup',
     licences: 'Licences',
     services: 'Services',

@@ -21,7 +21,7 @@ export function CustomBundleRequest({ software }: { software: CatalogueItem[] })
       const response = await fetch('/api/requests/custom-bundle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customerName, phone, email, notes, software: chosen }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Unable to send your request.');
-      setMessage(`Request received. Reference: ${data.request?.requestId || 'submitted'}`);
+      setMessage('Your details have been received. We will contact you within 24 hours.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to send your request.'); }
     finally { setBusy(false); }
   };

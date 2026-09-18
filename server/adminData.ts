@@ -11,6 +11,7 @@ import {
   Laptop,
   LandingSettings,
   CatalogueItemKind,
+  CustomerRequest,
   PricingConfig,
   TurnitinReportDocument
 } from '../src/types';
@@ -68,8 +69,9 @@ export async function listVariantSummaries(): Promise<VariantSummary[]> {
 
 export async function adminBootstrap() {
   const db = getFirestore();
-  const [ordersSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, bundlesSnap, laptopsSnap, categoriesSnap, landingSnap, variants, pricing] = await Promise.all([
+  const [ordersSnap, requestsSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, bundlesSnap, laptopsSnap, categoriesSnap, landingSnap, variants, pricing] = await Promise.all([
     db.collection(COLLECTIONS.orders).get(),
+    db.collection(COLLECTIONS.requests).get(),
     db.collection(COLLECTIONS.licencePool).get(),
     db.collection(COLLECTIONS.services).get(),
     db.collection(COLLECTIONS.announcements).get(),
@@ -85,6 +87,9 @@ export async function adminBootstrap() {
   const orders = ordersSnap.docs
     .map((doc) => maskOrder(doc.data() as Order))
     .sort(newestOrderFirst);
+  const requests = requestsSnap.docs
+    .map((doc) => doc.data() as CustomerRequest)
+    .sort((a, b) => (b.requestDate || '').localeCompare(a.requestDate || ''));
   const licences: MaskedLicence[] = licencesSnap.docs.map((doc) => {
     const entry = doc.data() as LicencePoolEntry;
     return {
@@ -127,7 +132,7 @@ export async function adminBootstrap() {
     ...categories.map((item) => ({ kind: 'category' as const, itemId: item.categoryId, name: item.name, imagePath: item.imagePath, iconImagePath: item.iconImagePath, sortOrder: item.sortOrder }))
   ].sort((a, b) => a.name.localeCompare(b.name));
 
-  return { orders, licences, services, announcements, products, bundles, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {}, pricing };
+  return { orders, requests, licences, services, announcements, products, bundles, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {}, pricing };
 }
 
 export async function savePricingConfiguration(input: Partial<PricingConfig>): Promise<PricingConfig> {
@@ -595,6 +600,8 @@ export async function saveProductConfiguration(productId: string, input: Product
       activationWebsiteUrl: variant.activationWebsiteUrl?.trim() || undefined,
       activationLink: variant.activationWebsiteUrl?.trim() || variant.activationLink?.trim() || undefined,
       windowsInstallerUrl: variant.windowsInstallerUrl?.trim() || undefined,
+      parallelsInstallerUrl: variant.parallelsInstallerUrl?.trim() || undefined,
+      windows11DownloadUrl: variant.windows11DownloadUrl?.trim() || undefined,
       guideUrl: variant.guideUrl?.trim() || undefined,
       learningResourcesUrl: variant.learningResourcesUrl?.trim() || undefined,
       deliveryCodeType: variant.deliveryCodeType || 'licence'

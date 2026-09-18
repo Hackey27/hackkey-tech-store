@@ -20,6 +20,7 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Search,
   Send,
   Settings2,
   Trash2,
@@ -27,7 +28,7 @@ import {
   X
 } from 'lucide-react';
 import { ADMIN_COPY } from '../config/storeCopy';
-import { Announcement, Bundle, Category, Laptop as LaptopType, Order, PricingConfig, Product, Service, ServiceField, ServiceFieldType, ServiceOption, Variant } from '../types';
+import { Announcement, Bundle, Category, CustomerRequest, Laptop as LaptopType, Order, PricingConfig, Product, Service, ServiceField, ServiceFieldType, ServiceOption, Variant } from '../types';
 import { formatPesewas } from '../utils/money';
 import { defaultCustomerInputType, defaultDeliveryCodeType, effectiveActivationWebsiteUrl } from '../utils/softwareFulfilment';
 import { AnnouncementModal } from '../components/AnnouncementModal';
@@ -40,7 +41,7 @@ import { documentContentType } from '../utils/documentFiles';
 import { newestOrderFirst } from '../utils/orderSorting';
 import { adminOrderMatchesSearch } from '../utils/adminOrderSearch';
 
-type Section = 'orders' | 'categories' | 'services' | 'announcements' | 'landing' | 'pricing';
+type Section = 'orders' | 'requests' | 'categories' | 'services' | 'announcements' | 'landing' | 'pricing';
 
 const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#014040] focus:ring-2 focus:ring-[#014040]/10';
 const labelClass = 'space-y-1 text-xs font-bold text-slate-700';
@@ -377,6 +378,18 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
   );
 }
 
+function RequestsSection({ requests }: { requests: CustomerRequest[] }) {
+  const [query, setQuery] = useState('');
+  const normalized = query.trim().toLowerCase();
+  const visible = requests.filter((request) => !normalized || [request.requestId, request.kind, request.customerName, request.phone, request.email, request.notes, JSON.stringify(request.details)].some((value) => String(value || '').toLowerCase().includes(normalized)));
+  return <div className="space-y-5">
+    <div><h2 className="text-2xl font-black text-[#014040]">Customer requests</h2><p className="text-sm text-slate-600">Laptop, software, custom-bundle and quote enquiries submitted from the storefront.</p></div>
+    <label className="relative block max-w-2xl"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><input className={`${inputClass} pl-10`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, phone, email, request reference or submitted details" /></label>
+    <div className="space-y-3">{visible.map((request) => <details key={request.requestId} className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><summary className="cursor-pointer list-none p-4 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-black text-[#014040]">{request.customerName}</h3><p className="mt-1 text-xs font-bold text-slate-500">{request.kind.replaceAll('-', ' ')} · {request.requestId}</p></div><div className="text-right text-xs text-slate-500"><span className="rounded-full bg-[#edf5f3] px-2.5 py-1 font-black uppercase text-[#014040]">{request.status || 'new'}</span><time className="mt-2 block">{request.requestDate ? new Date(request.requestDate).toLocaleString() : ''}</time></div></div></summary><div className="space-y-4 border-t bg-slate-50 p-4 sm:p-5"><div className="grid gap-3 text-sm sm:grid-cols-2"><div><b className="block text-xs uppercase tracking-wider text-slate-500">Phone</b><a className="font-bold text-[#014040] hover:underline" href={`tel:${request.phone}`}>{request.phone}</a></div><div><b className="block text-xs uppercase tracking-wider text-slate-500">Email</b>{request.email ? <a className="break-all font-bold text-[#014040] hover:underline" href={`mailto:${request.email}`}>{request.email}</a> : <span>—</span>}</div></div>{request.notes && <div><b className="text-xs uppercase tracking-wider text-slate-500">Notes</b><p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{request.notes}</p></div>}<dl className="grid gap-3 rounded-xl border bg-white p-4 sm:grid-cols-2">{Object.entries(request.details || {}).map(([key, value]) => <div key={key}><dt className="text-[10px] font-black uppercase tracking-wider text-slate-500">{key.replace(/([A-Z])/g, ' $1')}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm font-semibold text-slate-800">{typeof value === 'string' ? value || '—' : JSON.stringify(value, null, 2)}</dd></div>)}</dl></div></details>)}</div>
+    {!visible.length && <p className="rounded-2xl border bg-white p-8 text-center text-sm text-slate-500">No requests match this search.</p>}
+  </div>;
+}
+
 function LicencesSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
   const [keysByVariant, setKeysByVariant] = useState<Record<string, string>>({});
   const [revealed, setRevealed] = useState<Record<string, string>>({});
@@ -457,7 +470,7 @@ function ServicesSection({ data, user, reload }: { data: AdminData; user: User; 
     <div className="grid gap-5 xl:grid-cols-[220px_1fr_360px]">
       <aside className="h-fit rounded-2xl border bg-white p-2">{data.services.map((service) => <button key={service.serviceId} onClick={() => setDraft(structuredClone(service))} className={`w-full rounded-xl p-3 text-left text-sm ${draft.serviceId === service.serviceId ? 'bg-[#edf5f3] font-black text-[#014040]' : 'hover:bg-slate-50'}`}>{service.name}<small className="block font-mono text-[10px] text-slate-500">{service.serviceId}</small></button>)}</aside>
       <section className="space-y-5 rounded-2xl border bg-white p-5">
-        {draft.serviceId.toUpperCase() === 'TURNITIN' && <label className="block rounded-xl border border-amber-200 bg-[#fffaf0] p-4"><span className="flex items-center gap-2 text-sm font-black text-[#014040]"><input type="checkbox" checked={draft.showDeliveryNotice === true} onChange={(e) => set('showDeliveryNotice', e.target.checked)} />Show report fulfilment notice</span><small className="mt-1 block font-normal text-slate-600">Show the 20–40 minute fulfilment estimate and delivery-hours information to customers for Turnitin reports.</small></label>}
+        <label className="block rounded-xl border border-amber-200 bg-[#fffaf0] p-4"><span className="flex items-center gap-2 text-sm font-black text-[#014040]"><input type="checkbox" checked={draft.showDeliveryNotice === true} onChange={(e) => set('showDeliveryNotice', e.target.checked)} />Show delivery-window notice</span><small className="mt-1 block font-normal text-slate-600">Show the 20–40 minute fulfilment estimate, delivery hours and outside-hours confirmation for this service.</small></label>
         <div className="grid gap-3 sm:grid-cols-2"><label className={labelClass}>Service ID<input className={inputClass} value={draft.serviceId} onChange={(e) => set('serviceId', e.target.value)} /></label><label className={labelClass}>Name<input className={inputClass} value={draft.name} onChange={(e) => set('name', e.target.value)} /></label><label className={labelClass}>Tagline<input className={inputClass} value={draft.tagline} onChange={(e) => set('tagline', e.target.value)} /></label><label className={labelClass}>Category ID<input className={inputClass} value={draft.categoryId} onChange={(e) => set('categoryId', e.target.value)} /></label><label className={`${labelClass} sm:col-span-2`}>Description<textarea className={inputClass} value={draft.description} onChange={(e) => set('description', e.target.value)} /></label><label className={labelClass}>CTA label<input className={inputClass} value={draft.ctaLabel} onChange={(e) => set('ctaLabel', e.target.value)} /></label><label className={labelClass}>Sort order<input className={inputClass} type="number" value={draft.sortOrder} onChange={(e) => set('sortOrder', Number(e.target.value))} /></label><label className={labelClass}>Minimum quantity<input className={inputClass} type="number" min="1" value={draft.minQty ?? 1} onChange={(e) => set('minQty', Number(e.target.value))} /></label><label className={labelClass}>Maximum quantity<input className={inputClass} type="number" min="1" value={draft.maxQty ?? 50} onChange={(e) => set('maxQty', Number(e.target.value))} /></label><label className={`${labelClass} sm:col-span-2`}>Disclaimer<textarea className={inputClass} value={draft.disclaimer || ''} onChange={(e) => set('disclaimer', e.target.value || undefined)} /></label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={draft.active} onChange={(e) => set('active', e.target.checked)} /> Published</label></div>
         <div><div className="flex justify-between"><h3 className="font-black">Form fields</h3><button className={secondaryButton} onClick={() => set('fields', [...draft.fields, { key: `field_${draft.fields.length + 1}`, label: 'New field', type: 'text', required: false }])}><Plus className="h-3 w-3" />{ADMIN_COPY.services.addField}</button></div><div className="mt-3 space-y-3">{draft.fields.map((field, i) => <div key={`${field.key}-${i}`} className="rounded-xl border p-3"><div className="grid gap-2 sm:grid-cols-3"><input className={inputClass} placeholder="Field key" value={field.key} onChange={(e) => updateField(i, { key: e.target.value })} /><input className={inputClass} placeholder="Label" value={field.label} onChange={(e) => updateField(i, { label: e.target.value })} /><select className={inputClass} value={field.type} onChange={(e) => updateField(i, { type: e.target.value as ServiceFieldType })}>{fieldTypes.map((type) => <option key={type}>{type}</option>)}</select><input className={inputClass} placeholder="Helper text" value={field.helper || ''} onChange={(e) => updateField(i, { helper: e.target.value || undefined })} /><input className={inputClass} placeholder="Placeholder" value={field.placeholder || ''} onChange={(e) => updateField(i, { placeholder: e.target.value || undefined })} /><input className={inputClass} placeholder="Options, comma separated" value={(field.options || []).join(', ')} onChange={(e) => updateField(i, { options: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })} /><select className={inputClass} value={field.showIf?.field || ''} onChange={(e) => updateField(i, { showIf: e.target.value ? { field: e.target.value, equals: field.showIf?.equals || '' } : undefined })}><option value="">Always show</option>{draft.fields.filter((_, index) => index !== i).map((other) => <option key={other.key} value={other.key}>{ADMIN_COPY.services.showWhen} {other.label}</option>)}</select><input className={inputClass} placeholder={ADMIN_COPY.services.equals} disabled={!field.showIf} value={field.showIf?.equals || ''} onChange={(e) => updateField(i, { showIf: field.showIf ? { ...field.showIf, equals: e.target.value } : undefined })} /><label className="flex items-center gap-2 px-2 text-xs font-bold"><input type="checkbox" checked={field.required} onChange={(e) => updateField(i, { required: e.target.checked })} /> Required</label></div><div className="mt-2 flex justify-end gap-1"><button className={secondaryButton} onClick={() => moveField(i, -1)}><ArrowUp className="h-3 w-3" /></button><button className={secondaryButton} onClick={() => moveField(i, 1)}><ArrowDown className="h-3 w-3" /></button><button className={secondaryButton} onClick={() => set('fields', draft.fields.filter((_, index) => index !== i))}><Trash2 className="h-3 w-3" /></button></div></div>)}</div></div>
         <div><div className="flex justify-between"><h3 className="font-black">Priced options</h3><button className={secondaryButton} onClick={() => set('options', [...(draft.options || []), { optionId: `option_${(draft.options || []).length + 1}`, name: 'New option', unitPriceGhs: 1 }])}><Plus className="h-3 w-3" />{ADMIN_COPY.services.addOption}</button></div>{!draft.options?.length && <p className="mt-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">{ADMIN_COPY.services.quoteOnly}</p>}<div className="mt-3 space-y-3">{draft.options?.map((option, i) => <div key={`${option.optionId}-${i}`} className="grid gap-2 rounded-xl border p-3 sm:grid-cols-3"><input className={inputClass} placeholder="Option ID" value={option.optionId} onChange={(e) => updateOption(i, { optionId: e.target.value })} /><input className={inputClass} placeholder="Name" value={option.name} onChange={(e) => updateOption(i, { name: e.target.value })} /><label className={labelClass}>Unit price (GHS)<input className={inputClass} type="number" step="0.01" value={option.unitPriceGhs} onChange={(e) => updateOption(i, { unitPriceGhs: Number(e.target.value) })} /></label><label className={labelClass}>Bulk price (GHS)<input className={inputClass} type="number" step="0.01" value={option.bulkPriceGhs ?? ''} onChange={(e) => updateOption(i, { bulkPriceGhs: e.target.value ? Number(e.target.value) : undefined })} /></label><label className={labelClass}>Bulk from quantity<input className={inputClass} type="number" value={option.bulkFromQty ?? ''} onChange={(e) => updateOption(i, { bulkFromQty: e.target.value ? Number(e.target.value) : undefined })} /></label><button className={`${secondaryButton} self-end`} onClick={() => set('options', draft.options?.filter((_, index) => index !== i))}><Trash2 className="h-3 w-3" /></button></div>)}</div></div>
@@ -847,10 +860,50 @@ function CategorySetupEditor({ category, media, user, reload }: { category: Cate
 
 function ProductSetupEditor({ product, media, data, user, reload }: { product: Product; media?: AdminMediaItem; data: AdminData; user: User; reload: () => Promise<void> }) {
   const [draft, setDraft] = useState(() => structuredClone(product));
-  const [busy, setBusy] = useState(false); const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
   const set = <K extends keyof Product>(key: K, value: Product[K]) => setDraft((old) => ({ ...old, [key]: value }));
-  const save = async () => { setBusy(true); setMessage(''); try { await adminRequest(user, `/products/${encodeURIComponent(draft.productId)}/configuration`, { method: 'PUT', body: JSON.stringify(draft) }); setMessage('Software preview saved.'); await reload(); } catch (error) { setMessage(messageOf(error)); } finally { setBusy(false); } };
-  return <div className="space-y-5"><section className="space-y-4 rounded-2xl border bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">Software preview</p><h3 className="text-xl font-black text-[#014040]">{draft.productName}</h3></div><button className={primaryButton} disabled={busy} onClick={save}><Save className="h-4 w-4" />Save product</button></div><PublishedControl checked={draft.active} onChange={(value) => set('active', value)} /><div className="grid gap-3 sm:grid-cols-2"><label className={labelClass}>Product name<input className={inputClass} value={draft.productName} onChange={(e) => set('productName', e.target.value)} /></label><label className={labelClass}>Category<select className={inputClass} value={draft.categoryId} onChange={(e) => set('categoryId', e.target.value)}>{data.categories.map((category) => <option key={category.categoryId} value={category.categoryId}>{category.name}</option>)}</select></label><label className={`${labelClass} sm:col-span-2`}>About this software<textarea className={inputClass} rows={5} value={draft.description || ''} onChange={(e) => set('description', e.target.value)} /></label><label className={labelClass}>Display order<input className={inputClass} type="number" min="0" value={draft.sortOrder ?? 0} onChange={(e) => set('sortOrder', Number(e.target.value))} /></label><label className={labelClass}>Featured order<input className={inputClass} type="number" min="0" placeholder="Leave blank if not featured" value={draft.featuredOrder ?? ''} onChange={(e) => set('featuredOrder', e.target.value === '' ? undefined : Number(e.target.value))} /></label></div>{message && <p className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}</section><SetupMediaEditor media={media} user={user} reload={reload} /></div>;
+  const categoryName = data.categories.find((category) => category.categoryId === draft.categoryId)?.name || '';
+  const supportsSingleLicenceNotice = /(data|analysis|visuali[sz]ation|design|engineering)/i.test(`${draft.categoryId} ${categoryName}`);
+  const allVariantsShowDeliveryNotice = draft.variants.length > 0 && draft.variants.every((variant) => variant.showDeliveryNotice === true);
+  const setDeliveryNoticeForAllVersions = (checked: boolean) => setDraft((old) => ({ ...old, variants: old.variants.map((variant) => ({ ...variant, showDeliveryNotice: checked })) }));
+  const windowsOnlyVariants = draft.variants.filter((variant) => /win/i.test(variant.os || '') && !/mac/i.test(variant.os || ''));
+  const parallelsEnabled = windowsOnlyVariants.length > 0 && windowsOnlyVariants.every((variant) => variant.macViaParallels === true);
+  const parallelsInstallerUrl = windowsOnlyVariants.find((variant) => variant.parallelsInstallerUrl)?.parallelsInstallerUrl || '';
+  const windows11DownloadUrl = windowsOnlyVariants.find((variant) => variant.windows11DownloadUrl)?.windows11DownloadUrl || '';
+  const updateWindowsOnlyVariants = (patch: Partial<Variant>) => setDraft((old) => ({
+    ...old,
+    variants: old.variants.map((variant) => /win/i.test(variant.os || '') && !/mac/i.test(variant.os || '') ? { ...variant, ...patch } : variant)
+  }));
+  const save = async () => {
+    setBusy(true); setMessage('');
+    try {
+      await adminRequest(user, `/products/${encodeURIComponent(draft.productId)}/configuration`, { method: 'PUT', body: JSON.stringify(draft) });
+      setMessage('Software preview saved.'); await reload();
+    } catch (error) { setMessage(messageOf(error)); }
+    finally { setBusy(false); }
+  };
+  return <div className="space-y-5">
+    <section className="space-y-4 rounded-2xl border bg-white p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">Software preview</p><h3 className="text-xl font-black text-[#014040]">{draft.productName}</h3></div><button className={primaryButton} disabled={busy} onClick={save}><Save className="h-4 w-4" />Save product</button></div>
+      <PublishedControl checked={draft.active} onChange={(value) => set('active', value)} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className={labelClass}>Product name<input className={inputClass} value={draft.productName} onChange={(e) => set('productName', e.target.value)} /></label>
+        <label className={labelClass}>Category<select className={inputClass} value={draft.categoryId} onChange={(e) => set('categoryId', e.target.value)}>{data.categories.map((category) => <option key={category.categoryId} value={category.categoryId}>{category.name}</option>)}</select></label>
+        <label className={`${labelClass} sm:col-span-2`}>About this software<textarea className={inputClass} rows={5} value={draft.description || ''} onChange={(e) => set('description', e.target.value)} /></label>
+        <label className={labelClass}>Display order<input className={inputClass} type="number" min="0" value={draft.sortOrder ?? 0} onChange={(e) => set('sortOrder', Number(e.target.value))} /></label>
+        <label className={labelClass}>Featured order<input className={inputClass} type="number" min="0" placeholder="Leave blank if not featured" value={draft.featuredOrder ?? ''} onChange={(e) => set('featuredOrder', e.target.value === '' ? undefined : Number(e.target.value))} /></label>
+        <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm font-bold"><input className="mt-1" type="checkbox" checked={allVariantsShowDeliveryNotice} onChange={(e) => setDeliveryNoticeForAllVersions(e.target.checked)} /><span>Show delivery-window notice on every version<small className="mt-1 block font-normal text-slate-500">Controls the storefront notice and outside-hours confirmation.</small></span></label>
+        {supportsSingleLicenceNotice && <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm font-bold"><input className="mt-1" type="checkbox" checked={draft.showSingleLicenceDisclaimer === true} onChange={(e) => set('showSingleLicenceDisclaimer', e.target.checked)} /><span>Show single-licence, single-version and single-laptop disclaimer<small className="mt-1 block font-normal text-slate-500">For Data Analysis, Visualisation, Design and Engineering software.</small></span></label>}
+      </div>
+      {windowsOnlyVariants.length > 0 && <div className="space-y-3 rounded-2xl border border-[#cbdcd9] bg-[#f8fbfa] p-4">
+        <label className="flex items-start gap-2 text-sm font-black text-[#014040]"><input className="mt-1" type="checkbox" checked={parallelsEnabled} onChange={(e) => updateWindowsOnlyVariants({ macViaParallels: e.target.checked })} /><span>Offer Mac via Parallels at no extra cost<small className="mt-1 block font-normal text-slate-500">Adds the option to all Windows-only versions of this software.</small></span></label>
+        {parallelsEnabled && <div className="grid gap-3 sm:grid-cols-2"><label className={labelClass}>Parallels download URL<input className={inputClass} type="url" value={parallelsInstallerUrl} onChange={(e) => updateWindowsOnlyVariants({ parallelsInstallerUrl: e.target.value || undefined })} /></label><label className={labelClass}>Windows 11 download URL<input className={inputClass} type="url" value={windows11DownloadUrl} onChange={(e) => updateWindowsOnlyVariants({ windows11DownloadUrl: e.target.value || undefined })} /></label></div>}
+      </div>}
+      {message && <p className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}
+    </section>
+    <SetupMediaEditor media={media} user={user} reload={reload} />
+  </div>;
 }
 
 function BundleSetupEditor({ bundle, media, data, user, reload }: { bundle: Bundle; media?: AdminMediaItem; data: AdminData; user: User; reload: () => Promise<void> }) {
@@ -942,9 +995,10 @@ export default function AdminPortal() {
 
   if (checking) return <div className="min-h-screen bg-[#f7faf9] p-8 text-[#014040]">{ADMIN_COPY.loading}</div>;
   if (!user) return <SignIn />;
-  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'categories', icon: <Settings2 /> }, { id: 'services', icon: <Settings2 /> }, { id: 'pricing', icon: <BadgePercent /> }, { id: 'landing', icon: <ImagePlus /> }, { id: 'announcements', icon: <Bell /> }];
+  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'requests', icon: <FileText /> }, { id: 'categories', icon: <Settings2 /> }, { id: 'services', icon: <Settings2 /> }, { id: 'pricing', icon: <BadgePercent /> }, { id: 'landing', icon: <ImagePlus /> }, { id: 'announcements', icon: <Bell /> }];
   const content = !data ? <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">{ADMIN_COPY.loading}</div>
     : section === 'orders' ? <OrdersSection data={data} user={user} reload={reload} />
+    : section === 'requests' ? <RequestsSection requests={data.requests} />
     : section === 'categories' ? <CategorySetupSection data={data} user={user} reload={reload} />
     : section === 'services' ? <ServicesSection data={data} user={user} reload={reload} />
     : section === 'pricing' ? <PricingPromotionsSection data={data} user={user} reload={reload} />

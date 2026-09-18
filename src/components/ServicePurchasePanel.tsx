@@ -26,6 +26,7 @@ export const ServicePurchasePanel: React.FC<ServicePurchasePanelProps> = ({ item
   const maxQty = item.maxQty ?? 50;
   const [quantity, setQuantity] = useState<number>(minQty);
   const [showImportantInformation, setShowImportantInformation] = useState(false);
+  const isTurnitin = item.itemId.toUpperCase() === 'TURNITIN';
 
   if (!options.length || !selected) return null;
 
@@ -146,7 +147,7 @@ export const ServicePurchasePanel: React.FC<ServicePurchasePanelProps> = ({ item
       )}
 
       <div className="grid grid-cols-2 gap-2">
-        <button onClick={() => onBuyNow(selected, quantity)} className="flex items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-3 py-3 text-sm font-black text-[#014040]"><CreditCard className="h-4 w-4" />Buy now</button>
+        <button onClick={() => onBuyNow(selected, quantity)} className="flex items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-3 py-3 text-sm font-black text-[#014040]"><CreditCard className="h-4 w-4" />{isTurnitin ? 'Check now' : 'Buy now'}</button>
         <button onClick={() => onAddToCart(selected, quantity)} className="flex items-center justify-center gap-2 rounded-xl bg-[#014040] px-3 py-3 text-sm font-black text-white"><ShoppingCart className="h-4 w-4" />Add to cart</button>
       </div>
     </div>

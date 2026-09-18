@@ -43,9 +43,12 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   const [showInterestForm, setShowInterestForm] = useState(initialInterestForm);
   const productName = product.name || STORE_COPY.product.softwareFallback;
   const recommendedId = variants.find((variant) => variant.latest)?.variantId;
+  const latestVariant = variants.find((variant) => variant.latest && variant.available) || variants.find((variant) => variant.available);
   const isPurchasableService = product.kind === 'service' && (product.options?.length ?? 0) > 0;
   const isQuoteOnly = product.kind === 'laptop' || (product.kind === 'service' && !isPurchasableService);
   const machineCodeType: MachineCodeType = product.machineCodeType || 'none';
+  const selectedMacViaParallels = /via parallels/i.test(selectedOs);
+  const isParallelsProduct = /parallels/i.test(`${product.itemId} ${productName}`);
 
   const allOsList = useMemo(() => [...new Set(variants.flatMap((variant) => variant.osList || [variant.os || 'Windows']))], [variants]);
   const versionGroups = useMemo(() => {
@@ -155,6 +158,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
             <div key={`${selectedVariant?.variantId || 'from'}-${price}`} className="hk-price-change flex flex-wrap items-end gap-x-3 gap-y-1">
               {!selectedVariant && variants.length > 0 && <span className="pb-1 text-sm font-bold uppercase tracking-wider text-[#d9ffe0]">{STORE_COPY.product.fromPrefix}</span>}
               <span className="text-3xl font-black sm:text-4xl">{price > 0 ? formatPesewas(price) : STORE_COPY.product.askForPrice}</span>
+              {!selectedVariant && latestVariant && <span className="pb-1 text-sm font-black text-[#d9ffe0]">Latest version {latestVariant.versionOrPlan}</span>}
               {listPrice && listPrice > price && <span className="pb-1 text-sm font-bold text-white/70 line-through">{formatPesewas(listPrice)}</span>}
               {(promoLabel || promoPercent) && <span className="mb-1 rounded-full bg-[#05ef28] px-2.5 py-1 text-xs font-black text-[#014040]">{promoLabel || STORE_COPY.product.promotion(promoPercent)}</span>}
               {(promoLabel || promoPercent) && <PromotionCountdown endsAt={promoEndsAt} className="mb-1 text-xs font-bold text-[#d9ffe0]" />}
@@ -166,7 +170,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
           {isQuoteOnly ? (
             product.kind === 'laptop' && !showInterestForm
               ? <div className="grid grid-cols-[1fr_auto_auto] gap-2"><button type="button" onClick={() => setShowInterestForm(true)} className="rounded-xl bg-[#014040] px-5 py-3.5 text-sm font-black text-white">I am interested</button><a href={`tel:${STORE_COPY.brand.phoneRaw}`} className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#014040] bg-white text-[#014040]" aria-label={`Call ${STORE_COPY.brand.phone}`}><Phone className="h-5 w-5" /></a><a href={STORE_COPY.brand.whatsAppUrl} target="_blank" rel="noreferrer" className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#05ef28] text-[#014040]" aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}><WhatsAppIcon className="h-5 w-5" /></a></div>
-              : <QuoteRequestForm item={product} submitLabel={product.kind === 'laptop' ? 'I am interested' : 'Get a quote'} />
+              : <QuoteRequestForm item={product} submitLabel="Submit details" />
           ) : isPurchasableService ? (
             <ServicePurchasePanel item={product} onAddToCart={handleServiceAdd} onBuyNow={handleServiceBuy} />
           ) : variants.length > 0 ? (
@@ -174,6 +178,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
               <div className="sticky top-[116px] z-20 -mx-5 mb-5 border-b border-[#d8e7e4] bg-white px-5 pb-3 pt-1 shadow-sm sm:static sm:mx-0 sm:border-0 sm:p-0 sm:shadow-none">
                 {allOsList.length > 0 && <div className="mb-3 sm:mb-5"><p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-600">{STORE_COPY.product.chooseOperatingSystem}</p><div className="flex flex-wrap gap-2">{allOsList.map((os) => <button key={os} type="button" onClick={() => selectOs(os)} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold ${selectedOs === os ? 'bg-[#014040] text-white' : 'bg-[#edf5f3] text-[#014040]'}`}><Monitor className="h-3.5 w-3.5" />{os}</button>)}</div></div>}
               </div>
+              {selectedMacViaParallels && <details className="mb-5 overflow-hidden rounded-2xl border border-amber-200 bg-[#fffaf0]"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-black text-[#014040]">Please read this before you place your order</summary><p className="border-t border-amber-200 px-4 py-3 text-xs leading-6 text-slate-700">Parallels setup requires approximately <strong>8GB of data</strong> to download the files and about <strong>50GB of free storage</strong> on your Mac. The required Parallels and Windows downloads are included with this order at no extra cost.</p></details>}
               <div className="mb-4">
                 <h2 className="text-lg font-black text-[#014040]">{STORE_COPY.product.chooseVersion}</h2>
                 <p className="mt-1 text-xs text-slate-500">{STORE_COPY.product.selectVersion}</p>
@@ -238,12 +243,14 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
           ['Brand', product.laptop.brand], ['Model', product.laptop.model], ['Processor', product.laptop.processor], ['RAM', product.laptop.ram], ['Storage', product.laptop.storage], ['Screen size', product.laptop.screen], ['Colour', product.laptop.colour], ['Operating system', product.laptop.operatingSystem], ['Graphics card', [product.laptop.graphics, product.laptop.graphicsDetails].filter(Boolean).join(' · ')], ['Freebies included', product.laptop.freebies], ['Availability', product.laptop.availability]
         ].filter(([, value]) => value).map(([label, value]) => <div key={label}><dt className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</dt><dd className="mt-1 text-sm font-bold text-slate-800">{value}</dd></div>)}</dl>{product.laptop.availability.toLowerCase().includes('pre') ? <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-800">This laptop will be shipped after purchase and delivered within 2 to 4 weeks after payment. Pay 70% now and the remaining 30% when it arrives.</p> : <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800">This laptop is available with us and can be delivered as soon as your purchase is made.</p>}</section>}
 
-        {machineCodeType !== 'service' && machineCodeType !== 'none' && (
+        {product.showSingleLicenceDisclaimer === true && (
           <div className="flex max-w-3xl items-start gap-2 rounded-2xl border-l-4 border-[#e0a800] bg-[#fffaf0] p-4 text-xs leading-relaxed text-[#8a5b00]">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{STORE_COPY.deviceLock.before}</span>
           </div>
         )}
+
+        {isParallelsProduct && <section className="max-w-3xl rounded-2xl border border-amber-200 bg-[#fffaf0] p-4"><h2 className="text-base font-black text-[#014040]">Before installing Parallels</h2><p className="mt-2 text-sm leading-6 text-slate-700">You will need approximately <strong>8GB of data</strong> to download the required files and about <strong>50GB of free storage</strong> on your MacBook for the installation.</p></section>}
 
         <ProductGallery images={product.screenshots || []} productName={productName} kind={product.kind} />
       </div>

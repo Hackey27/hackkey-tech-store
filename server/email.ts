@@ -1,4 +1,4 @@
-import { Order } from '../src/types';
+import { CustomerRequest, Order } from '../src/types';
 import { formatPesewas } from '../src/utils/money';
 import { STORE_COPY } from '../src/config/storeCopy';
 
@@ -82,6 +82,28 @@ export async function sendSellerAlert(alert: {
   const to = sellerAddress();
   if (!to) throw new Error('SELLER_ALERT_EMAIL is not configured.');
   await send(to, alert.subject, alert.lines.join('\n'));
+}
+
+export async function sendSellerRequestAlert(request: CustomerRequest): Promise<void> {
+  const detailLines = Object.entries(request.details || {}).map(([key, value]) => {
+    const rendered = typeof value === 'string' ? value : JSON.stringify(value);
+    return `${key}: ${rendered || ''}`;
+  });
+  await sendSellerAlert({
+    subject: `New ${request.kind.replaceAll('-', ' ')} request — ${request.customerName}`,
+    lines: [
+      'A new storefront request has been submitted.',
+      '',
+      `Reference: ${request.requestId}`,
+      `Type: ${request.kind}`,
+      `Name: ${request.customerName}`,
+      `Phone: ${request.phone}`,
+      `Email: ${request.email || ''}`,
+      `Notes: ${request.notes || ''}`,
+      '',
+      ...detailLines
+    ]
+  });
 }
 
 /** The WhatsApp deep link, with the order reference already in the message. */
@@ -168,6 +190,8 @@ export async function sendCustomerDelivery(order: Order): Promise<void> {
     `${order.productName} — ${order.versionOrPlan}`,
     order.activationCodeOrKey ? `Licence / activation code: ${order.activationCodeOrKey}` : '',
     order.windowsInstallerUrl ? `Installer: ${order.windowsInstallerUrl}` : '',
+    order.macViaParallels && order.parallelsInstallerUrl ? `Parallels Desktop: ${order.parallelsInstallerUrl}` : '',
+    order.macViaParallels && order.windows11DownloadUrl ? `Windows 11: ${order.windows11DownloadUrl}` : '',
     order.guideUrl ? `Guide: ${order.guideUrl}` : '',
     order.reportDocuments?.length ? `Your labelled report files are available on the "Find my order" page.` : '',
     ``,

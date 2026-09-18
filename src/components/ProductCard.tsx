@@ -25,6 +25,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const versionCount = new Set((product.variants || []).filter((variant) => variant.available).map((variant) => variant.versionOrPlan)).size;
   const hasMultipleVariants = versionCount > 1;
+  const latestVariant = product.variants?.find((variant) => variant.latest && variant.available) || product.variants?.find((variant) => variant.available);
+  const isTurnitin = product.kind === 'service' && product.itemId.toUpperCase() === 'TURNITIN';
   const [laptopPreviewFailed, setLaptopPreviewFailed] = useState(false);
   const [showLaptopAvailability, setShowLaptopAvailability] = useState(false);
   const [hoverLaptopAvailability, setHoverLaptopAvailability] = useState(false);
@@ -121,7 +123,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <div className="mt-3 text-[11px] flex items-center gap-1.5 text-[#014040] font-medium bg-[#f0f8f6] px-2.5 py-1 rounded-lg border border-[#cbe5df]">
             <CheckCircle className="w-3.5 h-3.5 text-[#05ef28] shrink-0" />
             <span>
-              {STORE_COPY.product.latest}:{' '}
+              {STORE_COPY.product.latest} version:{' '}
               <strong>
                 {
                   product.variants.find((v) => v.latest)?.versionOrPlan
@@ -136,17 +138,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       {/* Footer: Price in GHS & Primary Action Button */}
       <div className={`px-5 sm:px-6 py-4 border-t flex flex-wrap items-center justify-between gap-3 ${product.kind === 'product' ? 'border-[#025656] bg-[#014040]' : 'border-[#e2ecea] bg-[#f8fbfa]'}`}>
         {/* Price in GHS only */}
-        {product.kind !== 'laptop' && <div>
+        {product.kind !== 'laptop' && <div className={product.kind === 'product' ? 'min-w-0' : undefined}>
           <span className={`text-[10px] uppercase tracking-wider font-bold block ${product.kind === 'product' ? 'text-white/70' : 'text-slate-500'}`}>
             {STORE_COPY.product.priceLabel}
           </span>
           <span className={`text-base sm:text-lg font-black ${product.kind === 'product' ? 'text-white' : 'text-[#014040]'}`}>
             {displayPrice}
           </span>
+          {product.kind === 'product' && latestVariant && <span className="mt-0.5 block text-[10px] font-bold text-white/80">{hasMultipleVariants ? 'Latest version' : 'Version'} {latestVariant.versionOrPlan}</span>}
           {(product.promoLabel || product.promoPercent) && <span className={`mt-1 block text-[10px] font-black ${product.kind === 'product' ? 'text-[#d9ffe0]' : 'text-[#0d6520]'}`}>{product.promoLabel || `${product.promoPercent}% off`} · <PromotionCountdown endsAt={product.promoEndsAt} /></span>}
         </div>}
 
-        {payable ? <div className="ml-auto flex flex-wrap justify-end gap-2"><button id={`product-buy-btn-${product.itemId}`} onClick={(event) => { event.stopPropagation(); onBuyNowClick(product); }} className={`flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-black ${product.kind === 'product' ? 'border border-[#05ef28] bg-[#05ef28] text-[#014040] hover:bg-[#20f43d]' : 'bg-[#05ef28] text-[#014040] hover:bg-[#04d824]'}`}><CreditCard className="h-3.5 w-3.5" />{product.kind === 'product' ? 'Buy latest' : 'Buy now'}</button><button id={`product-cart-btn-${product.itemId}`} onClick={(event) => { event.stopPropagation(); onAddToCart?.(product); }} className={`flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-black ${product.kind === 'product' ? 'border border-white bg-white text-[#014040] hover:bg-[#edf5f3]' : 'bg-[#014040] text-white hover:bg-[#025656]'}`}><ShoppingCart className="h-3.5 w-3.5" />Add to cart</button></div> : <button onClick={(event) => { event.stopPropagation(); if (product.kind === 'laptop' && onInterestClick) onInterestClick(product); else onSelect(product); }} className="ml-auto flex items-center gap-1.5 rounded-xl bg-[#014040] px-4 py-2.5 text-xs font-black text-white"><MessageSquareQuote className="h-3.5 w-3.5" />{product.kind === 'laptop' ? 'I am interested' : 'Get a quote'}</button>}
+        {payable ? <div className={`${product.kind === 'product' ? 'basis-full grid grid-cols-2' : 'ml-auto flex flex-wrap justify-end'} gap-2`}><button id={`product-buy-btn-${product.itemId}`} onClick={(event) => { event.stopPropagation(); onBuyNowClick(product); }} className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2.5 text-xs font-black ${product.kind === 'product' ? 'border border-[#05ef28] bg-[#05ef28] text-[#014040] hover:bg-[#20f43d]' : 'bg-[#05ef28] text-[#014040] hover:bg-[#04d824]'}`}><CreditCard className="h-3.5 w-3.5 shrink-0" />{product.kind === 'product' ? (hasMultipleVariants ? 'Buy latest version' : 'Buy now') : isTurnitin ? 'Check now' : 'Buy now'}</button><button id={`product-cart-btn-${product.itemId}`} onClick={(event) => { event.stopPropagation(); onAddToCart?.(product); }} className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2.5 text-xs font-black ${product.kind === 'product' ? 'border border-white bg-white text-[#014040] hover:bg-[#edf5f3]' : 'bg-[#014040] text-white hover:bg-[#025656]'}`}><ShoppingCart className="h-3.5 w-3.5 shrink-0" />Add to cart</button></div> : <button onClick={(event) => { event.stopPropagation(); if (product.kind === 'laptop' && onInterestClick) onInterestClick(product); else onSelect(product); }} className="ml-auto flex items-center gap-1.5 rounded-xl bg-[#014040] px-4 py-2.5 text-xs font-black text-white"><MessageSquareQuote className="h-3.5 w-3.5" />{product.kind === 'laptop' ? 'I am interested' : 'Get a quote'}</button>}
       </div>
     </article>
   );

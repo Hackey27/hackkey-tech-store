@@ -77,6 +77,9 @@ export interface Variant {
   activationLink?: string;
   activationLinkLive: boolean;
   windowsInstallerUrl?: string;
+  /** Extra no-cost downloads included when a Windows build is ordered for a Mac through Parallels. */
+  parallelsInstallerUrl?: string;
+  windows11DownloadUrl?: string;
   guideUrl?: string;
   learningResourcesUrl?: string;
   /** Admin-controlled customer-facing 20–40 minute fulfilment notice. */
@@ -115,6 +118,8 @@ export interface Product {
   sortOrder?: number;
   /** Lower numbers appear first in the featured software section. */
   featuredOrder?: number;
+  /** Admin-controlled single-device, single-version notice shown before purchase. */
+  showSingleLicenceDisclaimer?: boolean;
   variants: Variant[];
 }
 
@@ -313,6 +318,7 @@ export interface CatalogueItem {
   promoEndsAt?: string;
   /** Resolved from service configuration or its available software variants. */
   showDeliveryNotice?: boolean;
+  showSingleLicenceDisclaimer?: boolean;
   availabilitySentence?: string;
   /** Display name of the item's category, resolved from the category document
    *  so the card does not have to look it up. */
@@ -446,6 +452,8 @@ export interface Order {
   fulfilledAt?: string;
   notes?: string;
   windowsInstallerUrl?: string;
+  parallelsInstallerUrl?: string;
+  windows11DownloadUrl?: string;
   guideUrl?: string;
   learningResourcesUrl?: string;
   macViaParallels?: boolean;

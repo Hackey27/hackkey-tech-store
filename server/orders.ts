@@ -21,6 +21,7 @@ import {
 } from '../src/utils/money';
 import { getPricingConfig } from './pricingConfig';
 import { fulfilmentNoticeKind } from './deliveryNotice';
+import { sendSellerRequestAlert } from './email';
 
 /** Orders for a service are fulfilled by hand and never touch the licence pool. */
 export const SERVICE_FULFILMENT_TYPE = 'Service';
@@ -260,11 +261,13 @@ async function createBundleOrders(
     customerInputType: (found?.variant.customerInputRequired as CustomerInputType) || undefined,
     activationWebsiteUrl: found?.variant.activationWebsiteUrl,
     windowsInstallerUrl: found?.variant.windowsInstallerUrl,
+    parallelsInstallerUrl: found?.variant.parallelsInstallerUrl,
+    windows11DownloadUrl: found?.variant.windows11DownloadUrl,
     guideUrl: found?.variant.guideUrl,
     learningResourcesUrl: found?.variant.learningResourcesUrl,
     showDeliveryNotice: found?.variant.showDeliveryNotice === true,
     fulfilmentNoticeKind: fulfilmentNoticeKind(found?.variant.fulfilmentType),
-    macViaParallels: found?.variant.macViaParallels,
+    macViaParallels: false,
     notes: `Part of bundle ${bundle.bundleId} (${bundle.name}).`,
     receiptSent: false
   }));
@@ -359,6 +362,8 @@ export async function createOrders(request: CheckoutRequest): Promise<Order[]> {
     const quantity = Math.max(1, item.quantity || 1);
 
     for (let i = 0; i < quantity; i += 1) {
+      const selectedOs = item.selectedOs || variant.osList?.[0] || variant.os || '';
+      const macViaParallels = /via parallels/i.test(selectedOs);
       const order: Order = {
         orderId: newId('HK'),
         cartId,
@@ -371,7 +376,7 @@ export async function createOrders(request: CheckoutRequest): Promise<Order[]> {
         productId: product.productId,
         productName: product.productName,
         versionOrPlan: variant.versionOrPlan,
-        deliveryOs: item.selectedOs || variant.osList?.[0] || variant.os || '',
+        deliveryOs: selectedOs,
         amountPesewas: variant.payablePricePesewas ?? cedisToPesewas(variant.priceGhs),
         originalAmountPesewas: variant.listPricePesewas ?? cedisToPesewas(variant.priceGhs),
         paymentStatus: 'pending',
@@ -382,11 +387,13 @@ export async function createOrders(request: CheckoutRequest): Promise<Order[]> {
         customerInputType: (variant.customerInputRequired as CustomerInputType) || undefined,
         activationWebsiteUrl: variant.activationWebsiteUrl,
         windowsInstallerUrl: variant.windowsInstallerUrl,
+        parallelsInstallerUrl: variant.parallelsInstallerUrl,
+        windows11DownloadUrl: variant.windows11DownloadUrl,
         guideUrl: variant.guideUrl,
         learningResourcesUrl: variant.learningResourcesUrl,
         showDeliveryNotice: variant.showDeliveryNotice === true,
         fulfilmentNoticeKind: fulfilmentNoticeKind(variant.fulfilmentType),
-        macViaParallels: variant.macViaParallels,
+        macViaParallels,
         quantity: 1,
         receiptSent: false
       };
@@ -741,6 +748,7 @@ export async function createRequest(
   };
 
   await db.collection(COLLECTIONS.requests).doc(request.requestId).set(request);
+  await sendSellerRequestAlert(request).catch((error) => console.error(`[MAIL] Request alert failed for ${request.requestId}:`, error));
   return request;
 }
 

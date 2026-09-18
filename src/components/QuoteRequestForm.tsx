@@ -9,7 +9,7 @@ function Input({ field, value, onChange }: { field: ServiceField; value: string;
   return <input {...common} type={field.type === 'datetime' ? 'datetime-local' : field.type} />;
 }
 
-export function QuoteRequestForm({ item, submitLabel = 'Get a quote' }: { item: CatalogueItem; submitLabel?: string }) {
+export function QuoteRequestForm({ item, submitLabel = 'Submit details' }: { item: CatalogueItem; submitLabel?: string }) {
   const fields = item.kind === 'service' ? item.service?.fields || [] : [];
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
@@ -28,13 +28,13 @@ export function QuoteRequestForm({ item, submitLabel = 'Get a quote' }: { item: 
       const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Unable to send your request.');
-      setMessage(`Request received. Reference: ${data.request?.requestId || data.submission?.requestId || 'submitted'}`);
+      setMessage('Your details have been received. We will contact you within 24 hours.');
     } catch (caught) { setMessage(caught instanceof Error ? caught.message : 'Unable to send your request.'); }
     finally { setBusy(false); }
   };
 
   return <form onSubmit={submit} className="space-y-4">
-    <div><h2 className="text-xl font-black text-[#014040]">{submitLabel}</h2><p className="mt-1 text-xs leading-5 text-slate-600">Tell us what you need and we will contact you with the next steps.</p></div>
+    <div><h2 className="text-xl font-black text-[#014040]">{item.kind === 'laptop' ? 'I am interested' : 'Get a quote'}</h2><p className="mt-1 text-xs leading-5 text-slate-600">Tell us what you need and we will contact you with the next steps.</p></div>
     <label className="block text-xs font-bold text-slate-700">Full name<input required className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></label>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
       <label className="block text-xs font-bold text-slate-700">Phone<input required type="tel" className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={phone} onChange={(e) => setPhone(e.target.value)} /></label>
