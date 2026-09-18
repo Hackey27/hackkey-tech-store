@@ -24,6 +24,7 @@ import { TurnitinDocumentUpload } from './TurnitinDocumentUpload';
 import { isTurnitinOrder, turnitinOrderStep } from '../utils/orderProgress';
 import { TurnitinReportDownloads } from './TurnitinReportDownloads';
 import { whatsAppDocumentLink } from '../utils/whatsapp';
+import { FulfilmentTimeNotice } from './FulfilmentTimeNotice';
 
 /** The stored statuses are kebab-case; these are what the customer reads. */
 const FULFILMENT_LABELS: Record<string, string> = {
@@ -318,6 +319,8 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
                       currentStep={currentStep}
                     />
                   </div>
+
+                  {!isTurnitin && order.paymentStatus === 'paid' && order.fulfilmentStatus !== 'ready' && order.showDeliveryNotice !== false && <FulfilmentTimeNotice kind={/account/i.test(order.fulfilmentType || '') ? 'account' : 'licence'} />}
 
                   {/* STATE 1: UNPAID (Section 7) -> Show Pay button & MoMo transfer info */}
                   {order.paymentStatus !== 'paid' && (

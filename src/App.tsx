@@ -23,13 +23,11 @@ import {
   RefreshCw,
   Layers,
   ChevronRight,
-  Sparkles,
   Search,
-  ShieldCheck,
   PackageCheck
 } from 'lucide-react';
-import { WhatsAppIcon } from './components/WhatsAppIcon';
 import { PromotionCountdown } from './components/PromotionCountdown';
+import { SearchResultsOverlay } from './components/SearchResultsOverlay';
 
 type StoreRoute =
   | { view: 'home' }
@@ -65,10 +63,14 @@ export const App: React.FC = () => {
   // Requirement: "Show a small number of products only" and "Include a View all software control"
   const [showAllSoftware, setShowAllSoftware] = useState(false);
   const [announcementOpen, setAnnouncementOpen] = useState(false);
+  const announcementHandledRef = useRef(false);
+  const catalogueRequestRef = useRef(0);
   const [nextSteps, setNextSteps] = useState<{ phone: string; orderId: string } | null>(null);
+  const [requestLaunchMode, setRequestLaunchMode] = useState<'software' | 'laptop' | null>(null);
 
   // Fetch catalog from Phase 1 backend endpoint /api/catalog
   const fetchCatalogData = async (search?: string) => {
+    const requestId = ++catalogueRequestRef.current;
     setIsLoading(true);
     setError(null);
     try {
@@ -83,20 +85,24 @@ export const App: React.FC = () => {
         throw new Error(`Server returned HTTP ${res.status}: Failed to fetch catalog`);
       }
       const data: CatalogResponse = await res.json();
+      if (requestId !== catalogueRequestRef.current) return;
       setCatalog(data);
-      if (data.announcement && shouldShowAnnouncement(data.announcement)) {
+      if (data.announcement && !announcementHandledRef.current && shouldShowAnnouncement(data.announcement)) {
+        announcementHandledRef.current = true;
         setAnnouncementOpen(true);
       }
     } catch (err: any) {
+      if (requestId !== catalogueRequestRef.current) return;
       console.error('[App] Failed to load catalog:', err);
       setError(err.message || 'Error connecting to catalogue service');
     } finally {
-      setIsLoading(false);
+      if (requestId === catalogueRequestRef.current) setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchCatalogData(searchQuery);
+    const timer = window.setTimeout(() => { void fetchCatalogData(searchQuery); }, searchQuery.trim() ? 180 : 0);
+    return () => window.clearTimeout(timer);
   }, [searchQuery]);
 
   useEffect(() => {
@@ -277,12 +283,21 @@ export const App: React.FC = () => {
         activeTab={activeTab}
         onSelectTab={(tab) => {
           if (route.view !== 'home') navigate('/');
+          if (tab === 'request') setRequestLaunchMode(null);
           setActiveTab(tab);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         cartCount={totalCartCount}
         cartItems={cartItems}
         isLandingTransparent={landingActive && !landingPassed}
+      />
+
+      <SearchResultsOverlay
+        query={searchQuery}
+        items={allProducts}
+        loading={isLoading}
+        onClose={() => setSearchQuery('')}
+        onSelect={(item) => { setSearchQuery(''); openProduct(item); }}
       />
 
       {/* Main Content Area */}
@@ -300,6 +315,8 @@ export const App: React.FC = () => {
               onSelectProduct={openProduct}
               onBuyNow={handleBuyNow}
               onAddToCart={handleCardAdd}
+              onInterestClick={(item) => navigate(`/product/${encodeURIComponent(item.itemId)}?interest=1`)}
+              softwareItems={(catalog?.products || []).filter((item) => item.kind === 'product')}
             />
           )
         )}
@@ -310,6 +327,7 @@ export const App: React.FC = () => {
           ) : catalog?.products.find((item) => item.itemId === route.itemId) ? (
             <ProductDetailView
               product={catalog.products.find((item) => item.itemId === route.itemId)!}
+              initialInterestForm={new URLSearchParams(window.location.search).get('interest') === '1'}
               onClose={() => navigateBack(`/category/${encodeURIComponent(catalog.products.find((item) => item.itemId === route.itemId)!.categoryId)}`)}
               onAddToCart={handleAddToCart}
               onBuyNow={handleBuyNow}
@@ -475,32 +493,10 @@ export const App: React.FC = () => {
                 )}
               </section>
 
-              {/* Assistance / Support Callout */}
-              <section className="rounded-2xl bg-gradient-to-r from-[#014040] to-[#025656] text-white p-6 sm:p-8 shadow-sm">
-                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                  <div className="space-y-1.5 text-center md:text-left">
-                    <span className="text-xs font-bold text-[#05ef28] uppercase tracking-wider">
-                      Need Technical Advice?
-                    </span>
-                    <h3 className="text-xl sm:text-2xl font-black tracking-tight">
-                      Speak with our research software specialists
-                    </h3>
-                    <p className="text-xs sm:text-sm text-slate-200 max-w-xl">
-                      We assist with software compatibility, machine code identification, and remote installation setup across Windows and macOS.
-                    </p>
-                  </div>
-
-                  <a
-                    href={STORE_COPY.brand.whatsAppUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}
-                    className="px-6 py-3 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-sm shadow-md transition-all flex items-center gap-2 shrink-0"
-                  >
-                    <WhatsAppIcon className="w-4 h-4" />
-                    <span>{STORE_COPY.brand.whatsAppCta}</span>
-                  </a>
-                </div>
+              {/* Direct request menus */}
+              <section className="grid gap-4 sm:grid-cols-2">
+                <button type="button" onClick={() => { setRequestLaunchMode('software'); setActiveTab('request'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="flex items-center gap-4 rounded-2xl bg-[#014040] p-6 text-left text-white shadow-sm transition hover:bg-[#025656]"><span className="rounded-2xl bg-[#05ef28] p-3 text-[#014040]"><Layers className="h-6 w-6" /></span><span><strong className="block text-lg font-black">Request software</strong><small className="mt-1 block leading-5 text-white/75">Ask for software that is not currently listed in the store.</small></span></button>
+                <button type="button" onClick={() => { setRequestLaunchMode('laptop'); setActiveTab('request'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="flex items-center gap-4 rounded-2xl border border-[#7aa39b] bg-white p-6 text-left text-[#014040] shadow-sm transition hover:bg-[#edf5f3]"><span className="rounded-2xl bg-[#014040] p-3 text-[#05ef28]"><PackageCheck className="h-6 w-6" /></span><span><strong className="block text-lg font-black">Request a laptop</strong><small className="mt-1 block leading-5 text-slate-600">Tell us your budget and specifications for laptop sourcing.</small></span></button>
               </section>
             </div>
           </div>
@@ -513,7 +509,7 @@ export const App: React.FC = () => {
         {route.view === 'home' && activeTab === 'help' && <HelpHubView />}
 
         {/* Tab 4: Request software or laptop */}
-        {route.view === 'home' && activeTab === 'request' && <RequestView />}
+        {route.view === 'home' && activeTab === 'request' && <RequestView key={requestLaunchMode || 'launcher'} initialMode={requestLaunchMode} />}
 
         {/* Tab 5: Cart */}
         {route.view === 'home' && activeTab === 'cart' && (
@@ -541,84 +537,30 @@ export const App: React.FC = () => {
         activeTab={activeTab}
         onSelectTab={(tab) => {
           if (route.view !== 'home') navigate('/');
+          if (tab === 'request') setRequestLaunchMode(null);
           setActiveTab(tab);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
       />
 
-      {/* Clean Storefront Footer */}
-      <footer className="border-t border-[#d8e7e4] bg-white py-8 text-xs text-slate-600 hidden md:block">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 pb-6 border-b border-[#edf4f3]">
-            {/* Brand */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <BrandLogo variant="full" />
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                {STORE_COPY.brand.tagline}
-              </p>
+      {/* Storefront footer */}
+      <footer className="border-t border-[#025656] bg-[#014040] pb-24 pt-9 text-xs text-white md:pb-8">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 gap-8 border-b border-white/20 pb-7 md:grid-cols-3">
+            <div className="space-y-3">
+              <BrandLogo variant="full" textColor="#ffffff" glyphColor="#ffffff" />
+              <address className="max-w-sm not-italic leading-6 text-white/80">JE/GW/042, Jeffisi, Sissala West District,<br />Upper West Region, Ghana<br /><a className="font-bold text-white hover:underline" href={`tel:${STORE_COPY.brand.phoneRaw}`}>{STORE_COPY.brand.phone}</a><br /><a className="font-bold text-white hover:underline" href="mailto:orders@hackeytech.com">orders@hackeytech.com</a></address>
             </div>
-
-            {/* Quick Links */}
-            <div className="space-y-2">
-              <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px] block">
-                Quick Navigation
-              </span>
-              <ul className="space-y-1">
-                <li>
-                  <button onClick={() => setActiveTab('home')} className="hover:text-[#014040] cursor-pointer">
-                    {STORE_COPY.navigation.home}
-                  </button>
-                </li>
-                <li>
-                  <button onClick={() => setActiveTab('find-order')} className="hover:text-[#014040] cursor-pointer">
-                    {STORE_COPY.navigation.findOrder}
-                  </button>
-                </li>
-                <li>
-                  <button onClick={() => setActiveTab('help')} className="hover:text-[#014040] cursor-pointer">
-                    {STORE_COPY.navigation.help}
-                  </button>
-                </li>
-                <li>
-                  <button onClick={() => setActiveTab('request')} className="hover:text-[#014040] cursor-pointer">
-                    {STORE_COPY.requestPage.pageTitle}
-                  </button>
-                </li>
-              </ul>
+            <div className="space-y-3 md:justify-self-center">
+              <span className="block text-[11px] font-bold uppercase tracking-wider text-[#05ef28]">Quick Navigation</span>
+              <ul className="space-y-2"><li><button onClick={() => { navigate('/'); setActiveTab('home'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.home}</button></li><li><button onClick={() => { navigate('/'); setActiveTab('find-order'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.findOrder}</button></li><li><button onClick={() => { navigate('/'); setActiveTab('help'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.help}</button></li><li><button onClick={() => { navigate('/'); setRequestLaunchMode(null); setActiveTab('request'); }} className="hover:text-[#05ef28]">{STORE_COPY.requestPage.pageTitle}</button></li></ul>
             </div>
-
-            {/* Support */}
-            <div className="space-y-2">
-              <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px] block">
-                Support & Inquiries
-              </span>
-              <ul className="space-y-1">
-                <li>WhatsApp: {STORE_COPY.brand.phone}</li>
-                <li>Phone: {STORE_COPY.brand.phone}</li>
-                <li>Email: {STORE_COPY.brand.email}</li>
-              </ul>
-            </div>
-
-            {/* Payment & Security */}
-            <div className="space-y-2">
-              <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px] block">
-                Order Security
-              </span>
-              <p className="text-xs text-slate-500">
-                Processed via secure Paystack channels. Mobile Money & Card support.
-              </p>
-              <div className="text-[11px] text-slate-500 font-medium">
-                Accra & Kumasi, Ghana
-              </div>
+            <div className="space-y-5 md:justify-self-end">
+              <div><span className="block text-[11px] font-bold uppercase tracking-wider text-[#05ef28]">About us</span><p className="mt-2 max-w-xs leading-5 text-white/65">More information coming soon.</p></div>
+              <div><span className="block text-[11px] font-bold uppercase tracking-wider text-[#05ef28]">Our location</span><p className="mt-2 font-bold text-white">University of Cape Coast Campus</p></div>
             </div>
           </div>
-
-          <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-slate-400 text-[11px]">
-            <span>© {new Date().getFullYear()} {STORE_COPY.brand.name}. All rights reserved.</span>
-            <span>{STORE_COPY.brand.tagline}</span>
-          </div>
+          <div className="pt-4 text-[11px] text-white/65">© {new Date().getFullYear()} {STORE_COPY.brand.name}. All rights reserved.</div>
         </div>
       </footer>
     </div>

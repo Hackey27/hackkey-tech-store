@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { Announcement } from '../types';
 import { STORE_COPY } from '../config/storeCopy';
@@ -10,7 +10,7 @@ interface AnnouncementModalProps {
 }
 
 export function announcementStorageKey(announcementId: string): string {
-  return `hackkey-announcement-seen:${announcementId}`;
+  return `hackkey-announcement-dismissed:${announcementId}`;
 }
 
 export function shouldShowAnnouncement(announcement: Announcement): boolean {
@@ -23,8 +23,9 @@ export function shouldShowAnnouncement(announcement: Announcement): boolean {
 }
 
 export const AnnouncementModal: React.FC<AnnouncementModalProps> = ({ announcement, preview = false, onClose }) => {
+  const [dontShowAgain, setDontShowAgain] = useState(false);
   const dismiss = () => {
-    if (!preview && announcement.showOnce) {
+    if (!preview && announcement.showOnce && dontShowAgain) {
       try {
         localStorage.setItem(announcementStorageKey(announcement.announcementId), '1');
       } catch {
@@ -35,19 +36,12 @@ export const AnnouncementModal: React.FC<AnnouncementModalProps> = ({ announceme
   };
 
   useEffect(() => {
-    if (!preview && announcement.showOnce) {
-      try {
-        localStorage.setItem(announcementStorageKey(announcement.announcementId), '1');
-      } catch {
-        // Storage may be unavailable; the current modal remains usable.
-      }
-    }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') dismiss();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [announcement.announcementId, announcement.showOnce, preview]);
+  }, [announcement.announcementId, announcement.showOnce, preview, dontShowAgain]);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#002b2b]/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="announcement-title">
@@ -65,6 +59,7 @@ export const AnnouncementModal: React.FC<AnnouncementModalProps> = ({ announceme
               {announcement.buttonText}
             </a>
           )}
+          {announcement.showOnce && <label className="mt-5 flex cursor-pointer items-center gap-2 rounded-xl bg-[#edf5f3] p-3 text-sm font-bold text-[#014040]"><input type="checkbox" checked={dontShowAgain} onChange={(event) => setDontShowAgain(event.target.checked)} />Don&apos;t show this announcement again</label>}
         </div>
       </section>
     </div>

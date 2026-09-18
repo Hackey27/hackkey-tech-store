@@ -12,9 +12,12 @@ interface ProductGalleryProps {
 
 export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productName, kind }) => {
   const [active, setActive] = useState<number | null>(null);
+  const [failed, setFailed] = useState<Set<string>>(() => new Set());
   const touchStart = useRef<number | null>(null);
   const railRef = useRef<HTMLDivElement>(null);
-  const validImages = images.map(renderableProductImageUrl).filter((value): value is string => Boolean(value));
+  const validImages = images.map(renderableProductImageUrl).filter((value): value is string => Boolean(value)).filter((value) => !failed.has(value));
+
+  useEffect(() => setFailed(new Set()), [images]);
 
   const move = (direction: number) => {
     setActive((current) => {
@@ -42,16 +45,16 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
         <div><h2 id="product-gallery-title" className="text-xl font-black text-[#014040]">
           {kind === 'product' ? 'Successful installations' : 'Image Gallery'}
         </h2>
-        <p className="mt-1 text-sm text-slate-600">{kind === 'product' ? 'These images are installations completed for a sample of other clients.' : `Images of ${productName}.`}</p></div>
+        <p className="mt-1 text-sm text-slate-600">{kind === 'product' ? 'These images are installations completed for a sample of other clients.' : kind === 'laptop' ? 'Images of the laptop' : `Images of ${productName}.`}</p></div>
         <div className="flex gap-2"><button type="button" onClick={() => railRef.current?.scrollBy({ left: -320, behavior: 'smooth' })} className="rounded-full border bg-white p-2 text-[#014040]" aria-label={STORE_COPY.gallery.previous}><ChevronLeft className="h-5 w-5" /></button><button type="button" onClick={() => railRef.current?.scrollBy({ left: 320, behavior: 'smooth' })} className="rounded-full border bg-white p-2 text-[#014040]" aria-label={STORE_COPY.gallery.next}><ChevronRight className="h-5 w-5" /></button></div>
       </div>
-      <div ref={railRef} className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3 [scrollbar-width:thin]">
+      <div ref={railRef} className="flex snap-x snap-mandatory scroll-smooth gap-3 overflow-x-auto pb-3 [scrollbar-width:thin]">
         {validImages.map((image, index) => (
           <button
             key={`${image}-${index}`}
             type="button"
             onClick={() => setActive(index)}
-            className="aspect-[4/3] w-[82vw] max-w-sm shrink-0 snap-start overflow-hidden rounded-2xl border border-[#d8e7e4] bg-[#edf5f3] focus:outline-none focus:ring-2 focus:ring-[#014040] sm:w-80"
+            className="aspect-[4/3] w-[82vw] max-w-sm shrink-0 snap-center overflow-hidden rounded-2xl border border-[#d8e7e4] bg-[#edf5f3] focus:outline-none focus:ring-2 focus:ring-[#014040] sm:w-80"
             aria-label={STORE_COPY.gallery.openImage(index + 1)}
           >
             <img
@@ -61,7 +64,8 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
               height="480"
               loading="lazy"
               decoding="async"
-              className="h-full w-full object-cover transition-transform duration-200 hover:scale-[1.02] motion-reduce:transition-none motion-reduce:hover:scale-100"
+              className="h-full w-full object-contain transition-transform duration-500 ease-out hover:scale-[1.03] motion-reduce:transition-none motion-reduce:hover:scale-100"
+              onError={() => setFailed((old) => new Set(old).add(image))}
             />
           </button>
         ))}
@@ -69,7 +73,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
 
       {active != null && (
         <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-[#001f1f]/95 p-4"
+          className="hk-gallery-lightbox fixed inset-0 z-[80] flex items-center justify-center bg-[#001f1f]/95 p-4"
           role="dialog"
           aria-modal="true"
           aria-label={STORE_COPY.gallery.lightboxLabel}
@@ -96,7 +100,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
             width="1400"
             height="1050"
             className="max-h-[88vh] max-w-[88vw] rounded-2xl object-contain"
-            onClick={(event) => event.stopPropagation()}
+            onClick={() => setActive(null)}
           />
           {validImages.length > 1 && (
             <button type="button" onClick={(event) => { event.stopPropagation(); move(1); }} className="absolute right-3 rounded-full bg-white/10 p-3 text-white hover:bg-white/20" aria-label={STORE_COPY.gallery.next}>

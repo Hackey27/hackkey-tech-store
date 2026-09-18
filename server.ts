@@ -507,6 +507,22 @@ async function startServer() {
     }
   });
 
+  app.post('/api/requests/custom-bundle', async (req: Request, res: Response) => {
+    const { customerName, phone, email, notes, software } = req.body;
+    if (!customerName || !phone || !email || !Array.isArray(software) || software.length < 2) {
+      return res.status(400).json({ error: 'Name, phone, email, and at least two software titles are required.' });
+    }
+    try {
+      const request = await createRequest('custom-bundle', {
+        customerName, phone, email, notes,
+        details: { software: software.map((item: any) => ({ itemId: String(item.itemId || ''), name: String(item.name || '') })) }
+      });
+      res.json({ success: true, request });
+    } catch (err) {
+      failed(res, err, 'Failed to submit custom bundle request');
+    }
+  });
+
   // Service enquiry
   app.post('/api/services/submit', async (req: Request, res: Response) => {
     const { serviceId, serviceName, customerName, phone, email, deadline, summary, answers } = req.body;

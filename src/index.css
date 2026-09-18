@@ -126,6 +126,9 @@
 
 .hk-price-change { animation: hk-price-change 180ms ease-out both; }
 
+.hk-search-results,
+.hk-gallery-lightbox { animation: hk-modal-enter 180ms ease-out both; }
+
 @media (prefers-reduced-motion: reduce) {
   .hk-price-change { animation: none; }
 }

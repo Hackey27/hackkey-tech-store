@@ -19,6 +19,10 @@ test('Google Drive share links become renderable image URLs', () => {
   );
 });
 
+test('Google Photos share pages are not rendered as broken catalogue images', () => {
+  assert.equal(renderableProductImageUrl('https://photos.app.goo.gl/example-share'), undefined);
+});
+
 test('fallback initials are deterministic for the same product name', () => {
   assert.equal(productInitials('IBM SPSS'), 'IS');
   assert.equal(productInitials('AMOS'), 'AM');

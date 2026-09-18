@@ -4,12 +4,12 @@ import { STORE_COPY } from '../config/storeCopy';
 
 type RequestMode = 'software' | 'laptop';
 
-export const RequestView: React.FC = () => {
+export const RequestView: React.FC<{ initialMode?: RequestMode | null }> = ({ initialMode = null }) => {
   /**
    * Requests open as a modal sheet, matching the pattern the help hub used to
    * carry. The tab itself only presents the two launchers.
    */
-  const [modalMode, setModalMode] = useState<RequestMode | null>(null);
+  const [modalMode, setModalMode] = useState<RequestMode | null>(initialMode);
 
   // Software Form State
   const [sFirst, setSFirst] = useState('');

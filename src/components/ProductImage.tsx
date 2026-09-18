@@ -46,9 +46,14 @@ export function productInitials(name: string): string {
  *  recognised share URLs; every other URL is left untouched. */
 export function renderableProductImageUrl(value?: string): string | undefined {
   if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || /^(?:n\/?a|none|null|undefined|no image|not available|placeholder|-+)$/i.test(trimmed)) return undefined;
   try {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://store.hackeytech.com';
-    const url = new URL(value, origin);
+    const url = new URL(trimmed, origin);
+    // Google Photos share links serve HTML, not image bytes. Historical laptop
+    // rows used them as placeholders, which otherwise render as broken JPEGs.
+    if (url.hostname === 'photos.app.goo.gl' || (url.hostname === 'photos.google.com' && url.pathname.startsWith('/share'))) return undefined;
     if (url.hostname === 'drive.google.com') {
       const fileMatch = url.pathname.match(/\/file\/d\/([^/]+)/);
       const id = fileMatch?.[1] || url.searchParams.get('id');

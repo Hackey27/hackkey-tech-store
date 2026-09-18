@@ -6,7 +6,6 @@ import {
   ArrowUp,
   Bell,
   BadgePercent,
-  Boxes,
   Check,
   ClipboardList,
   Copy,
@@ -14,7 +13,6 @@ import {
   Eye,
   FileText,
   KeyRound,
-  Images,
   ImagePlus,
   LogOut,
   Plus,
@@ -40,7 +38,7 @@ import { documentContentType } from '../utils/documentFiles';
 import { newestOrderFirst } from '../utils/orderSorting';
 import { adminOrderMatchesSearch } from '../utils/adminOrderSearch';
 
-type Section = 'orders' | 'licences' | 'services' | 'software' | 'laptops' | 'announcements' | 'products' | 'landing' | 'ordering' | 'pricing';
+type Section = 'orders' | 'categories' | 'services' | 'announcements' | 'landing' | 'pricing';
 
 const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#014040] focus:ring-2 focus:ring-[#014040]/10';
 const labelClass = 'space-y-1 text-xs font-bold text-slate-700';
@@ -789,6 +787,17 @@ function CatalogueOrderSection({ data, user, reload }: { data: AdminData; user: 
   return <div className="space-y-5"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-black text-[#014040]">Catalogue order</h2><p className="text-sm text-slate-600">Lower display numbers appear first inside each category. A featured number includes software on the homepage, in that order.</p></div><button className={primaryButton} disabled={busy} onClick={save}><Save className="h-4 w-4" />{busy ? 'Saving…' : 'Save order'}</button></div>{data.categories.map((category) => { const items = catalogueItems.filter((item) => item.categoryId === category.categoryId); if (!items.length) return null; return <section key={category.categoryId} className="rounded-2xl border bg-white p-5"><h3 className="mb-3 text-lg font-black text-[#014040]">{category.name}</h3><div className="space-y-2">{items.map((item) => { const key = `${item.kind}:${item.itemId}`; const value = values[key] || { sortOrder: 0 }; return <div key={key} className="grid items-center gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-[1fr_110px_130px]"><div><b className="text-sm">{item.name}</b><small className="block text-[10px] uppercase text-slate-500">{item.kind}</small></div><label className="text-[11px] font-bold text-slate-600">Display order<input className={inputClass} type="number" min="0" value={value.sortOrder} onChange={(event) => setValues((old) => ({ ...old, [key]: { ...value, sortOrder: Number(event.target.value) } }))} /></label>{item.kind === 'product' ? <label className="text-[11px] font-bold text-slate-600">Featured order<input className={inputClass} type="number" min="0" placeholder="Not featured" value={value.featuredOrder ?? ''} onChange={(event) => setValues((old) => ({ ...old, [key]: { ...value, featuredOrder: event.target.value === '' ? undefined : Number(event.target.value) } }))} /></label> : <span />}</div>; })}</div></section>; })}{message && <p className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}</div>;
 }
 
+function CategorySetupSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
+  const panels: Array<{ id: string; title: string; description: string; content: React.ReactNode; open?: boolean }> = [
+    { id: 'media', title: 'Categories, products & media', description: 'Open a category and product to manage icons, card artwork, desktop/mobile banners, and galleries.', content: <ProductMediaSection data={data} user={user} reload={reload} />, open: true },
+    { id: 'software', title: 'Software configuration', description: 'Manage version-specific delivery, activation links, downloads, guides, and learning resources.', content: <SoftwareConfigurationSection data={data} user={user} reload={reload} /> },
+    { id: 'stock', title: 'Licences & sales-code stock', description: 'Add and inspect licence keys or sales codes by category, software, version, and operating system.', content: <LicencesSection data={data} user={user} reload={reload} /> },
+    { id: 'laptops', title: 'Laptop products & specifications', description: 'Add laptops and manage their make, model, specifications, availability, and price.', content: <LaptopPropertiesSection data={data} user={user} reload={reload} /> },
+    { id: 'order', title: 'Catalogue & featured order', description: 'Choose the order of products inside categories and featured software on the home page.', content: <CatalogueOrderSection data={data} user={user} reload={reload} /> }
+  ];
+  return <div className="space-y-5"><div><h2 className="text-2xl font-black text-[#014040]">Category setup</h2><p className="mt-1 max-w-3xl text-sm text-slate-600">All catalogue configuration is grouped here. Expand only the area you need so product setup stays clear and uncluttered.</p></div><div className="space-y-3">{panels.map((panel) => <details key={panel.id} open={panel.open} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><summary className="cursor-pointer list-none px-5 py-4 marker:hidden sm:px-6"><span className="flex items-center justify-between gap-4"><span><b className="block text-base text-[#014040]">{panel.title}</b><small className="mt-1 block font-normal leading-5 text-slate-500">{panel.description}</small></span><span className="rounded-full bg-[#edf5f3] px-3 py-1 text-xs font-black text-[#014040] group-open:hidden">Expand</span><span className="hidden rounded-full bg-[#014040] px-3 py-1 text-xs font-black text-white group-open:inline">Collapse</span></span></summary><div className="border-t border-slate-200 bg-[#f8fbfa] p-4 sm:p-6">{panel.content}</div></details>)}</div></div>;
+}
+
 export default function AdminPortal() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
@@ -821,17 +830,13 @@ export default function AdminPortal() {
 
   if (checking) return <div className="min-h-screen bg-[#f7faf9] p-8 text-[#014040]">{ADMIN_COPY.loading}</div>;
   if (!user) return <SignIn />;
-  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'licences', icon: <Boxes /> }, { id: 'software', icon: <KeyRound /> }, { id: 'laptops', icon: <Settings2 /> }, { id: 'services', icon: <Settings2 /> }, { id: 'pricing', icon: <BadgePercent /> }, { id: 'products', icon: <Images /> }, { id: 'landing', icon: <ImagePlus /> }, { id: 'ordering', icon: <ArrowUp /> }, { id: 'announcements', icon: <Bell /> }];
+  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'categories', icon: <Settings2 /> }, { id: 'services', icon: <Settings2 /> }, { id: 'pricing', icon: <BadgePercent /> }, { id: 'landing', icon: <ImagePlus /> }, { id: 'announcements', icon: <Bell /> }];
   const content = !data ? <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">{ADMIN_COPY.loading}</div>
     : section === 'orders' ? <OrdersSection data={data} user={user} reload={reload} />
-    : section === 'licences' ? <LicencesSection data={data} user={user} reload={reload} />
-    : section === 'software' ? <SoftwareConfigurationSection data={data} user={user} reload={reload} />
-    : section === 'laptops' ? <LaptopPropertiesSection data={data} user={user} reload={reload} />
+    : section === 'categories' ? <CategorySetupSection data={data} user={user} reload={reload} />
     : section === 'services' ? <ServicesSection data={data} user={user} reload={reload} />
     : section === 'pricing' ? <PricingPromotionsSection data={data} user={user} reload={reload} />
-    : section === 'products' ? <ProductMediaSection data={data} user={user} reload={reload} />
     : section === 'landing' ? <LandingBannersSection data={data} user={user} reload={reload} />
-    : section === 'ordering' ? <CatalogueOrderSection data={data} user={user} reload={reload} />
     : <AnnouncementsSection data={data} user={user} reload={reload} />;
   return <div className="min-h-screen bg-[#f7faf9] text-slate-900"><header className="border-b border-[#cbdcd9] bg-[#014040] text-white"><div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-4 sm:px-6"><div><p className="text-lg font-black">{ADMIN_COPY.brand}</p><p className="text-xs text-slate-300">{user.email}</p></div><div className="flex gap-2"><button className="rounded-xl border border-white/20 p-2 hover:bg-white/10" onClick={reload} aria-label={ADMIN_COPY.refresh}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button><button className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 text-xs font-bold hover:bg-white/10" onClick={() => signOut(adminAuth)}><LogOut className="h-4 w-4" />{ADMIN_COPY.signOut}</button></div></div></header><div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[210px_1fr]"><nav className="flex h-fit gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 lg:flex-col">{nav.map((item) => <button key={item.id} onClick={() => setSection(item.id)} className={`inline-flex min-w-fit items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black ${section === item.id ? 'bg-[#014040] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{React.cloneElement(item.icon as React.ReactElement, { className: 'h-4 w-4' })}{ADMIN_COPY.sections[item.id]}</button>)}</nav><main>{error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-sm font-bold text-rose-800">{error}</p>}{content}</main></div></div>;
 }

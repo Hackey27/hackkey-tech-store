@@ -4,7 +4,7 @@ import { fulfilmentTimeState } from '../utils/fulfilmentTime';
 
 type NoticeKind = 'licence' | 'account' | 'report';
 
-export function FulfilmentTimeNotice({ kind, postUpload = false }: { kind: NoticeKind; postUpload?: boolean }) {
+export function FulfilmentTimeNotice({ kind, postUpload = false, beforePayment = false }: { kind: NoticeKind; postUpload?: boolean; beforePayment?: boolean }) {
   const [now, setNow] = useState(() => new Date());
   const [expanded, setExpanded] = useState(false);
   useEffect(() => {
@@ -19,6 +19,15 @@ export function FulfilmentTimeNotice({ kind, postUpload = false }: { kind: Notic
     : postUpload && kind === 'report'
       ? `Your report will be processed from 01:00 UTC+0 (${timing.nextStartLocalTime} your time)`
       : `Orders placed now will be processed from 01:00 UTC+0 (${timing.nextStartLocalTime} your time)`;
+
+  if (beforePayment) {
+    const message = kind === 'licence'
+      ? 'The licence will be added in 20 to 40 minutes after payment.'
+      : kind === 'account'
+        ? 'The account details will be added in 20 to 40 minutes after payment.'
+        : 'The report will be processed after payment and document submission.';
+    return <section className="rounded-2xl border border-amber-200 bg-[#fffaf0] p-4 text-[#014040]"><div className="flex items-center gap-3"><span className="rounded-xl bg-[#05ef28]/20 p-2"><Clock3 className="h-5 w-5" /></span><p className="text-sm font-black sm:text-base">{message}</p></div></section>;
+  }
 
   return <section className="rounded-2xl border border-amber-200 bg-[#fffaf0] p-4 text-[#014040]">
     <div className="flex items-start gap-3"><span className="rounded-xl bg-[#05ef28]/20 p-2"><Clock3 className="h-5 w-5" /></span><div className="min-w-0"><p className="text-sm font-black sm:text-base">{headline}</p><p className="mt-1 text-xs text-slate-600">{timing.insideWindow ? 'You are currently within our fulfilment hours.' : 'You are currently outside our normal fulfilment window.'}</p></div></div>

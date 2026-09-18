@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, AlertCircle, Check, CreditCard, Monitor, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Check, CreditCard, Monitor, Phone, ShoppingCart } from 'lucide-react';
 import { CatalogueItem, MachineCodeType, ServiceOption, Variant } from '../types';
 import { STORE_COPY } from '../config/storeCopy';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
@@ -9,10 +9,12 @@ import { ProductImage, renderableProductImageUrl } from './ProductImage';
 import { QuoteRequestForm } from './QuoteRequestForm';
 import { PromotionCountdown } from './PromotionCountdown';
 import { FulfilmentTimeNotice } from './FulfilmentTimeNotice';
+import { WhatsAppIcon } from './WhatsAppIcon';
 
 interface ProductDetailViewProps {
   product: CatalogueItem;
   onClose: () => void;
+  initialInterestForm?: boolean;
   onAddToCart?: (
     product: CatalogueItem,
     variant?: Variant,
@@ -31,14 +33,14 @@ interface ProductDetailViewProps {
   ) => void;
 }
 
-export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose, onAddToCart, onBuyNow }) => {
+export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose, initialInterestForm = false, onAddToCart, onBuyNow }) => {
   const variants = product.variants || [];
   const [selectedVariant, setSelectedVariant] = useState<Variant>();
   const [selectedOs, setSelectedOs] = useState('');
   const [bundleSelections, setBundleSelections] = useState<Record<string, string>>({});
   const [addedNotice, setAddedNotice] = useState(false);
   const [bannerFailed, setBannerFailed] = useState(false);
-  const [showInterestForm, setShowInterestForm] = useState(false);
+  const [showInterestForm, setShowInterestForm] = useState(initialInterestForm);
   const productName = product.name || STORE_COPY.product.softwareFallback;
   const recommendedId = variants.find((variant) => variant.latest)?.variantId;
   const isPurchasableService = product.kind === 'service' && (product.options?.length ?? 0) > 0;
@@ -65,12 +67,12 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   useEffect(() => {
     setSelectedVariant(undefined);
     setSelectedOs(allOsList[0] || '');
-    setShowInterestForm(false);
+    setShowInterestForm(initialInterestForm);
     const defaults: Record<string, string> = {};
     alternativeGroups.forEach(([group, choices]) => { if (choices[0]) defaults[group] = choices[0].variantId; });
     setBundleSelections(defaults);
     setBannerFailed(false);
-  }, [product.itemId, alternativeGroups, allOsList]);
+  }, [product.itemId, alternativeGroups, allOsList, initialInterestForm]);
 
   useEffect(() => setBannerFailed(false), [product.bannerImageUrl]);
 
@@ -125,6 +127,9 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
     setSelectedVariant(undefined);
   };
 
+  const softwareActions = <div className="grid grid-cols-2 gap-2"><button type="button" disabled={!selectedVariant} onClick={handleBuyClick} className="flex items-center justify-center gap-2 rounded-xl border border-[#05ef28] bg-[#05ef28] px-3 py-3.5 text-sm font-black text-[#014040] disabled:opacity-50"><CreditCard className="h-4 w-4" />Buy now</button><button type="button" disabled={!selectedVariant} onClick={handleAddClick} className="flex items-center justify-center gap-2 rounded-xl border border-[#014040] bg-white px-3 py-3.5 text-sm font-black text-[#014040] disabled:opacity-50"><ShoppingCart className="h-4 w-4" />Add to cart</button></div>;
+  const aboutLabel = product.kind === 'product' ? 'About this software' : product.kind === 'laptop' ? 'About this laptop' : product.kind === 'service' ? 'About this service' : product.kind === 'bundle' ? 'About this bundle' : STORE_COPY.product.about;
+
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <button type="button" onClick={onClose} className="mb-5 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-[#014040] hover:bg-[#edf5f3]">
@@ -141,7 +146,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
             <div className="mb-4 flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-end sm:gap-4">
               <ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} size="lg" eager />
               <div className="min-w-0">
-                <p className="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-[#d9ffe0]">{product.categoryName}</p>
+                {product.kind !== 'laptop' && <p className="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-[#d9ffe0]">{product.categoryName}</p>}
                 <h1 className="text-2xl font-black leading-tight tracking-tight sm:text-4xl">{productName}</h1>
               </div>
             </div>
@@ -158,13 +163,16 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
         <aside className="rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-24">
           {isQuoteOnly ? (
             product.kind === 'laptop' && !showInterestForm
-              ? <button type="button" onClick={() => setShowInterestForm(true)} className="w-full rounded-xl bg-[#014040] px-5 py-3.5 text-sm font-black text-white">I am interested</button>
+              ? <div className="grid grid-cols-[1fr_auto_auto] gap-2"><button type="button" onClick={() => setShowInterestForm(true)} className="rounded-xl bg-[#014040] px-5 py-3.5 text-sm font-black text-white">I am interested</button><a href={`tel:${STORE_COPY.brand.phoneRaw}`} className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#014040] bg-white text-[#014040]" aria-label={`Call ${STORE_COPY.brand.phone}`}><Phone className="h-5 w-5" /></a><a href={STORE_COPY.brand.whatsAppUrl} target="_blank" rel="noreferrer" className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#05ef28] text-[#014040]" aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}><WhatsAppIcon className="h-5 w-5" /></a></div>
               : <QuoteRequestForm item={product} submitLabel={product.kind === 'laptop' ? 'I am interested' : 'Get a quote'} />
           ) : isPurchasableService ? (
             <ServicePurchasePanel item={product} onAddToCart={handleServiceAdd} onBuyNow={handleServiceBuy} />
           ) : variants.length > 0 ? (
             <div>
-              {allOsList.length > 0 && <div className="mb-5"><p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-600">{STORE_COPY.product.chooseOperatingSystem}</p><div className="flex flex-wrap gap-2">{allOsList.map((os) => <button key={os} type="button" onClick={() => selectOs(os)} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold ${selectedOs === os ? 'bg-[#014040] text-white' : 'bg-[#edf5f3] text-[#014040]'}`}><Monitor className="h-3.5 w-3.5" />{os}</button>)}</div></div>}
+              <div className="sticky top-[116px] z-20 -mx-5 mb-5 border-b border-[#d8e7e4] bg-white px-5 pb-3 pt-1 shadow-sm sm:static sm:mx-0 sm:border-0 sm:p-0 sm:shadow-none">
+                {allOsList.length > 0 && <div className="mb-3 sm:mb-5"><p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-600">{STORE_COPY.product.chooseOperatingSystem}</p><div className="flex flex-wrap gap-2">{allOsList.map((os) => <button key={os} type="button" onClick={() => selectOs(os)} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold ${selectedOs === os ? 'bg-[#014040] text-white' : 'bg-[#edf5f3] text-[#014040]'}`}><Monitor className="h-3.5 w-3.5" />{os}</button>)}</div></div>}
+                <div className="sm:hidden">{softwareActions}</div>
+              </div>
               <div className="mb-4">
                 <h2 className="text-lg font-black text-[#014040]">{STORE_COPY.product.chooseVersion}</h2>
                 <p className="mt-1 text-xs text-slate-500">{STORE_COPY.product.selectVersion}</p>
@@ -198,7 +206,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
                 })}
               </div>
 
-              <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" disabled={!selectedVariant} onClick={handleBuyClick} className="flex items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-3 py-3.5 text-sm font-black text-[#014040] disabled:opacity-50"><CreditCard className="h-4 w-4" />Buy now</button><button type="button" disabled={!selectedVariant} onClick={handleAddClick} className="flex items-center justify-center gap-2 rounded-xl bg-[#014040] px-3 py-3.5 text-sm font-black text-white disabled:opacity-50"><ShoppingCart className="h-4 w-4" />Add to cart</button></div>
+              <div className="mt-5 hidden sm:block">{softwareActions}</div>
             </div>
           ) : product.kind === 'bundle' ? (
             <div className="space-y-5"><div><h2 className="text-lg font-black text-[#014040]">What is included</h2><p className="mt-1 text-xs text-slate-500">Fixed items are included automatically. Choose one option where alternatives are shown.</p></div><div className="space-y-3">{(product.bundleContents || []).filter((entry) => !entry.altGroup).map((entry) => <div key={entry.itemId} className="rounded-xl bg-[#edf5f3] p-3"><b className="text-sm text-[#014040]">{entry.productName}</b><span className="ml-2 text-xs text-slate-600">{entry.versionOrPlan}</span></div>)}{alternativeGroups.map(([group, choices]) => <fieldset key={group} className="rounded-xl border border-slate-200 p-3"><legend className="px-1 text-xs font-black uppercase tracking-wider text-slate-600">{choices[0]?.altLabel || `Choose ${group}`}</legend>{choices.map((choice) => <label key={choice.itemId} className="mt-2 flex cursor-pointer items-center gap-2 text-sm"><input type="radio" name={group} checked={bundleSelections[group] === choice.variantId} onChange={() => setBundleSelections((old) => ({ ...old, [group]: choice.variantId }))} /><span><b>{choice.productName}</b> · {choice.versionOrPlan}</span></label>)}</fieldset>)}</div><div className="grid grid-cols-2 gap-2"><button type="button" onClick={handleBuyClick} className="flex items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-3 py-3.5 text-sm font-black text-[#014040]"><CreditCard className="h-4 w-4" />Buy now</button><button type="button" onClick={handleAddClick} className="flex items-center justify-center gap-2 rounded-xl bg-[#014040] px-3 py-3.5 text-sm font-black text-white"><ShoppingCart className="h-4 w-4" />Add to cart</button></div></div>
@@ -210,14 +218,14 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
           )}
 
           {addedNotice && <p role="status" className="mt-4 flex items-center gap-2 rounded-xl border border-[#b2f0bf] bg-[#d9ffe0] p-3 text-xs font-bold text-[#0d6520]"><Check className="h-4 w-4" />{STORE_COPY.product.addedToCartTitle}</p>}
-          {noticeEnabled && <div className="mt-4"><FulfilmentTimeNotice kind={noticeKind} /></div>}
+          {noticeEnabled && <div className="mt-4"><FulfilmentTimeNotice kind={noticeKind} beforePayment /></div>}
         </aside>
       </div>
 
       <div className="mt-8 space-y-10">
         {product.description && (
           <section className="max-w-3xl">
-            <h2 className="text-xl font-black text-[#014040]">{STORE_COPY.product.about}</h2>
+            <h2 className="text-xl font-black text-[#014040]">{aboutLabel}</h2>
             <p className="mt-3 text-sm leading-7 text-slate-700 sm:text-base">{product.description}</p>
           </section>
         )}

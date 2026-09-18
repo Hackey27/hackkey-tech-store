@@ -370,6 +370,7 @@ export const ADMIN_COPY = {
   cancel: 'Cancel',
   sections: {
     orders: 'Orders',
+    categories: 'Category setup',
     licences: 'Licences',
     services: 'Services',
     software: 'Software setup',
@@ -432,7 +433,7 @@ export const ADMIN_COPY = {
     title: 'Announcements',
     subtitle: 'If several are active at once, the most recently updated announcement is shown.',
     new: 'New announcement',
-    showOnce: 'Show only once per browser',
+    showOnce: 'Let users choose “Don’t show this again”',
     active: 'Published and active',
     previewTitle: 'Announcement preview',
   },
