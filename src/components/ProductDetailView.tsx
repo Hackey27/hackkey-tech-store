@@ -41,6 +41,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   const [addedNotice, setAddedNotice] = useState(false);
   const [bannerFailed, setBannerFailed] = useState(false);
   const [showInterestForm, setShowInterestForm] = useState(initialInterestForm);
+  const [galleryOpenRequest, setGalleryOpenRequest] = useState(0);
   const productName = product.name || STORE_COPY.product.softwareFallback;
   const recommendedId = variants.find((variant) => variant.latest)?.variantId;
   const latestVariant = variants.find((variant) => variant.latest && variant.available) || variants.find((variant) => variant.available);
@@ -75,6 +76,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
     alternativeGroups.forEach(([group, choices]) => { if (choices[0]) defaults[group] = choices[0].variantId; });
     setBundleSelections(defaults);
     setBannerFailed(false);
+    setGalleryOpenRequest(0);
   }, [product.itemId, alternativeGroups, allOsList, initialInterestForm]);
 
   useEffect(() => setBannerFailed(false), [product.bannerImageUrl]);
@@ -86,6 +88,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   const promoEndsAt = selectedVariant?.promoEndsAt ?? product.promoEndsAt;
   const bannerUrl = renderableProductImageUrl(product.bannerImageUrl);
   const mobileBannerUrl = renderableProductImageUrl(product.mobileBannerImageUrl);
+  const laptopBannerOpensGallery = product.kind === 'laptop' && (product.screenshots?.length || 0) > 0;
   const needsVariant = variants.length > 0;
   const canBuy = !needsVariant || Boolean(selectedVariant?.available);
   const noticeEnabled = product.kind === 'service'
@@ -143,7 +146,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
       </button>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(330px,0.75fr)]">
-        <section className="relative aspect-[4/5] w-full min-w-0 overflow-hidden rounded-3xl bg-gradient-to-br from-[#025656] via-[#014040] to-[#002929] shadow-lg sm:aspect-[16/10]">
+        <section role={laptopBannerOpensGallery ? 'button' : undefined} tabIndex={laptopBannerOpensGallery ? 0 : undefined} aria-label={laptopBannerOpensGallery ? `Open image gallery for ${productName}` : undefined} onClick={laptopBannerOpensGallery ? () => setGalleryOpenRequest((value) => value + 1) : undefined} onKeyDown={laptopBannerOpensGallery ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setGalleryOpenRequest((value) => value + 1); } } : undefined} className={`relative aspect-[4/5] w-full min-w-0 overflow-hidden rounded-3xl bg-gradient-to-br from-[#025656] via-[#014040] to-[#002929] shadow-lg sm:aspect-[16/10] ${laptopBannerOpensGallery ? 'cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-[#05ef28] focus:ring-offset-2' : ''}`}>
           {bannerUrl && !bannerFailed && <picture><source media="(max-width: 639px)" srcSet={mobileBannerUrl || bannerUrl} /><img src={bannerUrl} alt="" width="1200" height="750" loading="eager" decoding="async" className="absolute inset-0 h-full w-full object-cover" onError={() => setBannerFailed(true)} /></picture>}
           <div className="absolute inset-0 bg-black/10" aria-hidden="true" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#014040] via-[#014040]/80 to-transparent" aria-hidden="true" />
@@ -252,7 +255,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
 
         {isParallelsProduct && <section className="max-w-3xl rounded-2xl border border-amber-200 bg-[#fffaf0] p-4"><h2 className="text-base font-black text-[#014040]">Before installing Parallels</h2><p className="mt-2 text-sm leading-6 text-slate-700">You will need approximately <strong>8GB of data</strong> to download the required files and about <strong>50GB of free storage</strong> on your MacBook for the installation.</p></section>}
 
-        <ProductGallery images={product.screenshots || []} productName={productName} kind={product.kind} />
+        <ProductGallery images={product.screenshots || []} productName={productName} kind={product.kind} openRequest={galleryOpenRequest} />
       </div>
     </div>
   );
