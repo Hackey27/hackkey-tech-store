@@ -383,7 +383,7 @@ export const ADMIN_COPY = {
   orders: {
     title: 'Orders needing attention',
     subtitle: 'The default queue is oldest first. Ready orders are available through the filter.',
-    searchPlaceholder: 'Search phone, order reference, or email',
+    searchPlaceholder: 'Search client name, phone, order reference, or email',
     all: 'All orders',
     actionRequired: 'Needs action',
     empty: 'No orders match this view.',

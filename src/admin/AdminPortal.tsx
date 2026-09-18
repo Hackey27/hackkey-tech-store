@@ -7,7 +7,9 @@ import {
   Bell,
   BadgePercent,
   Boxes,
+  Check,
   ClipboardList,
+  Copy,
   Download,
   Eye,
   FileText,
@@ -36,6 +38,7 @@ import { AdminData, AdminLicence, ApiValidationError } from './types';
 import { isTurnitinOrder } from '../utils/orderProgress';
 import { documentContentType } from '../utils/documentFiles';
 import { newestOrderFirst } from '../utils/orderSorting';
+import { adminOrderMatchesSearch } from '../utils/adminOrderSearch';
 
 type Section = 'orders' | 'licences' | 'services' | 'software' | 'laptops' | 'announcements' | 'products' | 'landing' | 'ordering' | 'pricing';
 
@@ -142,6 +145,7 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
   const [reportLabel, setReportLabel] = useState('Turnitin report');
   const [reportFile, setReportFile] = useState<File | null>(null);
   const [reportProgress, setReportProgress] = useState(0);
+  const [copiedPreviewValue, setCopiedPreviewValue] = useState('');
 
   const selectedProduct = selected
     ? data.products.find((product) => product.productId === selected.productId || product.variants.some((variant) => variant.variantId === selected.variantId))
@@ -179,9 +183,19 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
   const rows = useMemo(() => data.orders.filter((order) => {
     if (filter === 'action' && ['ready', 'pending-payment'].includes(order.fulfilmentStatus)) return false;
     if (filter !== 'action' && filter !== 'all' && order.fulfilmentStatus !== filter) return false;
-    const haystack = `${order.phone} ${order.orderId} ${order.email}`.toLowerCase();
-    return haystack.includes(search.trim().toLowerCase());
+    return adminOrderMatchesSearch(order, search);
   }).sort(newestOrderFirst), [data.orders, filter, search]);
+
+  const copyPreviewValue = async (event: React.MouseEvent, key: string, value: string) => {
+    event.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedPreviewValue(key);
+      window.setTimeout(() => setCopiedPreviewValue((current) => current === key ? '' : current), 2000);
+    } catch {
+      setMessage('Could not copy that value. Select it and copy it manually.');
+    }
+  };
 
   const act = async (name: string, path: string, body?: unknown) => {
     setBusy(name);
@@ -294,7 +308,11 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
             <span><strong className="block text-sm text-slate-900">{order.customerName}</strong><small className="text-slate-500">{order.phone}</small></span>
             <span><strong className="block text-sm text-slate-800">{order.productName}</strong><small className="text-slate-500">{order.versionOrPlan}</small></span>
             <span className="text-xs font-bold text-amber-700">{bucketLabel[order.fulfilmentStatus]}</span>
-            {order.customerInputValue && <div className="flex flex-wrap items-center gap-2 rounded-xl bg-[#edf5f3] p-3 md:col-span-4"><span className="rounded-lg bg-white px-2.5 py-1 text-xs"><b>{orderInputType || 'Machine detail'}:</b> <span className="font-mono">{order.customerInputValue}</span></span>{order.salesCode && <span className="rounded-lg bg-white px-2.5 py-1 text-xs"><b>Sales ID:</b> <span className="font-mono">{order.salesCode}</span></span>}{orderActivationUrl && <a href={orderActivationUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="rounded-lg bg-[#014040] px-3 py-1.5 text-xs font-black text-white">Activation link</a>}</div>}
+            {(order.customerInputValue || order.salesCode) && <div className="flex flex-wrap items-center gap-2 rounded-xl bg-[#edf5f3] p-3 md:col-span-4">
+              {order.customerInputValue && <span className="inline-flex items-center gap-2 rounded-lg bg-white px-2.5 py-1 text-xs"><span><b>{orderInputType || 'Machine detail'}:</b> <span className="font-mono">{order.customerInputValue}</span></span><button type="button" onClick={(event) => void copyPreviewValue(event, `${order.orderId}-input`, order.customerInputValue!)} className="rounded-md p-1 text-[#014040] hover:bg-[#edf5f3]" aria-label={`Copy ${orderInputType || 'machine detail'}`}>{copiedPreviewValue === `${order.orderId}-input` ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}</button></span>}
+              {order.salesCode && <span className="inline-flex items-center gap-2 rounded-lg bg-white px-2.5 py-1 text-xs"><span><b>Sales code:</b> <span className="font-mono">{order.salesCode}</span></span><button type="button" onClick={(event) => void copyPreviewValue(event, `${order.orderId}-sales`, order.salesCode!)} className="rounded-md p-1 text-[#014040] hover:bg-[#edf5f3]" aria-label="Copy Sales code" title="Copy Sales code">{copiedPreviewValue === `${order.orderId}-sales` ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}</button></span>}
+              {orderActivationUrl && <a href={orderActivationUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="rounded-lg bg-[#014040] px-3 py-1.5 text-xs font-black text-white">Activation link</a>}
+            </div>}
           </div>;
         })}
       </div>
