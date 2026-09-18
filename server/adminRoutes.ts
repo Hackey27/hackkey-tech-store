@@ -64,7 +64,7 @@ export function createAdminRouter(): Router {
 
   router.post(
     '/catalogue/:kind/:itemId/images',
-    express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: MAX_CATALOGUE_IMAGE_BYTES }),
+    express.raw({ type: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'], limit: MAX_CATALOGUE_IMAGE_BYTES }),
     async (req: AdminRequest, res) => {
       const kind = String(req.params.kind || '') as 'product' | 'bundle' | 'service' | 'laptop' | 'category';
       const itemId = String(req.params.itemId || '').trim();
@@ -72,7 +72,7 @@ export function createAdminRouter(): Router {
       const contentType = String(req.header('content-type') || '').split(';')[0].trim();
       const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
       if (!['product', 'bundle', 'service', 'laptop', 'category'].includes(kind) || !itemId || !role) return res.status(400).json({ error: 'A catalogue item and image role are required.' });
-      if (kind === 'category' && role !== 'card') return res.status(400).json({ error: 'Categories use card artwork only.' });
+      if (kind === 'category' && !['icon', 'card'].includes(role)) return res.status(400).json({ error: 'Categories use icon and clipped card artwork only.' });
       const validation = validateCatalogueImage(contentType, bytes.length);
       if (!validation.ok) return res.status(400).json({ error: validation.error });
       const objectPath = catalogueImageObjectPath(`${kind}-${itemId}`, role, contentType);

@@ -30,7 +30,8 @@ export const ALLOWED_UPLOAD_TYPES: Record<string, string> = {
 export const ALLOWED_CATALOGUE_IMAGE_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
-  'image/webp': 'webp'
+  'image/webp': 'webp',
+  'image/gif': 'gif'
 };
 
 const UPLOAD_URL_TTL_MS = 15 * 60 * 1000; // 15 minutes
@@ -49,7 +50,7 @@ function getStorage(): Storage {
 
 export function validateCatalogueImage(contentType: string, sizeBytes: number): UploadValidation {
   if (!ALLOWED_CATALOGUE_IMAGE_TYPES[contentType]) {
-    return { ok: false, error: 'Use a JPEG, PNG, or WebP image.' };
+    return { ok: false, error: 'Use a JPEG, PNG, WebP, or GIF image.' };
   }
   if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
     return { ok: false, error: 'The image is empty.' };

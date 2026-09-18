@@ -31,8 +31,11 @@ export interface Category {
   active: boolean;
   /** Optional admin-uploaded artwork shown behind the category card. */
   imagePath?: string;
+  /** Optional uploaded icon. Animated GIFs are revealed on hover. */
+  iconImagePath?: string;
   /** Public, server-mediated URL derived from imagePath. */
   imageUrl?: string;
+  iconImageUrl?: string;
   /** Derived at read time from the catalogue entries in this category.
    *  Never stored — it would go stale the moment a product is added. */
   representativeItems?: string[];
@@ -97,6 +100,7 @@ export interface Product {
   defaultContact?: string;
   imageUrl?: string;
   imagePath?: string;
+  cardImagePath?: string;
   /** Optional wide artwork. Admin uploads are stored as a private Cloud
    *  Storage object path and exposed through the public catalogue image route. */
   bannerImagePath?: string;
@@ -136,6 +140,7 @@ export interface Bundle {
   sortOrder: number;
   active: boolean;
   imagePath?: string;
+  cardImagePath?: string;
   bannerImagePath?: string;
   mobileBannerImagePath?: string;
   screenshots?: string[];
@@ -212,6 +217,7 @@ export interface Service {
   active: boolean; // Status: 'Published' -> true
   sortOrder: number;
   imagePath?: string;
+  cardImagePath?: string;
   bannerImagePath?: string;
   mobileBannerImagePath?: string;
   screenshots?: string[];
@@ -245,6 +251,7 @@ export interface Laptop {
   active: boolean; // Status: 'Published' -> true
   sortOrder: number;
   imagePath?: string;
+  cardImagePath?: string;
   bannerImagePath?: string;
   mobileBannerImagePath?: string;
   screenshots?: string[];
@@ -283,6 +290,7 @@ export interface CatalogueItem {
   categoryId: string;
   description?: string;
   imageUrl?: string;
+  cardImageUrl?: string;
   bannerImageUrl?: string;
   mobileBannerImageUrl?: string;
   screenshots?: string[];

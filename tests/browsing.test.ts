@@ -27,6 +27,7 @@ test('fallback initials are deterministic for the same product name', () => {
 
 test('catalogue uploads accept resized web images and reject unsafe input', () => {
   assert.equal(validateCatalogueImage('image/webp', 250_000).ok, true);
+  assert.equal(validateCatalogueImage('image/gif', 250_000).ok, true);
   assert.equal(validateCatalogueImage('application/pdf', 250_000).ok, false);
   assert.equal(validateCatalogueImage('image/jpeg', MAX_CATALOGUE_IMAGE_BYTES + 1).ok, false);
 });
@@ -34,6 +35,7 @@ test('catalogue uploads accept resized web images and reject unsafe input', () =
 test('catalogue image paths stay inside their dedicated product prefix', () => {
   const path = catalogueImageObjectPath('AMOS', 'gallery', 'image/webp');
   assert.match(path, /^catalogue\/AMOS\/gallery\/.+\.webp$/);
+  assert.match(catalogueImageObjectPath('category-DATA', 'icon', 'image/gif'), /^catalogue\/category-DATA\/icon\/.+\.gif$/);
   assert.equal(isCatalogueImagePath(path), true);
   assert.equal(isCatalogueImagePath('orders/ORDER-1/document.pdf'), false);
   assert.equal(isCatalogueImagePath('catalogue/../orders/document.pdf'), false);

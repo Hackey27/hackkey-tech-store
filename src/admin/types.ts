@@ -7,6 +7,8 @@ export interface AdminMediaItem {
   categoryId?: string;
   imageUrl?: string;
   imagePath?: string;
+  cardImagePath?: string;
+  iconImagePath?: string;
   bannerImagePath?: string;
   mobileBannerImagePath?: string;
   screenshots?: string[];

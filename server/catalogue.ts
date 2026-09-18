@@ -124,6 +124,7 @@ function productToCatalogueItem(product: Product): CatalogueItem {
     categoryId: product.categoryId,
     description: product.description,
     imageUrl: catalogueImageUrl(product.imagePath) || product.imageUrl,
+    cardImageUrl: catalogueImageUrl(product.cardImagePath),
     bannerImageUrl: catalogueImageUrl(product.bannerImagePath),
     mobileBannerImageUrl: catalogueImageUrl(product.mobileBannerImagePath),
     screenshots: (product.screenshots || [])
@@ -170,6 +171,7 @@ function bundleToCatalogueItem(bundle: Bundle, products: Product[]): CatalogueIt
     categoryId: bundle.categoryId,
     description: bundle.description,
     imageUrl: catalogueImageUrl(bundle.imagePath),
+    cardImageUrl: catalogueImageUrl(bundle.cardImagePath),
     bannerImageUrl: catalogueImageUrl(bundle.bannerImagePath),
     mobileBannerImageUrl: catalogueImageUrl(bundle.mobileBannerImagePath),
     screenshots: (bundle.screenshots || []).map(catalogueImageUrl).filter((value): value is string => Boolean(value)),
@@ -200,6 +202,7 @@ function serviceToCatalogueItem(service: Service): CatalogueItem {
     categoryId: service.categoryId,
     description: service.description || service.tagline,
     imageUrl: catalogueImageUrl(service.imagePath),
+    cardImageUrl: catalogueImageUrl(service.cardImagePath),
     bannerImageUrl: catalogueImageUrl(service.bannerImagePath),
     mobileBannerImageUrl: catalogueImageUrl(service.mobileBannerImagePath),
     screenshots: (service.screenshots || []).map(catalogueImageUrl).filter((value): value is string => Boolean(value)),
@@ -238,6 +241,7 @@ function laptopToCatalogueItem(laptop: Laptop): CatalogueItem {
     categoryId: laptop.categoryId,
     description: spec,
     imageUrl: catalogueImageUrl(laptop.imagePath) || laptop.picturesUrl?.[0],
+    cardImageUrl: catalogueImageUrl(laptop.cardImagePath),
     bannerImageUrl: catalogueImageUrl(laptop.bannerImagePath),
     mobileBannerImageUrl: catalogueImageUrl(laptop.mobileBannerImagePath),
     screenshots: [
@@ -332,6 +336,7 @@ async function buildCatalogue(): Promise<CatalogResponse> {
     .map((category) => ({
       ...category,
       imageUrl: catalogueImageUrl(category.imagePath),
+      iconImageUrl: catalogueImageUrl(category.iconImagePath),
       // Derived, never stored: a stored copy goes stale as soon as the
       // catalogue changes.
       representativeItems: items

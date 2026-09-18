@@ -234,16 +234,21 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
           {Object.entries(bucketLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
       </div>
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="space-y-3">
         {rows.length === 0 && <p className="p-8 text-center text-sm text-slate-500">{ADMIN_COPY.orders.empty}</p>}
-        {rows.map((order) => (
-          <button key={order.orderId} onClick={() => { setSelected(order); setMessage(''); }} className="grid w-full gap-2 border-b border-slate-100 p-4 text-left hover:bg-[#f3faf8] last:border-0 md:grid-cols-[140px_1fr_1fr_140px] md:items-center">
+        {rows.map((order) => {
+          const orderProduct = data.products.find((product) => product.productId === order.productId || product.variants.some((variant) => variant.variantId === order.variantId));
+          const orderVariant = orderProduct?.variants.find((variant) => variant.variantId === order.variantId);
+          const orderInputType = order.customerInputType || orderVariant?.customerInputRequired || defaultCustomerInputType(order.productId || orderProduct?.productId);
+          const orderActivationUrl = effectiveActivationWebsiteUrl(orderVariant);
+          return <div key={order.orderId} role="button" tabIndex={0} onClick={() => { setSelected(order); setMessage(''); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setSelected(order); }} className="grid w-full cursor-pointer gap-3 rounded-2xl border border-[#cbdcd9] border-b-4 border-b-[#014040] bg-white p-4 text-left shadow-sm hover:bg-[#f3faf8] md:grid-cols-[140px_1fr_1fr_140px] md:items-center">
             <span className="font-mono text-xs font-bold text-[#014040]">{order.orderId}</span>
             <span><strong className="block text-sm text-slate-900">{order.customerName}</strong><small className="text-slate-500">{order.phone}</small></span>
             <span><strong className="block text-sm text-slate-800">{order.productName}</strong><small className="text-slate-500">{order.versionOrPlan}</small></span>
             <span className="text-xs font-bold text-amber-700">{bucketLabel[order.fulfilmentStatus]}</span>
-          </button>
-        ))}
+            {order.customerInputValue && <div className="flex flex-wrap items-center gap-2 rounded-xl bg-[#edf5f3] p-3 md:col-span-4"><span className="rounded-lg bg-white px-2.5 py-1 text-xs"><b>{orderInputType || 'Machine detail'}:</b> <span className="font-mono">{order.customerInputValue}</span></span>{order.salesCode && <span className="rounded-lg bg-white px-2.5 py-1 text-xs"><b>Sales ID:</b> <span className="font-mono">{order.salesCode}</span></span>}{orderActivationUrl && <a href={orderActivationUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="rounded-lg bg-[#014040] px-3 py-1.5 text-xs font-black text-white">Activation link</a>}</div>}
+          </div>;
+        })}
       </div>
 
       {selected && (
@@ -255,6 +260,9 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
               <div><b>Purchase</b><p>{selected.productName}<br />{selected.versionOrPlan} × {selected.quantity || 1}<br />{formatPesewas(selected.amountPesewas)}</p></div>
               <div><b>Status</b><p>{selected.paymentStatus} · {selected.paymentMethod || 'not recorded'}<br />{bucketLabel[selected.fulfilmentStatus]}<br />{new Date(selected.orderDate).toLocaleString()}</p></div>
               <div className="md:col-span-3"><b>Payment reference</b><p className="break-all font-mono text-xs">{selected.paystackReference || selected.offlinePaymentReference || '—'}</p></div>
+              {selected.customerInputValue && <div><b>{effectiveInputType || 'Machine detail'}</b><p className="break-all font-mono text-xs">{selected.customerInputValue}</p></div>}
+              {selected.customerInputValue && selected.salesCode && <div><b>Sales ID</b><p className="break-all font-mono text-xs">{selected.salesCode}</p></div>}
+              {selected.customerInputValue && activationUrl && <div className="flex items-end"><a className={secondaryButton} href={activationUrl} target="_blank" rel="noreferrer">Activation link</a></div>}
               {selected.activationCodeOrKey && <div className="md:col-span-3"><b>Attached licence / activation code</b><p className="break-all font-mono text-xs">{selected.activationCodeOrKey}</p></div>}
               {selected.serviceAnswers && <div className="md:col-span-3"><b>Service answers</b><pre className="mt-1 overflow-auto whitespace-pre-wrap rounded-lg bg-white p-3 text-xs">{JSON.stringify(selected.serviceAnswers, null, 2)}</pre></div>}
             </div>
@@ -446,6 +454,8 @@ function productMediaUrl(value?: string): string | undefined {
 }
 
 async function resizeProductImage(file: File, role: 'icon' | 'card' | 'banner' | 'mobile-banner' | 'gallery'): Promise<Blob> {
+  // Canvas conversion would flatten an animated GIF to its first frame.
+  if (file.type === 'image/gif') return file;
   const source = URL.createObjectURL(file);
   try {
     const image = new window.Image();
@@ -471,15 +481,30 @@ async function resizeProductImage(file: File, role: 'icon' | 'card' | 'banner' |
 }
 
 function ProductMediaSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
-  const [productId, setProductId] = useState(data.mediaItems[0]?.itemId || '');
+  const mediaKey = (item: AdminData['mediaItems'][number]) => `${item.kind}:${item.itemId}`;
+  const [selectionKey, setSelectionKey] = useState(data.mediaItems[0] ? mediaKey(data.mediaItems[0]) : '');
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(() => ({ [data.categories[0]?.categoryId || '']: true }));
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
-  const product = data.mediaItems.find((item) => item.itemId === productId) || data.mediaItems[0];
+  const product = data.mediaItems.find((item) => mediaKey(item) === selectionKey) || data.mediaItems[0];
+  const mediaGroups = useMemo(() => {
+    const categories = data.categories.slice().sort((a, b) => a.sortOrder - b.sortOrder);
+    const productMediaItems = data.mediaItems.filter((item) => item.kind !== 'category') as Array<AdminData['mediaItems'][number] & { kind: 'product' | 'bundle' | 'service' | 'laptop' }>;
+    const groups = categories.map((category) => ({
+      category,
+      categoryMedia: data.mediaItems.find((item) => item.kind === 'category' && item.itemId === category.categoryId),
+      items: productMediaItems.filter((item) => item.categoryId === category.categoryId)
+    }));
+    const known = new Set(categories.map((category) => category.categoryId));
+    const uncategorized = productMediaItems.filter((item) => !known.has(item.categoryId || ''));
+    if (uncategorized.length) groups.push({ category: { categoryId: 'OTHER', name: 'Other', tagline: '', icon: '', sortOrder: 999, active: true }, categoryMedia: undefined, items: uncategorized });
+    return groups;
+  }, [data.categories, data.mediaItems]);
 
   useEffect(() => {
-    if (productId && data.mediaItems.some((item) => item.itemId === productId)) return;
-    setProductId(data.mediaItems[0]?.itemId || '');
-  }, [data.mediaItems, productId]);
+    if (selectionKey && data.mediaItems.some((item) => mediaKey(item) === selectionKey)) return;
+    setSelectionKey(data.mediaItems[0] ? mediaKey(data.mediaItems[0]) : '');
+  }, [data.mediaItems, selectionKey]);
 
   const upload = async (role: 'icon' | 'card' | 'banner' | 'mobile-banner' | 'gallery', files?: FileList | null) => {
     if (!product || !files?.length) return;
@@ -513,6 +538,8 @@ function ProductMediaSection({ data, user, reload }: { data: AdminData; user: Us
   };
 
   if (!product) return <p className="rounded-2xl bg-white p-8 text-sm text-slate-500">{ADMIN_COPY.products.noGallery}</p>;
+  const iconUrl = productMediaUrl(product.kind === 'category' ? product.iconImagePath : product.imagePath) || product.imageUrl;
+  const cardUrl = productMediaUrl(product.kind === 'category' ? product.imagePath : product.cardImagePath);
   const bannerUrl = productMediaUrl(product.bannerImagePath);
   const mobileBannerUrl = productMediaUrl(product.mobileBannerImagePath);
 
@@ -521,16 +548,18 @@ function ProductMediaSection({ data, user, reload }: { data: AdminData; user: Us
       <div><h2 className="text-2xl font-black text-[#014040]">{ADMIN_COPY.products.title}</h2><p className="text-sm text-slate-600">{ADMIN_COPY.products.subtitle}</p></div>
       <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
         <aside className="h-fit rounded-2xl border bg-white p-2">
-          {data.mediaItems.map((item) => <button key={`${item.kind}-${item.itemId}`} onClick={() => { setProductId(item.itemId); setMessage(''); }} className={`flex w-full items-center gap-3 rounded-xl p-3 text-left text-sm ${product.itemId === item.itemId ? 'bg-[#edf5f3] font-black text-[#014040]' : 'hover:bg-slate-50'}`}><ProductImage name={item.name} itemId={item.itemId} imageUrl={productMediaUrl(item.imagePath) || item.imageUrl} kind={item.kind === 'category' ? undefined : item.kind} size="sm" /><span>{item.name}<small className="block font-mono text-[10px] text-slate-500">{item.kind} · {item.itemId}</small></span></button>)}
+          <div className="space-y-2">{mediaGroups.map(({ category, categoryMedia, items }) => <section key={category.categoryId} className="overflow-hidden rounded-xl border border-slate-200"><div className="flex items-stretch bg-[#f8fbfa]">{categoryMedia ? <button type="button" onClick={() => { setSelectionKey(mediaKey(categoryMedia)); setMessage(''); }} className={`flex min-w-0 flex-1 items-center gap-3 p-3 text-left ${selectionKey === mediaKey(categoryMedia) ? 'bg-[#014040] text-white' : 'hover:bg-[#edf5f3]'}`}><ProductImage name={category.name} itemId={category.categoryId} imageUrl={productMediaUrl(categoryMedia.iconImagePath) || productMediaUrl(categoryMedia.imagePath)} size="sm" /><span className="min-w-0"><b className="block truncate text-sm">{category.name}</b><small className={selectionKey === mediaKey(categoryMedia) ? 'text-white/70' : 'text-slate-500'}>Category card media</small></span></button> : <div className="min-w-0 flex-1 p-3 text-sm font-black">{category.name}</div>}<button type="button" onClick={() => setExpandedCategories((old) => ({ ...old, [category.categoryId]: !old[category.categoryId] }))} className="border-l px-3 text-xs font-black text-[#014040]" aria-expanded={Boolean(expandedCategories[category.categoryId])}>{expandedCategories[category.categoryId] ? '−' : '+'}<span className="sr-only"> {expandedCategories[category.categoryId] ? 'Collapse' : 'Expand'} products</span></button></div>{expandedCategories[category.categoryId] && <div className="space-y-1 border-t p-2">{items.length ? items.map((item) => <button key={mediaKey(item)} onClick={() => { setSelectionKey(mediaKey(item)); setMessage(''); }} className={`flex w-full items-center gap-3 rounded-lg p-2.5 text-left text-sm ${selectionKey === mediaKey(item) ? 'bg-[#edf5f3] font-black text-[#014040]' : 'hover:bg-slate-50'}`}><ProductImage name={item.name} itemId={item.itemId} imageUrl={productMediaUrl(item.imagePath) || item.imageUrl} kind={item.kind} size="sm" /><span className="min-w-0 truncate">{item.name}<small className="block font-mono text-[10px] text-slate-500">{item.kind} · {item.itemId}</small></span></button>) : <p className="p-3 text-xs text-slate-500">No products in this category.</p>}</div>}</section>)}</div>
         </aside>
         <section className="space-y-7 rounded-2xl border bg-white p-5">
-          <div className="flex items-center gap-3"><ProductImage name={product.name} itemId={product.itemId} imageUrl={productMediaUrl(product.imagePath) || product.imageUrl} kind={product.kind === 'category' ? undefined : product.kind} /><div><p className="text-xs font-bold uppercase tracking-wider text-slate-500">{product.kind}</p><h3 className="text-xl font-black text-[#014040]">{product.name}</h3></div></div>
+          <div className="flex items-center gap-3"><ProductImage name={product.name} itemId={product.itemId} imageUrl={iconUrl} kind={product.kind === 'category' ? undefined : product.kind} /><div><p className="text-xs font-bold uppercase tracking-wider text-slate-500">{product.kind}</p><h3 className="text-xl font-black text-[#014040]">{product.name}</h3></div></div>
 
-          <div><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-black text-[#014040]">{product.kind === 'category' ? 'Category card artwork' : 'Product icon'}</h4><p className="text-xs text-slate-500">Flexible square or landscape images are automatically resized for the storefront.</p></div><label className={secondaryButton}>{busy === (product.kind === 'category' ? 'card' : 'icon') ? ADMIN_COPY.products.uploading : 'Choose image'}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={Boolean(busy)} onChange={(event) => { void upload(product.kind === 'category' ? 'card' : 'icon', event.target.files); event.currentTarget.value = ''; }} /></label></div>{product.imagePath && <div className="relative aspect-[3/2] max-w-md overflow-hidden rounded-2xl bg-[#014040]"><img src={productMediaUrl(product.imagePath)} alt="" className="h-full w-full object-cover" /><button className="absolute right-2 top-2 rounded-lg bg-white/90 p-2 text-rose-700" onClick={() => void remove(product.imagePath!)}><Trash2 className="h-4 w-4" /></button></div>}</div>
+          <div><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-black text-[#014040]">{product.kind === 'category' ? 'Category icon' : 'Product icon'}</h4><p className="text-xs text-slate-500">Recommended: {product.kind === 'category' ? '512 × 512 px. GIF is supported and appears only while customers hover over the category.' : '800 × 800 px, square PNG or WebP.'}</p></div><label className={secondaryButton}>{busy === 'icon' ? ADMIN_COPY.products.uploading : 'Choose icon'}<input type="file" accept={product.kind === 'category' ? 'image/gif,image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/webp'} className="sr-only" disabled={Boolean(busy)} onChange={(event) => { void upload('icon', event.target.files); event.currentTarget.value = ''; }} /></label></div>{(product.kind === 'category' ? product.iconImagePath : product.imagePath) && <div className="relative flex h-36 w-36 items-center justify-center overflow-hidden rounded-2xl bg-[#edf5f3] p-3"><img src={iconUrl} alt="" className="h-full w-full object-contain" /><button className="absolute right-2 top-2 rounded-lg bg-white/90 p-2 text-rose-700" onClick={() => void remove((product.kind === 'category' ? product.iconImagePath : product.imagePath)!)}><Trash2 className="h-4 w-4" /></button></div>}</div>
+
+          <div><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-black text-[#014040]">{product.kind === 'category' ? 'Image clipped into the category card' : 'Card image'}</h4><p className="text-xs text-slate-500">Recommended: 1200 × 800 px (3:2 landscape).</p></div><label className={secondaryButton}>{busy === 'card' ? ADMIN_COPY.products.uploading : 'Choose card image'}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={Boolean(busy)} onChange={(event) => { void upload('card', event.target.files); event.currentTarget.value = ''; }} /></label></div>{cardUrl ? <div className="relative aspect-[3/2] max-w-md overflow-hidden rounded-2xl bg-[#014040]"><img src={cardUrl} alt="" className="h-full w-full object-cover" /><button className="absolute right-2 top-2 rounded-lg bg-white/90 p-2 text-rose-700" onClick={() => void remove((product.kind === 'category' ? product.imagePath : product.cardImagePath)!)}><Trash2 className="h-4 w-4" /></button></div> : <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">No card image uploaded yet.</p>}</div>
 
           {product.kind !== 'category' && <div>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h4 className="font-black text-[#014040]">{ADMIN_COPY.products.banner}</h4><label className={secondaryButton}>{busy === 'banner' ? ADMIN_COPY.products.uploading : ADMIN_COPY.products.chooseBanner}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={Boolean(busy)} onChange={(event) => { void upload('banner', event.target.files); event.currentTarget.value = ''; }} /></label></div>
-            {bannerUrl ? <div className="relative aspect-[16/7] overflow-hidden rounded-2xl bg-[#014040]"><img src={bannerUrl} alt="" width="1200" height="525" className="h-full w-full object-cover" />{product.bannerImagePath?.startsWith('catalogue/') && <button className="absolute right-3 top-3 rounded-xl bg-white/90 px-3 py-2 text-xs font-bold text-rose-700" disabled={Boolean(busy)} onClick={() => void remove(product.bannerImagePath!)}><Trash2 className="mr-1 inline h-3.5 w-3.5" />{ADMIN_COPY.products.remove}</button>}</div> : <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{ADMIN_COPY.products.noBanner}</p>}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-black text-[#014040]">Web banner</h4><p className="text-xs text-slate-500">Recommended: 1600 × 1000 px (16:10 landscape).</p></div><label className={secondaryButton}>{busy === 'banner' ? ADMIN_COPY.products.uploading : ADMIN_COPY.products.chooseBanner}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={Boolean(busy)} onChange={(event) => { void upload('banner', event.target.files); event.currentTarget.value = ''; }} /></label></div>
+            {bannerUrl ? <div className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-[#014040]"><img src={bannerUrl} alt="" width="1600" height="1000" className="h-full w-full object-cover" />{product.bannerImagePath?.startsWith('catalogue/') && <button className="absolute right-3 top-3 rounded-xl bg-white/90 px-3 py-2 text-xs font-bold text-rose-700" disabled={Boolean(busy)} onClick={() => void remove(product.bannerImagePath!)}><Trash2 className="mr-1 inline h-3.5 w-3.5" />{ADMIN_COPY.products.remove}</button>}</div> : <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{ADMIN_COPY.products.noBanner}</p>}
           </div>}
 
           {product.kind !== 'category' && <div>
@@ -539,7 +568,7 @@ function ProductMediaSection({ data, user, reload }: { data: AdminData; user: Us
           </div>}
 
           {product.kind !== 'category' && <div>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h4 className="font-black text-[#014040]">{ADMIN_COPY.products.gallery}</h4><label className={secondaryButton}>{busy === 'gallery' ? ADMIN_COPY.products.uploading : ADMIN_COPY.products.chooseGallery}<input type="file" multiple accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={Boolean(busy)} onChange={(event) => { void upload('gallery', event.target.files); event.currentTarget.value = ''; }} /></label></div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-black text-[#014040]">{ADMIN_COPY.products.gallery}</h4><p className="text-xs text-slate-500">Recommended: 1400 × 1050 px (4:3). Up to 12 images.</p></div><label className={secondaryButton}>{busy === 'gallery' ? ADMIN_COPY.products.uploading : ADMIN_COPY.products.chooseGallery}<input type="file" multiple accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={Boolean(busy)} onChange={(event) => { void upload('gallery', event.target.files); event.currentTarget.value = ''; }} /></label></div>
             {product.screenshots?.length ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3">{product.screenshots.map((image, index) => <div key={`${image}-${index}`} className="relative aspect-[4/3] overflow-hidden rounded-xl bg-slate-100"><img src={productMediaUrl(image)} alt="" width="480" height="360" loading="lazy" className="h-full w-full object-cover" />{image.startsWith('catalogue/') && <button className="absolute right-2 top-2 rounded-lg bg-white/90 p-2 text-rose-700" aria-label={ADMIN_COPY.products.remove} disabled={Boolean(busy)} onClick={() => void remove(image)}><Trash2 className="h-3.5 w-3.5" /></button>}</div>)}</div> : <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{ADMIN_COPY.products.noGallery}</p>}
           </div>}
           {message && <p role="status" className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}

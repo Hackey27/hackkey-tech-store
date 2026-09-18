@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CatalogueItem } from '../types';
-import { CheckCircle, CreditCard, MessageSquareQuote, ShoppingCart } from 'lucide-react';
+import { CheckCircle, CreditCard, Info, MessageSquareQuote, ShoppingCart } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
 import { ProductImage, renderableProductImageUrl } from './ProductImage';
@@ -22,6 +22,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const hasMultipleVariants = product.variants && product.variants.length > 1;
   const [laptopPreviewFailed, setLaptopPreviewFailed] = useState(false);
+  const [showLaptopAvailability, setShowLaptopAvailability] = useState(false);
 
   const productName = product.name || STORE_COPY.product.softwareFallback;
   const cardName = product.kind === 'laptop' && product.laptop
@@ -51,31 +52,38 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       : STORE_COPY.product.askForPrice;
 
   const payable = product.kind === 'product' || product.kind === 'bundle' || (product.kind === 'service' && Boolean(product.options?.length));
+  const isPreorder = product.kind === 'laptop' && product.laptop?.availability.toLowerCase().includes('pre');
+  const availabilityMessage = isPreorder
+    ? 'This laptop will be shipped after purchase and delivered within 2 to 4 weeks after payment. Pay 70% now and the remaining 30% when the laptop arrives.'
+    : 'This laptop is available with us and can be delivered as soon as your purchase is made.';
 
   return (
     <article
       id={`product-card-${product.itemId}`}
-      role="button" tabIndex={0} onClick={() => onSelect(product)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(product); } }}
+      role="button" tabIndex={0} onClick={() => onSelect(product)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onSelect(product); } }}
       className="group flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-[#d8e7e4] bg-white text-slate-900 transition-all duration-200 hover:border-[#014040]/70 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#014040]"
     >
       <div className="p-5 sm:p-6">
         {/* Laptops use their product banner as the browsing preview. */}
-        {product.kind === 'laptop' ? <div className="relative -mx-5 -mt-5 mb-5 aspect-[16/9] overflow-hidden bg-gradient-to-br from-[#025656] to-[#002929] sm:-mx-6 sm:-mt-6">
+        {product.kind === 'laptop' ? <div className="relative -mx-5 -mt-5 mb-5 aspect-[4/5] overflow-hidden bg-gradient-to-br from-[#025656] to-[#002929] sm:-mx-6 sm:-mt-6 sm:aspect-[16/9]">
           {laptopPreviewUrl && !laptopPreviewFailed && <picture><source media="(max-width: 639px)" srcSet={laptopMobilePreviewUrl || laptopPreviewUrl} /><img src={laptopPreviewUrl} alt={cardName} width="960" height="540" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none" onError={() => setLaptopPreviewFailed(true)} /></picture>}
           {(!laptopPreviewUrl || laptopPreviewFailed) && <div className="flex h-full items-center justify-center px-6 text-center text-2xl font-black text-white">{cardName}</div>}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" aria-hidden="true" />
-          {showCategoryLabel && <span className="absolute right-3 top-3 rounded-full border border-white/30 bg-[#014040]/85 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white backdrop-blur-sm">{product.categoryName || 'Laptop'}</span>}
-        </div> : <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="absolute inset-0 bg-gradient-to-t from-[#014040]/95 via-[#014040]/35 to-black/5" aria-hidden="true" />
+          {showCategoryLabel && <span className="absolute left-3 top-3 rounded-full border border-white/30 bg-[#014040]/75 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white backdrop-blur-sm">{product.categoryName || 'Laptop'}</span>}
+          <button type="button" onClick={(event) => { event.stopPropagation(); setShowLaptopAvailability((value) => !value); }} className={`absolute right-3 top-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider shadow-sm ${isPreorder ? 'bg-amber-300 text-amber-950' : 'bg-[#05ef28] text-[#014040]'}`} aria-expanded={showLaptopAvailability}><Info className="h-3 w-3" />{isPreorder ? 'Pre-order' : 'Available'}</button>
+          <div className="absolute inset-x-0 bottom-0 p-5 text-white"><h3 className="text-xl font-black leading-tight sm:text-2xl">{cardName}</h3><p className="mt-1 text-2xl font-black text-[#05ef28]">{displayPrice}</p></div>
+        </div> : product.cardImageUrl ? <div className="relative -mx-5 -mt-5 mb-5 aspect-[3/2] overflow-hidden bg-[#edf5f3] sm:-mx-6 sm:-mt-6"><img src={product.cardImageUrl} alt="" width="900" height="600" loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" /><div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" /><div className="absolute bottom-3 left-3"><ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} size="sm" /></div>{showCategoryLabel && <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-black uppercase text-[#014040]">{product.categoryName || STORE_COPY.product.softwareFallback}</span>}</div> : <div className="mb-4 flex items-start justify-between gap-3">
           <div className="rounded-2xl transition-transform group-hover:scale-105 motion-reduce:transition-none"><ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} /></div>
           <div className="text-right">{showCategoryLabel && <span className="inline-block rounded-full border border-[#d0e4e0] bg-[#edf5f3] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-[#014040]">{product.categoryName || STORE_COPY.product.softwareFallback}</span>}{hasMultipleVariants && <span className="mt-1 block text-[10px] font-medium text-slate-500">{STORE_COPY.product.versionsAvailable(product.variants?.length || 0)}</span>}</div>
         </div>}
+        {product.kind === 'laptop' && showLaptopAvailability && <div className="mb-4 rounded-xl border border-[#cbdcd9] bg-[#edf5f3] p-3 text-left text-xs font-semibold leading-5 text-slate-700" onClick={(event) => event.stopPropagation()}>{availabilityMessage}</div>}
 
         {/* Product Name */}
-        <h3
+        {product.kind !== 'laptop' && <h3
           className="text-base sm:text-lg font-bold text-[#014040] tracking-tight group-hover:text-[#025656] transition-colors leading-snug"
         >
           {cardName}
-        </h3>
+        </h3>}
 
         {product.kind === 'laptop' && product.laptop && <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600"><span><b>CPU</b><br />{product.laptop.processor}</span><span><b>RAM</b><br />{product.laptop.ram}</span><span><b>Storage</b><br />{product.laptop.storage}</span>{(product.laptop.graphicsDetails || product.laptop.graphics?.toLowerCase().includes('dedicated')) && <span><b>Dedicated graphics</b><br />{product.laptop.graphicsDetails || product.laptop.graphics}</span>}</div>}
 
@@ -114,16 +122,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       {/* Footer: Price in GHS & Primary Action Button */}
       <div className="px-5 sm:px-6 py-4 bg-[#f8fbfa] border-t border-[#e2ecea] flex items-center justify-between gap-3">
         {/* Price in GHS only */}
-        <div>
+        {product.kind !== 'laptop' && <div>
           <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold block">
             {STORE_COPY.product.priceLabel}
           </span>
           <span className="text-base sm:text-lg font-black text-[#014040]">
             {displayPrice}
           </span>
-        </div>
+        </div>}
 
-        {payable ? <div className="flex gap-2"><button id={`product-buy-btn-${product.itemId}`} onClick={(event) => { event.stopPropagation(); onBuyNowClick(product); }} className="flex items-center gap-1.5 rounded-xl bg-[#05ef28] px-3 py-2.5 text-xs font-black text-[#014040] hover:bg-[#04d824]"><CreditCard className="h-3.5 w-3.5" />Buy now</button><button id={`product-cart-btn-${product.itemId}`} onClick={(event) => { event.stopPropagation(); onAddToCart?.(product); }} className="flex items-center gap-1.5 rounded-xl bg-[#014040] px-3 py-2.5 text-xs font-black text-white hover:bg-[#025656]"><ShoppingCart className="h-3.5 w-3.5" />Add</button></div> : <button onClick={(event) => { event.stopPropagation(); onSelect(product); }} className="flex items-center gap-1.5 rounded-xl bg-[#014040] px-4 py-2.5 text-xs font-black text-white"><MessageSquareQuote className="h-3.5 w-3.5" />{product.kind === 'laptop' ? 'I am interested' : 'Get a quote'}</button>}
+        {payable ? <div className="ml-auto flex gap-2"><button id={`product-buy-btn-${product.itemId}`} onClick={(event) => { event.stopPropagation(); onBuyNowClick(product); }} className="flex items-center gap-1.5 rounded-xl bg-[#05ef28] px-3 py-2.5 text-xs font-black text-[#014040] hover:bg-[#04d824]"><CreditCard className="h-3.5 w-3.5" />Buy now</button><button id={`product-cart-btn-${product.itemId}`} onClick={(event) => { event.stopPropagation(); onAddToCart?.(product); }} className="flex items-center gap-1.5 rounded-xl bg-[#014040] px-3 py-2.5 text-xs font-black text-white hover:bg-[#025656]"><ShoppingCart className="h-3.5 w-3.5" />Add</button></div> : <button onClick={(event) => { event.stopPropagation(); onSelect(product); }} className="ml-auto flex items-center gap-1.5 rounded-xl bg-[#014040] px-4 py-2.5 text-xs font-black text-white"><MessageSquareQuote className="h-3.5 w-3.5" />{product.kind === 'laptop' ? 'I am interested' : 'Get a quote'}</button>}
       </div>
     </article>
   );

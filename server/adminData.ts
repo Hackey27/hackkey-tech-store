@@ -114,11 +114,11 @@ export async function adminBootstrap() {
   const laptops = laptopsSnap.docs.map((doc) => doc.data() as Laptop);
   const categories = categoriesSnap.docs.map((doc) => doc.data() as Category);
   const mediaItems = [
-    ...products.map((item) => ({ kind: 'product' as const, itemId: item.productId, name: item.productName, categoryId: item.categoryId, imageUrl: item.imageUrl, imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, mobileBannerImagePath: item.mobileBannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder, featuredOrder: item.featuredOrder })),
-    ...bundles.map((item) => ({ kind: 'bundle' as const, itemId: item.bundleId, name: item.name, categoryId: item.categoryId, imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, mobileBannerImagePath: item.mobileBannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
-    ...services.map((item) => ({ kind: 'service' as const, itemId: item.serviceId, name: item.name, categoryId: item.categoryId, imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, mobileBannerImagePath: item.mobileBannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
-    ...laptops.map((item) => ({ kind: 'laptop' as const, itemId: item.laptopId, name: item.title, categoryId: item.categoryId, imageUrl: item.picturesUrl?.[0], imagePath: item.imagePath, bannerImagePath: item.bannerImagePath, mobileBannerImagePath: item.mobileBannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
-    ...categories.map((item) => ({ kind: 'category' as const, itemId: item.categoryId, name: item.name, imagePath: item.imagePath, sortOrder: item.sortOrder }))
+    ...products.map((item) => ({ kind: 'product' as const, itemId: item.productId, name: item.productName, categoryId: item.categoryId, imageUrl: item.imageUrl, imagePath: item.imagePath, cardImagePath: item.cardImagePath, bannerImagePath: item.bannerImagePath, mobileBannerImagePath: item.mobileBannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder, featuredOrder: item.featuredOrder })),
+    ...bundles.map((item) => ({ kind: 'bundle' as const, itemId: item.bundleId, name: item.name, categoryId: item.categoryId, imagePath: item.imagePath, cardImagePath: item.cardImagePath, bannerImagePath: item.bannerImagePath, mobileBannerImagePath: item.mobileBannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
+    ...services.map((item) => ({ kind: 'service' as const, itemId: item.serviceId, name: item.name, categoryId: item.categoryId, imagePath: item.imagePath, cardImagePath: item.cardImagePath, bannerImagePath: item.bannerImagePath, mobileBannerImagePath: item.mobileBannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
+    ...laptops.map((item) => ({ kind: 'laptop' as const, itemId: item.laptopId, name: item.title, categoryId: item.categoryId, imageUrl: item.picturesUrl?.[0], imagePath: item.imagePath, cardImagePath: item.cardImagePath, bannerImagePath: item.bannerImagePath, mobileBannerImagePath: item.mobileBannerImagePath, screenshots: item.screenshots, sortOrder: item.sortOrder })),
+    ...categories.map((item) => ({ kind: 'category' as const, itemId: item.categoryId, name: item.name, imagePath: item.imagePath, iconImagePath: item.iconImagePath, sortOrder: item.sortOrder }))
   ].sort((a, b) => a.name.localeCompare(b.name));
 
   return { orders, licences, services, announcements, products, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {} };
@@ -140,12 +140,17 @@ export async function updateCatalogueMedia(
   const ref = getFirestore().collection(mediaCollection[kind]).doc(itemId);
   const snap = await ref.get();
   if (!snap.exists) throw new Error('Catalogue item not found.');
-  const current = snap.data() as { imagePath?: string; bannerImagePath?: string; mobileBannerImagePath?: string; screenshots?: string[] };
+  const current = snap.data() as { imagePath?: string; cardImagePath?: string; iconImagePath?: string; bannerImagePath?: string; mobileBannerImagePath?: string; screenshots?: string[] };
   let patch: Record<string, unknown> = {};
   let replacedPath: string | undefined;
-  if (change.role === 'icon' || change.role === 'card') {
-    replacedPath = current.imagePath?.startsWith('catalogue/') ? current.imagePath : undefined;
-    patch = { imagePath: change.objectPath };
+  if (change.role === 'icon') {
+    const field = kind === 'category' ? 'iconImagePath' : 'imagePath';
+    replacedPath = current[field]?.startsWith('catalogue/') ? current[field] : undefined;
+    patch = { [field]: change.objectPath };
+  } else if (change.role === 'card') {
+    const field = kind === 'category' ? 'imagePath' : 'cardImagePath';
+    replacedPath = current[field]?.startsWith('catalogue/') ? current[field] : undefined;
+    patch = { [field]: change.objectPath };
   } else if (change.role === 'banner') {
     replacedPath = current.bannerImagePath?.startsWith('catalogue/') ? current.bannerImagePath : undefined;
     patch = { bannerImagePath: change.objectPath };
@@ -159,6 +164,8 @@ export async function updateCatalogueMedia(
   } else {
     patch = {
       imagePath: current.imagePath === change.objectPath ? '' : current.imagePath,
+      cardImagePath: current.cardImagePath === change.objectPath ? '' : current.cardImagePath,
+      iconImagePath: current.iconImagePath === change.objectPath ? '' : current.iconImagePath,
       bannerImagePath: current.bannerImagePath === change.objectPath ? '' : current.bannerImagePath,
       mobileBannerImagePath: current.mobileBannerImagePath === change.objectPath ? '' : current.mobileBannerImagePath,
       screenshots: (current.screenshots || []).filter((value) => value !== change.objectPath)
