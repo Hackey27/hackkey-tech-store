@@ -34,8 +34,13 @@ interface ProductDetailViewProps {
   ) => void;
 }
 
+const EMPTY_VARIANTS: Variant[] = [];
+
 export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose, initialInterestForm = false, onAddToCart, onBuyNow }) => {
-  const variants = product.variants || [];
+  // Keep the no-variants value referentially stable. A fresh [] on every
+  // service-option render retriggered the product reset effect and restored
+  // the first Turnitin option before the banner could show the new price.
+  const variants = product.variants || EMPTY_VARIANTS;
   const [selectedVariant, setSelectedVariant] = useState<Variant>();
   const [selectedOs, setSelectedOs] = useState('');
   const [bundleSelections, setBundleSelections] = useState<Record<string, string>>({});
