@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import { readFile } from 'node:fs/promises';
 import path from 'path';
 import { HealthResponse } from './src/types';
 import { getCatalogue } from './server/catalogue';
@@ -38,6 +39,7 @@ import {
 import { createAdminRouter } from './server/adminRoutes';
 import { publicOrder } from './server/publicOrder';
 import { turnitinDocumentUploadPolicy } from './server/documentUploadPolicy';
+import { renderProductSocialPreview } from './server/socialPreview';
 
 // Cloud Run injects PORT (8080 by default); 3000 keeps local dev unchanged.
 const PORT = Number(process.env.PORT) || 3000;
@@ -555,9 +557,29 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
+    const indexPath = path.join(distPath, 'index.html');
+    const indexTemplate = await readFile(indexPath, 'utf8');
+
+    // Social crawlers do not run the React app. Serve product-specific Open
+    // Graph metadata while keeping the same SPA shell for the human visitor.
+    app.get('/product/:itemId', async (req: Request, res: Response) => {
+      try {
+        const catalogue = await getCatalogue();
+        const item = catalogue.products.find((candidate) => candidate.itemId === req.params.itemId);
+        if (!item) return res.sendFile(indexPath);
+        const requestBase = `${req.protocol}://${req.get('host')}`;
+        const baseUrl = process.env.PUBLIC_BASE_URL || requestBase;
+        res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+        res.type('html').send(renderProductSocialPreview(indexTemplate, item, baseUrl));
+      } catch (err) {
+        console.error('[social-preview] Failed to render product metadata:', err);
+        res.sendFile(indexPath);
+      }
+    });
+
     app.use(express.static(distPath));
     app.get('*', (req: Request, res: Response) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      res.sendFile(indexPath);
     });
   }
 

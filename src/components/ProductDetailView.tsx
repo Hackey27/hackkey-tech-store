@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, AlertCircle, Check, CreditCard, Monitor, Phone, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Check, CreditCard, Monitor, Phone, Share2, ShoppingCart } from 'lucide-react';
 import { CatalogueItem, MachineCodeType, ServiceOption, Variant } from '../types';
 import { STORE_COPY } from '../config/storeCopy';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
@@ -43,6 +43,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   const [bannerFailed, setBannerFailed] = useState(false);
   const [showInterestForm, setShowInterestForm] = useState(initialInterestForm);
   const [galleryOpenRequest, setGalleryOpenRequest] = useState(0);
+  const [shareStatus, setShareStatus] = useState('');
   useBackDismiss(showInterestForm, () => setShowInterestForm(false));
   const productName = product.name || STORE_COPY.product.softwareFallback;
   const recommendedId = variants.find((variant) => variant.latest)?.variantId;
@@ -82,6 +83,10 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   }, [product.itemId, alternativeGroups, allOsList, initialInterestForm]);
 
   useEffect(() => setBannerFailed(false), [product.bannerImageUrl]);
+
+  useEffect(() => {
+    setShareStatus('');
+  }, [product.itemId]);
 
   const price = resolveLinePricePesewas({ item: product, variant: selectedVariant, quantity: 1 }).unitPesewas;
   const listPrice = selectedVariant?.listPricePesewas ?? product.listPricePesewas;
@@ -137,6 +142,46 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
     setSelectedVariant(undefined);
   };
 
+  const copyShareUrl = async (url: string) => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      return;
+    }
+    const input = document.createElement('textarea');
+    input.value = url;
+    input.setAttribute('readonly', '');
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    input.remove();
+  };
+
+  const shareItem = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    const url = new URL(`/product/${encodeURIComponent(product.itemId)}`, window.location.origin).toString();
+    const shareData = { title: productName, text: `View ${productName} on Hack-Key Tech Store.`, url };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        setShareStatus('Shared');
+      } else {
+        await copyShareUrl(url);
+        setShareStatus('Link copied');
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      try {
+        await copyShareUrl(url);
+        setShareStatus('Link copied');
+      } catch {
+        setShareStatus('Unable to share');
+      }
+    }
+    window.setTimeout(() => setShareStatus(''), 2200);
+  };
+
   const softwareActions = <div className="grid grid-cols-2 gap-1.5 sm:gap-2"><button type="button" disabled={!selectedVariant} onClick={handleBuyClick} className="flex items-center justify-center gap-1.5 rounded-lg border border-[#05ef28] bg-[#05ef28] px-2.5 py-3 text-xs font-black text-[#014040] disabled:opacity-50 sm:gap-2 sm:rounded-xl sm:px-3 sm:py-3.5 sm:text-sm"><CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4" />Buy now</button><button type="button" disabled={!selectedVariant} onClick={handleAddClick} className="flex items-center justify-center gap-1.5 rounded-lg border border-[#014040] bg-white px-2.5 py-3 text-xs font-black text-[#014040] disabled:opacity-50 sm:gap-2 sm:rounded-xl sm:px-3 sm:py-3.5 sm:text-sm"><ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />Add to cart</button></div>;
   const aboutLabel = product.kind === 'product' ? 'About this software' : product.kind === 'laptop' ? 'About this laptop' : product.kind === 'service' ? 'About this service' : product.kind === 'bundle' ? 'About this bundle' : STORE_COPY.product.about;
 
@@ -152,6 +197,8 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
           {bannerUrl && !bannerFailed && <picture><source media="(max-width: 639px)" srcSet={mobileBannerUrl || bannerUrl} /><img src={bannerUrl} alt="" width="1200" height="750" loading="eager" decoding="async" className="absolute inset-0 h-full w-full object-cover" onError={() => setBannerFailed(true)} /></picture>}
           <div className="absolute inset-0 bg-black/10" aria-hidden="true" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#014040] via-[#014040]/80 to-transparent" aria-hidden="true" />
+          <button type="button" onPointerDown={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} onClick={shareItem} className="absolute bottom-5 right-5 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-white/95 text-[#014040] shadow-lg transition-transform hover:scale-105 hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#05ef28] sm:bottom-7 sm:right-7" aria-label={`Share ${productName}`} title={`Share ${productName}`}><Share2 className="h-5 w-5" /></button>
+          {shareStatus && <span role="status" className="absolute bottom-[4.5rem] right-4 z-20 rounded-full bg-black/75 px-3 py-1.5 text-xs font-bold text-white shadow-lg sm:bottom-[5.25rem] sm:right-6">{shareStatus}</span>}
           <div className="absolute inset-x-0 bottom-0 p-5 text-white sm:p-8">
             <div className="mb-4 flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-end sm:gap-4">
               <ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} size="lg" eager />

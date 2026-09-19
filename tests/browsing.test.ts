@@ -9,6 +9,7 @@ import {
 } from '../server/storage';
 import { searchCatalogue } from '../src/utils/catalogueSearch';
 import type { CatalogueItem } from '../src/types';
+import { renderProductSocialPreview } from '../server/socialPreview';
 
 test('Google Drive share links become renderable image URLs', () => {
   assert.equal(
@@ -61,4 +62,43 @@ test('catalogue search matches version, operating system and laptop specificatio
   assert.deepEqual(searchCatalogue(items, 'spss mac'), [items[0]]);
   assert.deepEqual(searchCatalogue(items, '840 16 gb'), [items[1]]);
   assert.deepEqual(searchCatalogue(items, 'missing'), []);
+});
+
+test('shared product pages expose an absolute banner preview to social crawlers', () => {
+  const template = '<html><head><title>Store</title><meta name="description" content="Store" /><meta property="og:title" content="Store" /><meta property="og:description" content="Store" /></head><body></body></html>';
+  const item = {
+    kind: 'service', itemId: 'Similarity & AI', name: 'Similarity & AI Check', categoryId: 'SERVICES', sortOrder: 1,
+    description: 'Check your document before submission.',
+    bannerImageUrl: '/api/catalog/images?path=catalogue%2FTURNITIN%2Fbanner.webp'
+  } as CatalogueItem;
+  const html = renderProductSocialPreview(template, item, 'https://store.hackeytech.com/');
+
+  assert.match(html, /<title>Similarity &amp; AI Check \| Hack-Key Tech Store<\/title>/);
+  assert.match(html, /property="og:image" content="https:\/\/store\.hackeytech\.com\/api\/catalog\/images\?path=catalogue%2FTURNITIN%2Fbanner\.webp"/);
+  assert.match(html, /property="og:url" content="https:\/\/store\.hackeytech\.com\/product\/Similarity%20%26%20AI"/);
+  assert.match(html, /name="twitter:card" content="summary_large_image"/);
+});
+
+test('shared product metadata escapes catalogue text and falls back to store artwork', () => {
+  const template = '<head><title>Store</title><meta name="description" content="Store" /><meta property="og:title" content="Store" /><meta property="og:description" content="Store" /></head>';
+  const item = {
+    kind: 'product', itemId: 'SAFE', name: '<Safe & Sound>', categoryId: 'SOFTWARE', sortOrder: 1,
+    description: 'Install "safely" & quickly.'
+  } as CatalogueItem;
+  const html = renderProductSocialPreview(template, item, 'https://store.hackeytech.com');
+
+  assert.doesNotMatch(html, /<title><Safe/);
+  assert.match(html, /&lt;Safe &amp; Sound&gt;/);
+  assert.match(html, /content="Install &quot;safely&quot; &amp; quickly\."/);
+  assert.match(html, /og:image" content="https:\/\/store\.hackeytech\.com\/landing-workspace\.webp"/);
+});
+
+test('shared product metadata converts legacy Google Drive banners into image previews', () => {
+  const template = '<head><title>Store</title><meta name="description" content="Store" /><meta property="og:title" content="Store" /><meta property="og:description" content="Store" /></head>';
+  const item = {
+    kind: 'laptop', itemId: 'LAPTOP', name: 'Laptop', categoryId: 'LAPTOPS', sortOrder: 1,
+    bannerImageUrl: 'https://drive.google.com/file/d/banner123/view?usp=sharing'
+  } as CatalogueItem;
+  const html = renderProductSocialPreview(template, item, 'https://store.hackeytech.com');
+  assert.match(html, /og:image" content="https:\/\/drive\.google\.com\/thumbnail\?id=banner123&amp;sz=w1200"/);
 });
