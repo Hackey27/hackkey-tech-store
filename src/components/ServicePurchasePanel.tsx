@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertCircle, Check, ChevronDown, CreditCard, Minus, Plus, ShoppingCart } from 'lucide-react';
 import { CatalogueItem, ServiceOption } from '../types';
 import { STORE_COPY } from '../config/storeCopy';
@@ -9,6 +9,7 @@ interface ServicePurchasePanelProps {
   item: CatalogueItem;
   onAddToCart: (option: ServiceOption, quantity: number) => void;
   onBuyNow: (option: ServiceOption, quantity: number) => void;
+  onOptionChange?: (option: ServiceOption) => void;
 }
 
 /**
@@ -18,7 +19,7 @@ interface ServicePurchasePanelProps {
  * Services without options never reach this panel and keep their existing
  * quote-request behaviour.
  */
-export const ServicePurchasePanel: React.FC<ServicePurchasePanelProps> = ({ item, onAddToCart, onBuyNow }) => {
+export const ServicePurchasePanel: React.FC<ServicePurchasePanelProps> = ({ item, onAddToCart, onBuyNow, onOptionChange }) => {
   const options = item.options || [];
   // The first option is the one customers actually buy, so it starts selected.
   const [selected, setSelected] = useState<ServiceOption>(options[0]);
@@ -27,6 +28,13 @@ export const ServicePurchasePanel: React.FC<ServicePurchasePanelProps> = ({ item
   const [quantity, setQuantity] = useState<number>(minQty);
   const [showImportantInformation, setShowImportantInformation] = useState(false);
   const isTurnitin = item.itemId.toUpperCase() === 'TURNITIN';
+
+  useEffect(() => {
+    if (!options[0]) return;
+    setSelected(options[0]);
+    setQuantity(minQty);
+    onOptionChange?.(options[0]);
+  }, [item.itemId]);
 
   if (!options.length || !selected) return null;
 
@@ -46,7 +54,7 @@ export const ServicePurchasePanel: React.FC<ServicePurchasePanelProps> = ({ item
             return (
               <button
                 key={option.optionId}
-                onClick={() => setSelected(option)}
+                onClick={() => { setSelected(option); onOptionChange?.(option); }}
                 className={`w-full p-3.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between text-left ${
                   isSelected
                     ? 'bg-[#f0f9f7] border-[#014040] shadow-xs'

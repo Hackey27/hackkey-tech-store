@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, AlertCircle, Check, CreditCard, Monitor, Phone, Share2, ShoppingCart } from 'lucide-react';
 import { CatalogueItem, MachineCodeType, ServiceOption, Variant } from '../types';
 import { STORE_COPY } from '../config/storeCopy';
-import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
+import { formatPesewas, priceServiceLine, resolveLinePricePesewas } from '../utils/money';
 import { ServicePurchasePanel } from './ServicePurchasePanel';
 import { ProductGallery } from './ProductGallery';
 import { ProductImage, renderableProductImageUrl } from './ProductImage';
@@ -44,6 +44,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   const [showInterestForm, setShowInterestForm] = useState(initialInterestForm);
   const [galleryOpenRequest, setGalleryOpenRequest] = useState(0);
   const [shareStatus, setShareStatus] = useState('');
+  const [selectedServiceOption, setSelectedServiceOption] = useState<ServiceOption | undefined>(product.options?.[0]);
   useBackDismiss(showInterestForm, () => setShowInterestForm(false));
   const productName = product.name || STORE_COPY.product.softwareFallback;
   const recommendedId = variants.find((variant) => variant.latest)?.variantId;
@@ -80,6 +81,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
     setBundleSelections(defaults);
     setBannerFailed(false);
     setGalleryOpenRequest(0);
+    setSelectedServiceOption(product.options?.[0]);
   }, [product.itemId, alternativeGroups, allOsList, initialInterestForm]);
 
   useEffect(() => setBannerFailed(false), [product.bannerImageUrl]);
@@ -88,7 +90,9 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
     setShareStatus('');
   }, [product.itemId]);
 
-  const price = resolveLinePricePesewas({ item: product, variant: selectedVariant, quantity: 1 }).unitPesewas;
+  const price = isPurchasableService && selectedServiceOption
+    ? priceServiceLine(selectedServiceOption, 1).unitPricePesewas
+    : resolveLinePricePesewas({ item: product, variant: selectedVariant, quantity: 1 }).unitPesewas;
   const listPrice = selectedVariant?.listPricePesewas ?? product.listPricePesewas;
   const promoLabel = selectedVariant?.promoLabel ?? product.promoLabel;
   const promoPercent = selectedVariant?.promoPercent ?? product.promoPercent;
@@ -207,7 +211,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
                 <h1 className="text-2xl font-black leading-tight tracking-tight sm:text-4xl">{productName}</h1>
               </div>
             </div>
-            <div key={`${selectedVariant?.variantId || 'from'}-${price}`} className="hk-price-change flex flex-wrap items-end gap-x-3 gap-y-1">
+            <div key={`${selectedVariant?.variantId || selectedServiceOption?.optionId || 'from'}-${price}`} className="hk-price-change flex flex-wrap items-end gap-x-3 gap-y-1">
               {!selectedVariant && variants.length > 0 && <span className="pb-1 text-sm font-bold uppercase tracking-wider text-[#d9ffe0]">{STORE_COPY.product.fromPrefix}</span>}
               <span className="text-3xl font-black sm:text-4xl">{price > 0 ? formatPesewas(price) : STORE_COPY.product.askForPrice}</span>
               {!selectedVariant && latestVariant && <span className="pb-1 text-sm font-black text-[#d9ffe0]">Latest version {latestVariant.versionOrPlan}</span>}
@@ -224,7 +228,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
               ? <div className="grid grid-cols-[1fr_auto_auto] gap-2"><button type="button" onClick={() => setShowInterestForm(true)} className="rounded-xl bg-[#014040] px-5 py-3.5 text-sm font-black text-white">I am interested</button><a href={`tel:${STORE_COPY.brand.phoneRaw}`} className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#014040] bg-white text-[#014040]" aria-label={`Call ${STORE_COPY.brand.phone}`}><Phone className="h-5 w-5" /></a><a href={STORE_COPY.brand.whatsAppUrl} target="_blank" rel="noreferrer" className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#05ef28] text-[#014040]" aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}><WhatsAppIcon className="h-5 w-5" /></a></div>
               : <QuoteRequestForm item={product} submitLabel="Submit details" />
           ) : isPurchasableService ? (
-            <ServicePurchasePanel item={product} onAddToCart={handleServiceAdd} onBuyNow={handleServiceBuy} />
+            <ServicePurchasePanel item={product} onAddToCart={handleServiceAdd} onBuyNow={handleServiceBuy} onOptionChange={setSelectedServiceOption} />
           ) : variants.length > 0 ? (
             <div>
               <div className="sticky top-[116px] z-20 -mx-5 mb-5 border-b border-[#d8e7e4] bg-white px-5 pb-3 pt-1 shadow-sm sm:static sm:mx-0 sm:border-0 sm:p-0 sm:shadow-none">
