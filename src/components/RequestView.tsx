@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layers, Laptop, CheckCircle2, X, AlertCircle } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
+import { useBackDismiss } from '../utils/useBackDismiss';
 
 type RequestMode = 'software' | 'laptop';
 
@@ -41,13 +42,17 @@ export const RequestView: React.FC<{ initialMode?: RequestMode | null }> = ({ in
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const dismissModal = useBackDismiss(Boolean(modalMode), () => {
+    setModalMode(null);
+    setSubmitError(null);
+  });
 
   // Close on Escape and lock background scrolling while the sheet is open.
   useEffect(() => {
     if (!modalMode) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setModalMode(null);
+      if (e.key === 'Escape') dismissModal();
     };
 
     document.addEventListener('keydown', handleKeyDown);
@@ -58,7 +63,7 @@ export const RequestView: React.FC<{ initialMode?: RequestMode | null }> = ({ in
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [modalMode]);
+  }, [modalMode, dismissModal]);
 
   const openModal = (mode: RequestMode) => {
     setSubmitError(null);
@@ -66,8 +71,7 @@ export const RequestView: React.FC<{ initialMode?: RequestMode | null }> = ({ in
   };
 
   const closeModal = () => {
-    setModalMode(null);
-    setSubmitError(null);
+    dismissModal();
   };
 
   const handleSoftwareSubmit = async (e: React.FormEvent) => {

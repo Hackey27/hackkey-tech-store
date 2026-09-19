@@ -5,6 +5,7 @@ import { cartItemToCheckoutItem } from '../utils/checkout';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
 import { FulfilmentTimeNotice } from './FulfilmentTimeNotice';
 import { cartDeliveryNotice } from '../utils/cartDeliveryNotice';
+import { useBackDismiss } from '../utils/useBackDismiss';
 
 export function DirectCheckoutModal({ item, onClose }: { item: CartItem; onClose: () => void }) {
   const [firstName, setFirstName] = useState('');
@@ -15,6 +16,7 @@ export function DirectCheckoutModal({ item, onClose }: { item: CartItem; onClose
   const [error, setError] = useState('');
   const total = resolveLinePricePesewas({ item: item.product, variant: item.variant, serviceOption: item.serviceOption, quantity: item.quantity }).totalPesewas;
   const deliveryNotice = cartDeliveryNotice(item);
+  const closeForm = useBackDismiss(true, onClose);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -36,7 +38,7 @@ export function DirectCheckoutModal({ item, onClose }: { item: CartItem; onClose
 
   return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#001f1f]/75 p-4" role="dialog" aria-modal="true" aria-label="Buy now">
     <form onSubmit={submit} className="relative max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
-      <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-full p-2 text-slate-500 hover:bg-slate-100" aria-label="Close"><X className="h-5 w-5" /></button>
+      <button type="button" onClick={closeForm} className="absolute right-4 top-4 rounded-full p-2 text-slate-500 hover:bg-slate-100" aria-label="Close"><X className="h-5 w-5" /></button>
       <div className="pr-10"><p className="text-xs font-black uppercase tracking-wider text-[#047857]">Buy now</p><h2 className="mt-1 text-2xl font-black text-[#014040]">{item.product.name}</h2><p className="mt-2 text-sm text-slate-600">Enter your details to continue directly to secure payment. This item will not be added to your cart.</p></div>
       {deliveryNotice.enabled && <div className="mt-5"><FulfilmentTimeNotice kind={deliveryNotice.kind} beforePayment customerInputLabel={deliveryNotice.customerInputLabel} /></div>}
       <div className="mt-5 grid gap-4 sm:grid-cols-2">

@@ -126,11 +126,23 @@
 
 .hk-price-change { animation: hk-price-change 180ms ease-out both; }
 
+@keyframes hk-purchase-actions-enter {
+  0% { opacity: 0; transform: translateY(18px) scale(0.96); }
+  62% { opacity: 1; transform: translateY(-4px) scale(1.015); }
+  82% { transform: translateY(2px) scale(0.995); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.hk-purchase-actions-enter {
+  animation: hk-purchase-actions-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .hk-search-results,
 .hk-gallery-lightbox { animation: hk-modal-enter 180ms ease-out both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .hk-price-change { animation: none; }
+  .hk-price-change,
+  .hk-purchase-actions-enter { animation: none; }
 }
 
 /* Custom scrollbars */

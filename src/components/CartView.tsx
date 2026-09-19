@@ -6,6 +6,7 @@ import { STORE_COPY } from '../config/storeCopy';
 import { ProductImage } from './ProductImage';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
 import { cartItemToCheckoutItem } from '../utils/checkout';
+import { useBackDismiss } from '../utils/useBackDismiss';
 
 export interface CartItem {
   id: string;
@@ -53,6 +54,7 @@ export const CartView: React.FC<CartViewProps> = ({
 
   const [createdOrderIds, setCreatedOrderIds] = useState<string[]>([]);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  useBackDismiss(showCheckout && !orderComplete, () => setShowCheckout(false));
 
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

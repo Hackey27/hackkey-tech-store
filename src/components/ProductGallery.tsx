@@ -52,6 +52,8 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
   const transitionTimer = useRef<number | undefined>(undefined);
   const wheelEndTimer = useRef<number | undefined>(undefined);
   const gestureEndTimer = useRef<number | undefined>(undefined);
+  const singleTapTimer = useRef<number | undefined>(undefined);
+  const lastImageTap = useRef(0);
   const animationFrame = useRef<number | undefined>(undefined);
   const dragOffsetRef = useRef(0);
   const animatingRef = useRef(false);
@@ -155,6 +157,8 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
     window.clearTimeout(transitionTimer.current);
     window.clearTimeout(wheelEndTimer.current);
     window.clearTimeout(gestureEndTimer.current);
+    window.clearTimeout(singleTapTimer.current);
+    lastImageTap.current = 0;
     pointerStart.current = null;
     panStart.current = null;
     pinchStart.current = null;
@@ -166,6 +170,32 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
     setDragOffset(0);
     resetViewport();
     setActive(null);
+  };
+
+  const handleImageTap = (event: React.MouseEvent<HTMLImageElement>) => {
+    event.stopPropagation();
+    if (dragged.current) {
+      dragged.current = false;
+      lastImageTap.current = 0;
+      window.clearTimeout(singleTapTimer.current);
+      return;
+    }
+
+    const now = performance.now();
+    if (now - lastImageTap.current <= 340) {
+      window.clearTimeout(singleTapTimer.current);
+      lastImageTap.current = 0;
+      if (transformRef.current.zoom > MIN_ZOOM) resetViewport();
+      else applyZoom(1.5);
+      return;
+    }
+
+    lastImageTap.current = now;
+    window.clearTimeout(singleTapTimer.current);
+    singleTapTimer.current = window.setTimeout(() => {
+      lastImageTap.current = 0;
+      close();
+    }, 340);
   };
 
   useEffect(() => {
@@ -224,6 +254,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
     window.clearTimeout(transitionTimer.current);
     window.clearTimeout(wheelEndTimer.current);
     window.clearTimeout(gestureEndTimer.current);
+    window.clearTimeout(singleTapTimer.current);
     if (animationFrame.current != null) window.cancelAnimationFrame(animationFrame.current);
   }, []);
 
@@ -356,7 +387,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
           <div className={`flex h-full w-full will-change-transform ${animating ? 'transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]' : ''}`} style={{ transform: validImages.length === 1 ? 'translate3d(0,0,0)' : `translate3d(calc(-100% + ${dragOffset}px),0,0)` }}>
             {visibleIndexes.map((index, position) => {
               const current = position === currentPosition;
-              return <div key={`${activeIndex}-${index}-${position}`} className="flex h-full w-full shrink-0 items-center justify-center overflow-hidden p-4 sm:p-10"><img src={validImages[index]} alt={imageAlt(index)} width="1400" height="1050" draggable={false} className={`max-h-full max-w-full select-none rounded-2xl object-contain shadow-2xl will-change-transform ${current && !gestureActive ? 'transition-transform duration-200 ease-out' : ''}`} style={current ? { transform: `translate3d(${viewportTransform.x}px, ${viewportTransform.y}px, 0) scale(${viewportTransform.zoom})`, transformOrigin: 'center center' } : undefined} onClick={(event) => { event.stopPropagation(); if (!dragged.current) close(); dragged.current = false; }} /></div>;
+              return <div key={`${activeIndex}-${index}-${position}`} className="flex h-full w-full shrink-0 items-center justify-center overflow-hidden p-4 sm:p-10"><img src={validImages[index]} alt={imageAlt(index)} width="1400" height="1050" draggable={false} className={`max-h-full max-w-full select-none rounded-2xl object-contain shadow-2xl will-change-transform ${current && !gestureActive ? 'transition-transform duration-200 ease-out' : ''}`} style={current ? { transform: `translate3d(${viewportTransform.x}px, ${viewportTransform.y}px, 0) scale(${viewportTransform.zoom})`, transformOrigin: 'center center' } : undefined} onClick={current ? handleImageTap : undefined} /></div>;
             })}
           </div>
 

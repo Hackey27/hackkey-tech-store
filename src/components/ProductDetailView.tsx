@@ -10,6 +10,7 @@ import { QuoteRequestForm } from './QuoteRequestForm';
 import { PromotionCountdown } from './PromotionCountdown';
 import { FulfilmentTimeNotice } from './FulfilmentTimeNotice';
 import { WhatsAppIcon } from './WhatsAppIcon';
+import { useBackDismiss } from '../utils/useBackDismiss';
 
 interface ProductDetailViewProps {
   product: CatalogueItem;
@@ -42,6 +43,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   const [bannerFailed, setBannerFailed] = useState(false);
   const [showInterestForm, setShowInterestForm] = useState(initialInterestForm);
   const [galleryOpenRequest, setGalleryOpenRequest] = useState(0);
+  useBackDismiss(showInterestForm, () => setShowInterestForm(false));
   const productName = product.name || STORE_COPY.product.softwareFallback;
   const recommendedId = variants.find((variant) => variant.latest)?.variantId;
   const latestVariant = variants.find((variant) => variant.latest && variant.available) || variants.find((variant) => variant.available);
@@ -215,8 +217,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
                 })}
               </div>
 
-              <div className="h-[68px] sm:hidden" aria-hidden="true" />
-              <div className="fixed inset-x-0 bottom-[63px] z-40 border-t border-[#d8e7e4] bg-white/95 px-4 py-2 shadow-[0_-6px_18px_rgba(1,64,64,0.10)] backdrop-blur-md sm:hidden"><div className="mx-auto max-w-lg">{softwareActions}</div></div>
+              {selectedVariant && <><div className="h-[68px] sm:hidden" aria-hidden="true" /><div key={selectedVariant.variantId} className="hk-purchase-actions-enter fixed inset-x-0 bottom-[63px] z-40 border-t border-[#d8e7e4] bg-white/95 px-4 py-2 shadow-[0_-6px_18px_rgba(1,64,64,0.10)] backdrop-blur-md sm:hidden"><div className="mx-auto max-w-lg">{softwareActions}</div></div></>}
 
               <div className="mt-5 hidden sm:block">{softwareActions}</div>
             </div>
