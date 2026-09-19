@@ -36,6 +36,42 @@ interface ProductDetailViewProps {
 
 const EMPTY_VARIANTS: Variant[] = [];
 
+type LaptopDetails = NonNullable<CatalogueItem['laptop']>;
+
+const LaptopSpecs: React.FC<{ laptop: LaptopDetails }> = ({ laptop }) => {
+  const rows: Array<[string, string | undefined]> = [
+    ['Brand', laptop.brand],
+    ['Model', laptop.model],
+    ['Processor', laptop.processor],
+    ['RAM', laptop.ram],
+    ['Storage', laptop.storage],
+    ['Screen size', laptop.screen],
+    ['Colour', laptop.colour],
+    ['Operating system', laptop.operatingSystem],
+    ['Graphics card', [laptop.graphics, laptop.graphicsDetails].filter(Boolean).join(' · ') || undefined],
+    ['Freebies included', laptop.freebies],
+    ['Availability', laptop.availability]
+  ];
+  const isPreorder = laptop.availability?.toLowerCase().includes('pre');
+
+  return (
+    <section>
+      <h2 className="text-xl font-black text-[#014040]">Specs</h2>
+      <dl className="mt-3 divide-y divide-[#d8e7e4]/80 border-y border-[#d8e7e4]/80">
+        {rows.filter(([, value]) => value).map(([label, value]) => (
+          <div key={label} className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-3 py-3">
+            <dt className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</dt>
+            <dd className="text-right text-sm font-semibold text-slate-800">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {isPreorder
+        ? <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-800">This laptop will be shipped after purchase and delivered within 2 to 4 weeks after payment. Pay 70% now and the remaining 30% when it arrives.</p>
+        : <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800">This laptop is available with us and can be delivered as soon as your purchase is made.</p>}
+    </section>
+  );
+};
+
 export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose, initialInterestForm = false, onAddToCart, onBuyNow }) => {
   // Keep the no-variants value referentially stable. A fresh [] on every
   // service-option render retriggered the product reset effect and restored
@@ -193,6 +229,16 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
 
   const softwareActions = <div className="grid grid-cols-2 gap-1.5 sm:gap-2"><button type="button" disabled={!selectedVariant} onClick={handleBuyClick} className="flex items-center justify-center gap-1.5 rounded-lg border border-[#05ef28] bg-[#05ef28] px-2.5 py-3 text-xs font-black text-[#014040] disabled:opacity-50 sm:gap-2 sm:rounded-xl sm:px-3 sm:py-3.5 sm:text-sm"><CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4" />Buy now</button><button type="button" disabled={!selectedVariant} onClick={handleAddClick} className="flex items-center justify-center gap-1.5 rounded-lg border border-[#014040] bg-white px-2.5 py-3 text-xs font-black text-[#014040] disabled:opacity-50 sm:gap-2 sm:rounded-xl sm:px-3 sm:py-3.5 sm:text-sm"><ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />Add to cart</button></div>;
   const aboutLabel = product.kind === 'product' ? 'About this software' : product.kind === 'laptop' ? 'About this laptop' : product.kind === 'service' ? 'About this service' : product.kind === 'bundle' ? 'About this bundle' : STORE_COPY.product.about;
+  const bannerPrice = (
+    <div key={`${selectedVariant?.variantId || selectedServiceOption?.optionId || 'from'}-${price}`} className="hk-price-change flex flex-wrap items-end gap-x-3 gap-y-1">
+      {!selectedVariant && variants.length > 0 && <span className="pb-1 text-sm font-bold uppercase tracking-wider text-[#d9ffe0]">{STORE_COPY.product.fromPrefix}</span>}
+      <span className="text-3xl font-black sm:text-4xl">{price > 0 ? formatPesewas(price) : STORE_COPY.product.askForPrice}</span>
+      {!selectedVariant && latestVariant && <span className="pb-1 text-sm font-black text-[#d9ffe0]">Latest version {latestVariant.versionOrPlan}</span>}
+      {listPrice && listPrice > price && <span className="pb-1 text-sm font-bold text-white/70 line-through">{formatPesewas(listPrice)}</span>}
+      {(promoLabel || promoPercent) && <span className="mb-1 rounded-full bg-[#05ef28] px-2.5 py-1 text-xs font-black text-[#014040]">{promoLabel || STORE_COPY.product.promotion(promoPercent)}</span>}
+      {(promoLabel || promoPercent) && <PromotionCountdown endsAt={promoEndsAt} className="mb-1 text-xs font-bold text-[#d9ffe0]" />}
+    </div>
+  );
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
@@ -209,28 +255,35 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
           <button type="button" onPointerDown={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} onClick={shareItem} className="absolute bottom-5 right-5 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-white/95 text-[#014040] shadow-lg transition-transform hover:scale-105 hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#05ef28] sm:bottom-7 sm:right-7" aria-label={`Share ${productName}`} title={`Share ${productName}`}><Share2 className="h-5 w-5" /></button>
           {shareStatus && <span role="status" className="absolute bottom-[4.5rem] right-4 z-20 rounded-full bg-black/75 px-3 py-1.5 text-xs font-bold text-white shadow-lg sm:bottom-[5.25rem] sm:right-6">{shareStatus}</span>}
           <div className="absolute inset-x-0 bottom-0 p-5 text-white sm:p-8">
-            <div className="mb-4 flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-end sm:gap-4">
-              <ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} size="lg" eager />
-              <div className="min-w-0">
-                {product.kind !== 'laptop' && <p className="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-[#d9ffe0]">{product.categoryName}</p>}
-                <h1 className="text-2xl font-black leading-tight tracking-tight sm:text-4xl">{productName}</h1>
+            {product.kind === 'laptop' ? (
+              <div className="flex min-w-0 flex-col items-start gap-3 lg:flex-row lg:items-stretch lg:gap-4">
+                <ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} size="lg" eager />
+                <div className="min-w-0 lg:flex lg:min-h-24 lg:flex-1 lg:flex-col lg:justify-between lg:pr-16">
+                  <h1 className="text-[1.35rem] font-medium leading-tight tracking-tight sm:text-[2.025rem]">{productName}</h1>
+                  <div className="mt-3 lg:mt-0">{bannerPrice}</div>
+                </div>
               </div>
-            </div>
-            <div key={`${selectedVariant?.variantId || selectedServiceOption?.optionId || 'from'}-${price}`} className="hk-price-change flex flex-wrap items-end gap-x-3 gap-y-1">
-              {!selectedVariant && variants.length > 0 && <span className="pb-1 text-sm font-bold uppercase tracking-wider text-[#d9ffe0]">{STORE_COPY.product.fromPrefix}</span>}
-              <span className="text-3xl font-black sm:text-4xl">{price > 0 ? formatPesewas(price) : STORE_COPY.product.askForPrice}</span>
-              {!selectedVariant && latestVariant && <span className="pb-1 text-sm font-black text-[#d9ffe0]">Latest version {latestVariant.versionOrPlan}</span>}
-              {listPrice && listPrice > price && <span className="pb-1 text-sm font-bold text-white/70 line-through">{formatPesewas(listPrice)}</span>}
-              {(promoLabel || promoPercent) && <span className="mb-1 rounded-full bg-[#05ef28] px-2.5 py-1 text-xs font-black text-[#014040]">{promoLabel || STORE_COPY.product.promotion(promoPercent)}</span>}
-              {(promoLabel || promoPercent) && <PromotionCountdown endsAt={promoEndsAt} className="mb-1 text-xs font-bold text-[#d9ffe0]" />}
-            </div>
+            ) : (
+              <>
+                <div className="mb-4 flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-end sm:gap-4">
+                  <ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} size="lg" eager />
+                  <div className="min-w-0">
+                    <p className="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-[#d9ffe0]">{product.categoryName}</p>
+                    <h1 className="text-2xl font-black leading-tight tracking-tight sm:text-4xl">{productName}</h1>
+                  </div>
+                </div>
+                {bannerPrice}
+              </>
+            )}
           </div>
         </section>
 
-        <aside className="rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-24">
+        <aside className={product.kind === 'laptop' ? 'lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1' : 'rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-24'}>
           {isQuoteOnly ? (
-            product.kind === 'laptop' && !showInterestForm
-              ? <div className="grid grid-cols-[1fr_auto_auto] gap-2"><button type="button" onClick={() => setShowInterestForm(true)} className="rounded-xl bg-[#014040] px-5 py-3.5 text-sm font-black text-white">I am interested</button><a href={`tel:${STORE_COPY.brand.phoneRaw}`} className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#014040] bg-white text-[#014040]" aria-label={`Call ${STORE_COPY.brand.phone}`}><Phone className="h-5 w-5" /></a><a href={STORE_COPY.brand.whatsAppUrl} target="_blank" rel="noreferrer" className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#05ef28] text-[#014040]" aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}><WhatsAppIcon className="h-5 w-5" /></a></div>
+            product.kind === 'laptop'
+              ? <div className="space-y-5"><div className="rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6">{!showInterestForm
+                ? <div className="grid grid-cols-[1fr_auto_auto] gap-2"><button type="button" onClick={() => setShowInterestForm(true)} className="rounded-xl bg-[#014040] px-5 py-3.5 text-sm font-black text-white">I am interested</button><a href={`tel:${STORE_COPY.brand.phoneRaw}`} className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#014040] bg-white text-[#014040]" aria-label={`Call ${STORE_COPY.brand.phone}`}><Phone className="h-5 w-5" /></a><a href={STORE_COPY.brand.whatsAppUrl} target="_blank" rel="noreferrer" className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#05ef28] text-[#014040]" aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}><WhatsAppIcon className="h-5 w-5" /></a></div>
+                : <QuoteRequestForm item={product} submitLabel="Submit details" />}</div>{product.laptop && <div className="hidden px-1 lg:block"><LaptopSpecs laptop={product.laptop} /></div>}</div>
               : <QuoteRequestForm item={product} submitLabel="Submit details" />
           ) : isPurchasableService ? (
             <ServicePurchasePanel item={product} onAddToCart={handleServiceAdd} onBuyNow={handleServiceBuy} onOptionChange={setSelectedServiceOption} />
@@ -299,9 +352,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
           </section>
         )}
 
-        {product.kind === 'laptop' && product.laptop && <section className="max-w-4xl"><h2 className="text-xl font-black text-[#014040]">Laptop specifications</h2><dl className="mt-4 grid gap-3 rounded-2xl border border-[#d8e7e4] bg-white p-5 sm:grid-cols-2">{[
-          ['Brand', product.laptop.brand], ['Model', product.laptop.model], ['Processor', product.laptop.processor], ['RAM', product.laptop.ram], ['Storage', product.laptop.storage], ['Screen size', product.laptop.screen], ['Colour', product.laptop.colour], ['Operating system', product.laptop.operatingSystem], ['Graphics card', [product.laptop.graphics, product.laptop.graphicsDetails].filter(Boolean).join(' · ')], ['Freebies included', product.laptop.freebies], ['Availability', product.laptop.availability]
-        ].filter(([, value]) => value).map(([label, value]) => <div key={label}><dt className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</dt><dd className="mt-1 text-sm font-bold text-slate-800">{value}</dd></div>)}</dl>{product.laptop.availability.toLowerCase().includes('pre') ? <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-800">This laptop will be shipped after purchase and delivered within 2 to 4 weeks after payment. Pay 70% now and the remaining 30% when it arrives.</p> : <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800">This laptop is available with us and can be delivered as soon as your purchase is made.</p>}</section>}
+        {product.kind === 'laptop' && product.laptop && <div className="max-w-4xl lg:hidden"><LaptopSpecs laptop={product.laptop} /></div>}
 
         {product.showSingleLicenceDisclaimer === true && (
           <div className="flex max-w-3xl items-start gap-2 rounded-2xl border-l-4 border-[#e0a800] bg-[#fffaf0] p-4 text-xs leading-relaxed text-[#8a5b00]">
