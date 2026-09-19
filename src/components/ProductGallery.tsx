@@ -20,6 +20,8 @@ interface ViewportTransform {
 
 const SWIPE_THRESHOLD = 55;
 const SWIPE_DURATION_MS = 280;
+const TRACKPAD_SWIPE_THRESHOLD = 42;
+const TRACKPAD_VISUAL_MULTIPLIER = 1.45;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 
@@ -51,6 +53,9 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
   const dragged = useRef(false);
   const transitionTimer = useRef<number | undefined>(undefined);
   const wheelEndTimer = useRef<number | undefined>(undefined);
+  const wheelUnlockTimer = useRef<number | undefined>(undefined);
+  const wheelDistance = useRef(0);
+  const wheelLocked = useRef(false);
   const gestureEndTimer = useRef<number | undefined>(undefined);
   const singleTapTimer = useRef<number | undefined>(undefined);
   const lastImageTap = useRef(0);
@@ -156,6 +161,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
   const close = () => {
     window.clearTimeout(transitionTimer.current);
     window.clearTimeout(wheelEndTimer.current);
+    window.clearTimeout(wheelUnlockTimer.current);
     window.clearTimeout(gestureEndTimer.current);
     window.clearTimeout(singleTapTimer.current);
     lastImageTap.current = 0;
@@ -165,6 +171,8 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
     pointers.current.clear();
     animatingRef.current = false;
     dragOffsetRef.current = 0;
+    wheelDistance.current = 0;
+    wheelLocked.current = false;
     setAnimating(false);
     setGestureActive(false);
     setDragOffset(0);
@@ -219,6 +227,32 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
       window.clearTimeout(gestureEndTimer.current);
       gestureEndTimer.current = window.setTimeout(() => setGestureActive(false), 100);
     };
+    const unlockTrackpadAfterMomentum = () => {
+      window.clearTimeout(wheelUnlockTimer.current);
+      const tryUnlock = () => {
+        if (animatingRef.current) {
+          wheelUnlockTimer.current = window.setTimeout(tryUnlock, 80);
+          return;
+        }
+        wheelLocked.current = false;
+        wheelDistance.current = 0;
+        endGestureSoon();
+      };
+      wheelUnlockTimer.current = window.setTimeout(tryUnlock, 180);
+    };
+    const finishTrackpadGesture = (direction: number) => {
+      if (wheelLocked.current) return;
+      wheelLocked.current = true;
+      wheelDistance.current = 0;
+      animatingRef.current = true;
+      setAnimating(true);
+      if (direction) {
+        const width = lightboxRef.current?.clientWidth || window.innerWidth;
+        renderDragOffset(direction > 0 ? -width : width);
+      } else renderDragOffset(0);
+      finishTransition(direction);
+      unlockTrackpadAfterMomentum();
+    };
     const onWheel = (event: WheelEvent) => {
       if (event.ctrlKey) {
         event.preventDefault();
@@ -237,14 +271,30 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
         return;
       }
 
-      if (validImages.length < 2 || Math.abs(event.deltaX) < Math.abs(event.deltaY) * 0.7 || animatingRef.current) return;
+      const horizontalGesture = Math.abs(event.deltaX) >= Math.abs(event.deltaY) * 0.7;
+      if (validImages.length < 2 || !horizontalGesture) return;
       event.preventDefault();
       dragged.current = true;
       setGestureActive(true);
+
+      // Trackpads keep emitting momentum events after the fingers have lifted.
+      // Absorb that tail so one physical swipe can advance only one image.
+      if (wheelLocked.current || animatingRef.current) {
+        wheelLocked.current = true;
+        unlockTrackpadAfterMomentum();
+        return;
+      }
+
       const width = lightboxRef.current?.clientWidth || window.innerWidth;
-      renderDragOffset(clamp(dragOffsetRef.current - event.deltaX, -width, width));
+      wheelDistance.current += event.deltaX;
+      const visualLimit = Math.min(width * 0.46, 360);
+      renderDragOffset(clamp(-wheelDistance.current * TRACKPAD_VISUAL_MULTIPLIER, -visualLimit, visualLimit));
       window.clearTimeout(wheelEndTimer.current);
-      wheelEndTimer.current = window.setTimeout(() => { settleSwipe(); endGestureSoon(); }, 90);
+      if (Math.abs(wheelDistance.current) >= TRACKPAD_SWIPE_THRESHOLD) {
+        finishTrackpadGesture(wheelDistance.current > 0 ? 1 : -1);
+        return;
+      }
+      wheelEndTimer.current = window.setTimeout(() => finishTrackpadGesture(0), 75);
     };
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);
@@ -253,6 +303,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ images, productN
   useEffect(() => () => {
     window.clearTimeout(transitionTimer.current);
     window.clearTimeout(wheelEndTimer.current);
+    window.clearTimeout(wheelUnlockTimer.current);
     window.clearTimeout(gestureEndTimer.current);
     window.clearTimeout(singleTapTimer.current);
     if (animationFrame.current != null) window.cancelAnimationFrame(animationFrame.current);
