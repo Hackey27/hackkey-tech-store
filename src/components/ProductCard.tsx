@@ -95,11 +95,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <div className="text-right">{showCategoryLabel && <span className="inline-block rounded-full border border-[#d0e4e0] bg-[#edf5f3] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-[#014040]">{product.categoryName || STORE_COPY.product.softwareFallback}</span>}{versionCount > 0 && <span className="mt-1 block text-[10px] font-medium text-slate-500">{STORE_COPY.product.versionsAvailable(versionCount)}</span>}</div>
         </div>}
         {/* Product Name */}
-        {product.kind !== 'laptop' && <h3
+        {product.kind !== 'laptop' && <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1"><h3
           className="text-base sm:text-lg font-bold text-[#014040] tracking-tight group-hover:text-[#025656] transition-colors leading-snug"
         >
           {cardName}
-        </h3>}
+        </h3>{product.kind === 'product' && product.licenceTerm && <span className="text-xs font-medium text-[#025656] sm:text-sm">{product.licenceTerm}</span>}</div>}
 
         {product.kind === 'laptop' && product.laptop && <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600"><span><b>CPU</b><br />{product.laptop.processor}</span><span><b>RAM</b><br />{product.laptop.ram}</span><span><b>Storage</b><br />{product.laptop.storage}</span>{(product.laptop.graphicsDetails || (/dedicated/i.test(product.laptop.graphics || '') && !/(?:no dedicated|integrated)/i.test(product.laptop.graphics || ''))) && <span><b>Dedicated graphics</b><br />{product.laptop.graphicsDetails || product.laptop.graphics}</span>}</div>}
 

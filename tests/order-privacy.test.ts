@@ -10,6 +10,7 @@ const order: Order = {
   versionOrPlan: '31', deliveryOs: 'Windows', amountPesewas: 22000,
   paymentStatus: 'paid', fulfilmentStatus: 'awaiting-seller-activation',
   salesCode: 'SELLER-ONLY', activationCodeOrKey: 'CUSTOMER-LICENCE',
+  customerAccessTokenHashes: ['private-bearer-token-hash'],
   documentPath: 'orders/private.docx', offlinePaymentReason: 'private',
   reportDocuments: [{ reportId: 'REP-1', label: 'Similarity report', originalName: 'report.pdf', storagePath: 'orders/HK-1/reports/private.pdf', uploadedAt: '2026-09-17T01:00:00Z' }],
   internalNotes: [{ text: 'private', actorUid: 'admin', createdAt: '2026-09-17T00:00:00Z' }]
@@ -22,5 +23,6 @@ test('the public order boundary never exposes an internal sales code', () => {
   assert.equal(visible.reportDocuments?.[0].storagePath, undefined);
   assert.equal(visible.reportDocuments?.[0].label, 'Similarity report');
   assert.equal(visible.internalNotes, undefined);
+  assert.equal(visible.customerAccessTokenHashes, undefined);
   assert.equal(visible.activationCodeOrKey, 'CUSTOMER-LICENCE');
 });

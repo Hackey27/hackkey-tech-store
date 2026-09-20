@@ -43,7 +43,7 @@ const fulfilmentLabel = (status: string) => FULFILMENT_LABELS[status] || status;
  * document arrives identifying the order it belongs to rather than as an
  * anonymous file.
  */
-export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPhone?: string; focusOrderId?: string }> = ({ catalogItems = [], initialPhone = '', focusOrderId }) => {
+export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPhone?: string; focusOrderId?: string; sharedOrderId?: string; sharedAccessToken?: string }> = ({ catalogItems = [], initialPhone = '', focusOrderId, sharedOrderId, sharedAccessToken }) => {
   const [phoneNumber, setPhoneNumber] = useState(initialPhone);
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -95,6 +95,35 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
   };
 
   useEffect(() => { if (initialPhone) void executeLookup(initialPhone); }, [initialPhone]);
+
+  useEffect(() => {
+    if (!sharedOrderId) return;
+    if (!sharedAccessToken) {
+      setErrorMessage('This order link is incomplete. You can still find the order with the phone number submitted at checkout.');
+      setOrders([]);
+      setHasSearched(true);
+      return;
+    }
+    let cancelled = false;
+    const openSharedOrder = async () => {
+      setIsSearching(true); setHasSearched(false); setErrorMessage(null);
+      try {
+        const response = await fetch(`/api/orders/${encodeURIComponent(sharedOrderId)}/access?token=${encodeURIComponent(sharedAccessToken)}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'This order link could not be opened.');
+        if (cancelled) return;
+        setPhoneNumber(data.order.phone || '');
+        setOrders([data.order]);
+        setHasSearched(true);
+      } catch (error) {
+        if (cancelled) return;
+        setErrorMessage(error instanceof Error ? error.message : 'This order link could not be opened.');
+        setOrders([]); setHasSearched(true);
+      } finally { if (!cancelled) setIsSearching(false); }
+    };
+    void openSharedOrder();
+    return () => { cancelled = true; };
+  }, [sharedOrderId, sharedAccessToken]);
 
   useEffect(() => {
     if (!focusOrderId || !orders.length) return;
@@ -218,7 +247,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
       {hasSearched && !errorMessage && (
         <div className="space-y-6">
           {orders.length > 0 ? (
-            <><div className="rounded-2xl bg-[#edf5f3] p-5"><h2 className="text-xl font-black text-[#014040]">{STORE_COPY.findOrder.resultsGreeting(orders[0].customerName)}</h2><p className="mt-1 text-sm text-slate-600">Here are all the orders linked to this phone number.</p></div>{orders.map((order) => {
+            <><div className="rounded-2xl bg-[#edf5f3] p-5"><h2 className="text-xl font-black text-[#014040]">{STORE_COPY.findOrder.resultsGreeting(orders[0].customerName)}</h2><p className="mt-1 text-sm text-slate-600">{sharedOrderId ? 'This secure link opens the selected order. You can still search with your submitted phone number above whenever you need to.' : 'Here are all the orders linked to this phone number.'}</p></div>{orders.map((order) => {
               const catalogueItem = catalogItems.find((item) => item.itemId === order.productId || item.name === order.productName);
               const inputType = order.customerInputType || 'Lock Code';
               const isHardwareId = inputType === 'Hardware ID';

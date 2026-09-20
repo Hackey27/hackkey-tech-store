@@ -37,6 +37,7 @@ type StoreRoute =
   | { view: 'home' }
   | { view: 'category'; categoryId: string }
   | { view: 'product'; itemId: string }
+  | { view: 'order-access'; orderId: string }
   | { view: 'payment-return' };
 
 function currentRoute(): StoreRoute {
@@ -46,6 +47,8 @@ function currentRoute(): StoreRoute {
   if (category) return { view: 'category', categoryId: decodeURIComponent(category[1]) };
   const product = path.match(/^\/product\/([^/]+)\/?$/);
   if (product) return { view: 'product', itemId: decodeURIComponent(product[1]) };
+  const orderAccess = path.match(/^\/order\/([^/]+)\/?$/);
+  if (orderAccess) return { view: 'order-access', orderId: decodeURIComponent(orderAccess[1]) };
   return { view: 'home' };
 }
 
@@ -280,7 +283,7 @@ export const App: React.FC = () => {
             setShowAllSoftware(true);
           }
         }}
-        activeTab={activeTab}
+        activeTab={route.view === 'order-access' ? 'find-order' : activeTab}
         onSelectTab={(tab) => {
           if (route.view !== 'home') navigate('/');
           if (tab === 'request') setRequestLaunchMode(null);
@@ -336,6 +339,8 @@ export const App: React.FC = () => {
             <div className="mx-auto flex min-h-[55vh] max-w-xl flex-col items-center justify-center px-4 text-center"><AlertCircle className="h-12 w-12 text-[#025656]" /><h1 className="mt-4 text-2xl font-black text-[#014040]">{STORE_COPY.catalog.productNotFoundTitle}</h1><p className="mt-2 text-sm text-slate-600">{STORE_COPY.catalog.productNotFoundDescription}</p><button type="button" onClick={() => navigate('/')} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#014040] px-5 py-3 text-sm font-black text-white"><ArrowLeft className="h-4 w-4" />{STORE_COPY.catalog.backToBrowse}</button></div>
           )
         )}
+
+        {route.view === 'order-access' && <FindOrderView catalogItems={catalog?.products || []} sharedOrderId={route.orderId} sharedAccessToken={new URLSearchParams(window.location.search).get('access') || ''} />}
 
         {/* Tab 1: Storefront Home */}
         {route.view === 'home' && activeTab === 'home' && (
@@ -535,7 +540,7 @@ export const App: React.FC = () => {
 
       {/* Mobile Fixed Bottom Navigation */}
       <BottomNav
-        activeTab={activeTab}
+        activeTab={route.view === 'order-access' ? 'find-order' : activeTab}
         onSelectTab={(tab) => {
           if (route.view !== 'home') navigate('/');
           if (tab === 'request') setRequestLaunchMode(null);

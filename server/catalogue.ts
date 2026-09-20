@@ -125,6 +125,7 @@ function productToCatalogueItem(product: Product, config: PricingConfig): Catalo
     kind: 'product',
     itemId: product.productId,
     name: product.productName,
+    licenceTerm: product.licenceTerm?.trim() || undefined,
     categoryId: product.categoryId,
     description: product.description,
     imageUrl: catalogueImageUrl(product.imagePath) || product.imageUrl,

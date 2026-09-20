@@ -8,6 +8,7 @@ import {
   createOrders,
   createRequest,
   getOrder,
+  getOrderByAccessToken,
   getOrderByPaystackReference,
   getOrdersByCartId,
   lookupOrdersByPhone,
@@ -198,6 +199,26 @@ async function startServer() {
       res.json({ orders: orders.map(publicOrder), count: orders.length });
     } catch (err) {
       failed(res, err, 'Failed to look up orders');
+    }
+  });
+
+  // A high-entropy link created by an authenticated administrator opens one
+  // order without exposing the customer's phone number in the URL. Phone lookup
+  // remains available independently and continues to return all matching orders.
+  app.get('/api/orders/:orderId/access', async (req: Request, res: Response) => {
+    const orderId = String(req.params.orderId || '');
+    const token = String(req.query.token || '');
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+    if (!orderId || !token) return res.status(400).json({ error: 'The order link is incomplete.' });
+    if (isRateLimited(`${clientIp}-access-${orderId}`)) {
+      return res.status(429).json({ error: 'Too many requests. Please wait a moment and try again.' });
+    }
+    try {
+      const order = await getOrderByAccessToken(orderId, token);
+      if (!order) return res.status(404).json({ error: 'This order link is invalid or no longer available.' });
+      res.json({ order: publicOrder(order) });
+    } catch (err) {
+      failed(res, err, 'Failed to open the order link');
     }
   });
 

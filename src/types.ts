@@ -101,6 +101,9 @@ export interface Variant {
 export interface Product {
   productId: string;
   productName: string; // customer-facing, always wins
+  /** Optional product-wide term displayed beside the software name. This is
+   * deliberately not stored on a version because it applies to the title as a whole. */
+  licenceTerm?: string;
   categoryId: string;
   description?: string;
   defaultContact?: string;
@@ -299,6 +302,8 @@ export interface CatalogueItem {
   kind: CatalogueItemKind;
   itemId: string;
   name: string;
+  /** Software-only product-wide licence term, omitted when the admin leaves it blank. */
+  licenceTerm?: string;
   categoryId: string;
   description?: string;
   imageUrl?: string;
@@ -457,6 +462,11 @@ export interface Order {
   guideUrl?: string;
   learningResourcesUrl?: string;
   macViaParallels?: boolean;
+  /** Hashes of bearer tokens created by the administrator for customer order links.
+   * Raw tokens are never stored; several recent hashes remain valid so resending a
+   * notification does not invalidate an earlier message. */
+  customerAccessTokenHashes?: string[];
+  customerAccessLinkCreatedAt?: string;
   /** Cloud Storage object path, never a public URL. Retrieval is
    *  server-mediated: these are customers' unpublished academic documents. */
   documentPath?: string;

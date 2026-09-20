@@ -10,6 +10,7 @@ export function publicOrder(order: Order): Order {
     documentPath: _documentPath,
     fulfilmentHistory: _fulfilmentHistory,
     salesCode: _salesCode,
+    customerAccessTokenHashes: _customerAccessTokenHashes,
     ...safe
   } = order;
   return {

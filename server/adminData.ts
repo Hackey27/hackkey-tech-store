@@ -48,9 +48,10 @@ function maskCode(code: string): string {
 }
 
 function maskOrder(order: Order): Order {
+  const { customerAccessTokenHashes: _customerAccessTokenHashes, ...safe } = order;
   return order.activationCodeOrKey
-    ? { ...order, activationCodeOrKey: maskCode(order.activationCodeOrKey) }
-    : order;
+    ? { ...safe, activationCodeOrKey: maskCode(order.activationCodeOrKey) } as Order
+    : safe as Order;
 }
 
 export async function listVariantSummaries(): Promise<VariantSummary[]> {
@@ -594,6 +595,7 @@ export async function saveProductConfiguration(productId: string, input: Product
     ...input,
     productId,
     productName: input.productName.trim(),
+    licenceTerm: input.licenceTerm?.trim() || undefined,
     variants: (input.variants || []).map((variant) => ({
       ...variant,
       customerInputRequired: variant.customerInputRequired?.trim() || undefined,

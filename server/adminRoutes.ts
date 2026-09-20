@@ -26,7 +26,7 @@ import {
   saveLaptop,
   savePricingConfiguration
 } from './adminData';
-import { getOrder } from './orders';
+import { createOrderAccessToken, getOrder } from './orders';
 import { applyOfflinePayment } from './payments';
 import {
   catalogueImageObjectPath,
@@ -56,6 +56,20 @@ function routeError(res: any, err: unknown, fallback: string) {
     error: err instanceof Error ? err.message : fallback,
     validationErrors
   });
+}
+
+function whatsappRecipient(phone: string): string {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.startsWith('233')) return digits;
+  if (digits.startsWith('0')) return `233${digits.slice(1)}`;
+  return digits;
+}
+
+function publicBaseUrl(req: AdminRequest): string {
+  const configured = String(process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+  if (configured) return configured;
+  const forwarded = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
+  return `${forwarded}://${req.get('host')}`;
 }
 
 export function createAdminRouter(): Router {
@@ -253,6 +267,26 @@ export function createAdminRouter(): Router {
       res.json({ order, emailError });
     } catch (err) {
       routeError(res, err, 'Failed to assign licence.');
+    }
+  });
+
+  router.post('/orders/:orderId/whatsapp-link', async (req: AdminRequest, res) => {
+    try {
+      const existing = await getOrder(String(req.params.orderId));
+      if (!existing) return res.status(404).json({ error: 'Order not found.' });
+      if (existing.fulfilmentStatus !== 'ready') {
+        return res.status(409).json({ error: 'Complete the order before notifying the customer on WhatsApp.' });
+      }
+      const { order, token } = await createOrderAccessToken(existing.orderId);
+      const orderUrl = `${publicBaseUrl(req)}/order/${encodeURIComponent(order.orderId)}?access=${encodeURIComponent(token)}`;
+      const message = `Hello ${order.customerName}, your Hack-Key Tech order ${order.orderId} for ${order.productName} is complete. Use this secure link to submit any required details and view your deliverables: ${orderUrl}`;
+      const whatsappUrl = `https://wa.me/${whatsappRecipient(order.phone)}?text=${encodeURIComponent(message)}`;
+      await writeAdminAudit(actor(req), {
+        action: 'order.whatsapp-link-create', targetType: 'order', targetId: order.orderId, orderId: order.orderId
+      });
+      res.json({ orderUrl, whatsappUrl });
+    } catch (err) {
+      routeError(res, err, 'Failed to prepare the WhatsApp notification.');
     }
   });
 

@@ -269,7 +269,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
                   <ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} size="lg" eager />
                   <div className="min-w-0">
                     <p className="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-[#d9ffe0]">{product.categoryName}</p>
-                    <h1 className="text-2xl font-black leading-tight tracking-tight sm:text-4xl">{productName}</h1>
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><h1 className="text-2xl font-black leading-tight tracking-tight sm:text-4xl">{productName}</h1>{product.kind === 'product' && product.licenceTerm && <span className="text-sm font-medium text-[#d9ffe0] sm:text-base">{product.licenceTerm}</span>}</div>
                   </div>
                 </div>
                 {bannerPrice}

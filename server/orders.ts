@@ -1,4 +1,5 @@
 import { Firestore } from '@google-cloud/firestore';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   CustomerInputType,
   BundleItem,
@@ -36,6 +37,34 @@ export function normalisePhone(phone: string): string {
 
 function newId(prefix: string): string {
   return `${prefix}-${Math.floor(100000 + Math.random() * 900000)}`;
+}
+
+function compactOrderCode(value: string, fallback: string, length: number): string {
+  return (value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, length) || fallback;
+}
+
+/**
+ * Human-readable order references. The date and time make the order easy to
+ * recognise, while the final segments identify the item/version and add enough
+ * cryptographic entropy for several lines created in the same second.
+ */
+export function buildOrderId(
+  productId: string,
+  versionOrPlan: string,
+  date = new Date(),
+  entropy = randomBytes(3).toString('hex').toUpperCase()
+): string {
+  const stamp = date.toISOString().replace(/[-:]/g, '');
+  const day = stamp.slice(0, 8);
+  const time = stamp.slice(9, 15);
+  const productCode = compactOrderCode(productId, 'ITEM', 7);
+  const versionCode = compactOrderCode(versionOrPlan, 'GEN', 5);
+  const uniqueCode = compactOrderCode(entropy, '000000', 6).padEnd(6, '0');
+  return `HKT-${day}-${time}-${productCode}-${versionCode}-${uniqueCode}`;
+}
+
+function orderAccessTokenHash(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
 }
 
 function nowIso(): string {
@@ -137,7 +166,7 @@ async function createServiceOrder(
   );
 
   return {
-    orderId: newId('HK'),
+    orderId: buildOrderId(service.serviceId, option.optionId || option.name),
     cartId,
     orderDate: nowIso(),
     lastUpdated: nowIso(),
@@ -208,7 +237,7 @@ async function createBundleOrders(
   if (!resolved.length) {
     return [
       {
-        orderId: newId('HK'),
+        orderId: buildOrderId(bundle.bundleId, 'BUNDLE'),
         cartId,
         orderDate: nowIso(),
         lastUpdated: nowIso(),
@@ -238,7 +267,7 @@ async function createBundleOrders(
   const parts = allocateProportionally(totalPesewas, weights);
 
   return resolved.map(({ bundleItem, found }, i) => ({
-    orderId: newId('HK'),
+    orderId: buildOrderId(found?.product.productId || bundleItem.productId || bundle.bundleId, found?.variant.versionOrPlan || bundleItem.variantId || 'BUNDLE'),
     cartId,
     orderDate: nowIso(),
     lastUpdated: nowIso(),
@@ -296,7 +325,7 @@ async function createLaptopOrder(
   );
 
   return {
-    orderId: newId('HK'),
+    orderId: buildOrderId(laptop.laptopId, laptop.model || 'LAPTOP'),
     cartId,
     orderDate: nowIso(),
     lastUpdated: nowIso(),
@@ -365,7 +394,7 @@ export async function createOrders(request: CheckoutRequest): Promise<Order[]> {
       const selectedOs = item.selectedOs || variant.osList?.[0] || variant.os || '';
       const macViaParallels = /via parallels/i.test(selectedOs);
       const order: Order = {
-        orderId: newId('HK'),
+        orderId: buildOrderId(product.productId, variant.versionOrPlan),
         cartId,
         orderDate: nowIso(),
         lastUpdated: nowIso(),
@@ -606,6 +635,30 @@ export async function getOrder(orderId: string): Promise<Order | null> {
   const db = getFirestore();
   const snap = await db.collection(COLLECTIONS.orders).doc(orderId).get();
   return snap.exists ? (snap.data() as Order) : null;
+}
+
+/** Create a bearer link token for one order. Only its hash is retained. Keep a
+ * small rolling set so sending a new notification does not break older links. */
+export async function createOrderAccessToken(orderId: string): Promise<{ order: Order; token: string }> {
+  const db = getFirestore();
+  const ref = db.collection(COLLECTIONS.orders).doc(orderId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('Order not found.');
+  const order = snap.data() as Order;
+  const token = randomBytes(24).toString('base64url');
+  const hashes = [...new Set([...(order.customerAccessTokenHashes || []), orderAccessTokenHash(token)])].slice(-5);
+  const customerAccessLinkCreatedAt = nowIso();
+  await ref.update({ customerAccessTokenHashes: hashes, customerAccessLinkCreatedAt, lastUpdated: customerAccessLinkCreatedAt });
+  return { order: { ...order, customerAccessTokenHashes: hashes, customerAccessLinkCreatedAt }, token };
+}
+
+/** Resolve a single customer order from a high-entropy bearer token. */
+export async function getOrderByAccessToken(orderId: string, token: string): Promise<Order | null> {
+  if (!token || token.length < 24) return null;
+  const order = await getOrder(orderId);
+  if (!order) return null;
+  const requested = orderAccessTokenHash(token);
+  return (order.customerAccessTokenHashes || []).includes(requested) ? order : null;
 }
 
 export async function getOrdersByCartId(cartId: string): Promise<Order[]> {
