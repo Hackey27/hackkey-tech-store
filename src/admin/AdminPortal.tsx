@@ -216,26 +216,26 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
     }
   };
 
-  const assignQuickLicence = async (event: React.MouseEvent, order: Order) => {
+  const assignQuickLicence = async (event: React.MouseEvent, order: Order, licenceId?: string) => {
     event.stopPropagation();
     const manualKey = quickLicenceValue.trim();
-    if (!manualKey) { setQuickLicenceMessage('Paste the licence before adding it.'); return; }
+    if (!manualKey && !licenceId) { setQuickLicenceMessage('Paste a licence or choose the next available licence in stock.'); return; }
     setBusy(`quick-licence-${order.orderId}`); setQuickLicenceMessage(''); setMessage('');
     try {
-      await adminRequest(user, `/orders/${encodeURIComponent(order.orderId)}/assign-licence`, { method: 'POST', body: JSON.stringify({ manualKey }) });
+      await adminRequest(user, `/orders/${encodeURIComponent(order.orderId)}/assign-licence`, { method: 'POST', body: JSON.stringify(manualKey ? { manualKey } : { licenceId }) });
       setQuickLicenceOrderId(''); setQuickLicenceValue(''); setMessage(`Licence added to ${order.orderId}.`);
       await reload();
     } catch (error) { setQuickLicenceMessage(messageOf(error)); }
     finally { setBusy(''); }
   };
 
-  const openWhatsAppNotification = async (event: React.MouseEvent, order: Order) => {
+  const openWhatsAppNotification = async (event: React.MouseEvent, order: Order, purpose: 'complete' | 'turnitin-document' | 'turnitin-report') => {
     event.stopPropagation();
     const popup = window.open('about:blank', '_blank');
     if (popup) popup.opener = null;
     setBusy(`whatsapp-${order.orderId}`); setMessage('');
     try {
-      const result = await adminRequest<{ whatsappUrl: string }>(user, `/orders/${encodeURIComponent(order.orderId)}/whatsapp-link`, { method: 'POST' });
+      const result = await adminRequest<{ whatsappUrl: string }>(user, `/orders/${encodeURIComponent(order.orderId)}/whatsapp-link`, { method: 'POST', body: JSON.stringify({ purpose }) });
       if (popup) popup.location.replace(result.whatsappUrl);
       else setMessage('WhatsApp is ready, but the browser blocked the new tab. Allow pop-ups and try again.');
     } catch (error) {
@@ -338,7 +338,24 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
           const orderActivationUrl = effectiveActivationWebsiteUrl(orderVariant);
           const hasSavedLicence = Boolean(order.activationCodeOrKey || order.licenceId);
           const quickLicenceOpen = quickLicenceOrderId === order.orderId;
-          return <div key={order.orderId} role="button" tabIndex={0} onClick={() => { setSelected(order); setMessage(''); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setSelected(order); }} className={`relative grid w-full cursor-pointer gap-3 rounded-2xl border border-[#cbdcd9] border-b-4 border-b-[#014040] bg-white p-4 text-left shadow-sm hover:bg-[#f3faf8] md:grid-cols-[140px_1fr_1fr_140px] md:items-center ${quickLicenceOpen ? 'z-30' : ''}`}>
+          const nextAvailableLicence = data.licences
+            .filter((licence) => licence.variantId === order.variantId && licence.status === 'available')
+            .sort((a, b) => (a.dateAdded || '').localeCompare(b.dateAdded || ''))[0];
+          const orderIsTurnitin = isTurnitinOrder(order);
+          const turnitinHasDocument = Boolean(order.documentPath || order.documentReceivedAt || order.documentUploadedAt || order.documentUploadStatus === 'uploaded' || order.documentSubmissionMethod === 'whatsapp');
+          const whatsAppPurpose = orderIsTurnitin && order.fulfilmentStatus === 'ready' && Boolean(order.reportDocuments?.length)
+            ? 'turnitin-report'
+            : orderIsTurnitin && order.paymentStatus === 'paid' && !turnitinHasDocument
+              ? 'turnitin-document'
+              : !orderIsTurnitin && order.fulfilmentStatus === 'ready'
+                ? 'complete'
+                : null;
+          const whatsAppLabel = whatsAppPurpose === 'turnitin-document'
+            ? 'Notify customer on WhatsApp to submit their document'
+            : whatsAppPurpose === 'turnitin-report'
+              ? 'Notify customer on WhatsApp that their Turnitin report is ready'
+              : 'Notify customer on WhatsApp that their order is complete';
+          return <div key={order.orderId} role="button" tabIndex={0} onClick={() => { setSelected(order); setMessage(''); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setSelected(order); }} className="grid w-full cursor-pointer gap-3 rounded-2xl border border-[#cbdcd9] border-b-4 border-b-[#014040] bg-white p-4 text-left shadow-sm hover:bg-[#f3faf8] md:grid-cols-[140px_1fr_1fr_140px] md:items-center">
             <span className="font-mono text-xs font-bold text-[#014040]">{order.orderId}<small className="mt-1 block font-sans font-normal text-slate-500">{new Date(order.orderDate).toLocaleString()}</small></span>
             <span><strong className="block text-sm text-slate-900">{order.customerName}</strong><small className="text-slate-500">{order.phone}</small></span>
             <span><strong className="block text-sm text-slate-800">{order.productName}</strong><small className="text-slate-500">{order.versionOrPlan}</small></span>
@@ -348,16 +365,18 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
               {order.salesCode && <span className="inline-flex items-center gap-2 rounded-lg bg-white px-2.5 py-1 text-xs"><span><b>Sales code:</b> <span className="font-mono">{order.salesCode}</span></span><button type="button" onClick={(event) => void copyPreviewValue(event, `${order.orderId}-sales`, order.salesCode!)} className="rounded-md p-1 text-[#014040] hover:bg-[#edf5f3]" aria-label="Copy Sales code" title="Copy Sales code">{copiedPreviewValue === `${order.orderId}-sales` ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}</button></span>}
               {orderActivationUrl && <a href={orderActivationUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="rounded-lg bg-[#014040] px-3 py-1.5 text-xs font-black text-white">Activation link</a>}
             </div>}
-            {(orderProduct || order.fulfilmentStatus === 'ready') && <div className="flex flex-wrap gap-2 border-t border-[#e4efed] pt-3 md:col-span-4" onClick={(event) => event.stopPropagation()}>
-              {orderProduct && <button type="button" disabled={order.paymentStatus !== 'paid' || hasSavedLicence} title={order.paymentStatus !== 'paid' ? 'The order must be paid first.' : hasSavedLicence ? 'A licence is already attached.' : 'Enter a licence without opening the full order.'} onClick={() => { setQuickLicenceOrderId((current) => current === order.orderId ? '' : order.orderId); setQuickLicenceValue(''); setQuickLicenceMessage(''); }} className={secondaryButton}><KeyRound className="h-4 w-4" />{hasSavedLicence ? 'Licence added' : 'Enter license'}</button>}
-              {order.fulfilmentStatus === 'ready' && <button type="button" disabled={busy === `whatsapp-${order.orderId}`} onClick={(event) => void openWhatsAppNotification(event, order)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#25d366] px-3 py-2 text-xs font-black text-[#014040] disabled:opacity-50"><WhatsAppIcon className="h-4 w-4" />{busy === `whatsapp-${order.orderId}` ? 'Preparing…' : 'Notify customer on WhatsApp'}</button>}
+            {(orderProduct || whatsAppPurpose) && <div className="flex flex-wrap items-center gap-2 border-t border-[#e4efed] pt-3 md:col-span-4" onClick={(event) => event.stopPropagation()}>
+              {orderProduct && <button type="button" disabled={order.paymentStatus !== 'paid' || hasSavedLicence} title={order.paymentStatus !== 'paid' ? 'The order must be paid first.' : hasSavedLicence ? 'A licence is already attached.' : 'Add a licence without opening the full order.'} onClick={() => { setQuickLicenceOrderId((current) => current === order.orderId ? '' : order.orderId); setQuickLicenceValue(''); setQuickLicenceMessage(''); }} className={secondaryButton}><KeyRound className="h-4 w-4" />{hasSavedLicence ? 'Licence added' : 'Add license'}</button>}
+              {whatsAppPurpose && <button type="button" disabled={busy === `whatsapp-${order.orderId}`} onClick={(event) => void openWhatsAppNotification(event, order, whatsAppPurpose)} className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#25d366] text-[#014040] shadow-sm transition hover:scale-105 disabled:opacity-50" aria-label={whatsAppLabel} title={whatsAppLabel}><WhatsAppIcon className={`h-5 w-5 ${busy === `whatsapp-${order.orderId}` ? 'animate-pulse' : ''}`} /></button>}
             </div>}
-            {quickLicenceOpen && <div role="dialog" aria-label={`Enter licence for ${order.orderId}`} onClick={(event) => event.stopPropagation()} className="absolute right-3 top-full z-40 mt-3 w-[min(23rem,calc(100vw-2.5rem))] rounded-2xl border border-[#9dbbb5] bg-white p-4 shadow-2xl before:absolute before:-top-2 before:right-8 before:h-4 before:w-4 before:rotate-45 before:border-l before:border-t before:border-[#9dbbb5] before:bg-white">
-              <div className="flex items-start justify-between gap-3"><div><h4 className="text-sm font-black text-[#014040]">Enter license</h4><p className="mt-1 text-xs text-slate-500">{order.productName} · {order.versionOrPlan}</p></div><button type="button" className="rounded-full p-1 text-slate-500 hover:bg-slate-100" onClick={() => setQuickLicenceOrderId('')} aria-label="Close licence entry"><X className="h-4 w-4" /></button></div>
-              <textarea autoFocus className={`${inputClass} mt-3 min-h-24 font-mono`} value={quickLicenceValue} onChange={(event) => setQuickLicenceValue(event.target.value)} placeholder="Paste the licence code" />
+            {quickLicenceOpen && <section aria-label={`Add licence for ${order.orderId}`} onClick={(event) => event.stopPropagation()} className="rounded-2xl border border-[#9dbbb5] bg-[#f3faf8] p-4 md:col-span-4">
+              <div className="flex items-start justify-between gap-3"><div><h4 className="text-sm font-black text-[#014040]">Add license</h4><p className="mt-1 text-xs text-slate-500">{order.productName} · {order.versionOrPlan}</p></div><button type="button" className="rounded-full p-1 text-slate-500 hover:bg-white" onClick={() => setQuickLicenceOrderId('')} aria-label="Close licence entry"><X className="h-4 w-4" /></button></div>
+              <div className="mt-3 rounded-xl border border-[#cbdcd9] bg-white p-3"><p className="text-xs font-bold text-slate-700">Next available licence in stock</p>{nextAvailableLicence ? <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><span className="font-mono text-xs text-slate-600">{nextAvailableLicence.maskedCode}</span><button type="button" disabled={busy === `quick-licence-${order.orderId}`} onClick={(event) => void assignQuickLicence(event, order, nextAvailableLicence.licenceId)} className={primaryButton}><KeyRound className="h-4 w-4" />{busy === `quick-licence-${order.orderId}` ? 'Adding…' : 'Use next available'}</button></div> : <p className="mt-2 text-xs text-amber-700">No available licence is in stock for this version.</p>}</div>
+              <div className="my-3 flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400"><span className="h-px flex-1 bg-slate-200" />or paste a licence<span className="h-px flex-1 bg-slate-200" /></div>
+              <textarea className={`${inputClass} min-h-24 font-mono`} value={quickLicenceValue} onChange={(event) => setQuickLicenceValue(event.target.value)} placeholder="Paste a licence code" />
               {quickLicenceMessage && <p role="alert" className="mt-2 text-xs font-bold text-rose-700">{quickLicenceMessage}</p>}
-              <button type="button" disabled={busy === `quick-licence-${order.orderId}` || !quickLicenceValue.trim()} onClick={(event) => void assignQuickLicence(event, order)} className={`${primaryButton} mt-3 w-full`}><Plus className="h-4 w-4" />{busy === `quick-licence-${order.orderId}` ? 'Adding…' : 'Add licence'}</button>
-            </div>}
+              <button type="button" disabled={busy === `quick-licence-${order.orderId}` || !quickLicenceValue.trim()} onClick={(event) => void assignQuickLicence(event, order)} className={`${primaryButton} mt-3 w-full sm:w-auto`}><Plus className="h-4 w-4" />{busy === `quick-licence-${order.orderId}` ? 'Adding…' : 'Add pasted licence'}</button>
+            </section>}
           </div>;
         })}
       </div>

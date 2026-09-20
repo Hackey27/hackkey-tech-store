@@ -274,15 +274,31 @@ export function createAdminRouter(): Router {
     try {
       const existing = await getOrder(String(req.params.orderId));
       if (!existing) return res.status(404).json({ error: 'Order not found.' });
-      if (existing.fulfilmentStatus !== 'ready') {
+      const purpose = String(req.body?.purpose || 'complete');
+      const isTurnitin = existing.productId === 'TURNITIN' || existing.variantId === 'TURNITIN';
+      const turnitinHasDocument = Boolean(existing.documentPath || existing.documentReceivedAt || existing.documentUploadedAt || existing.documentUploadStatus === 'uploaded' || existing.documentSubmissionMethod === 'whatsapp');
+      if (purpose === 'turnitin-document' && (!isTurnitin || existing.paymentStatus !== 'paid' || turnitinHasDocument)) {
+        return res.status(409).json({ error: 'Document reminders are available for paid Turnitin orders that are still awaiting a document.' });
+      }
+      if (purpose === 'turnitin-report' && (!isTurnitin || existing.fulfilmentStatus !== 'ready' || !existing.reportDocuments?.length)) {
+        return res.status(409).json({ error: 'Upload a Turnitin report before notifying the customer that it is ready.' });
+      }
+      if (purpose === 'complete' && existing.fulfilmentStatus !== 'ready') {
         return res.status(409).json({ error: 'Complete the order before notifying the customer on WhatsApp.' });
+      }
+      if (!['complete', 'turnitin-document', 'turnitin-report'].includes(purpose)) {
+        return res.status(400).json({ error: 'Unsupported WhatsApp notification type.' });
       }
       const { order, token } = await createOrderAccessToken(existing.orderId);
       const orderUrl = `${publicBaseUrl(req)}/order/${encodeURIComponent(order.orderId)}?access=${encodeURIComponent(token)}`;
-      const message = `Hello ${order.customerName}, your Hack-Key Tech order ${order.orderId} for ${order.productName} is complete. Use this secure link to submit any required details and view your deliverables: ${orderUrl}`;
+      const message = purpose === 'turnitin-document'
+        ? `Hello ${order.customerName}, payment has been received for your Hack-Key Tech Turnitin order ${order.orderId}. Please use this secure link to submit your document: ${orderUrl}`
+        : purpose === 'turnitin-report'
+          ? `Hello ${order.customerName}, your Turnitin report for order ${order.orderId} is ready. Use this secure link to view and download your report: ${orderUrl}`
+          : `Hello ${order.customerName}, your Hack-Key Tech order ${order.orderId} for ${order.productName} is complete. Use this secure link to submit any required details and view your deliverables: ${orderUrl}`;
       const whatsappUrl = `https://wa.me/${whatsappRecipient(order.phone)}?text=${encodeURIComponent(message)}`;
       await writeAdminAudit(actor(req), {
-        action: 'order.whatsapp-link-create', targetType: 'order', targetId: order.orderId, orderId: order.orderId
+        action: 'order.whatsapp-link-create', targetType: 'order', targetId: order.orderId, orderId: order.orderId, details: { purpose }
       });
       res.json({ orderUrl, whatsappUrl });
     } catch (err) {
