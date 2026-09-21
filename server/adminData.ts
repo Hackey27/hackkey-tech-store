@@ -27,6 +27,7 @@ import {
 import { getPricingConfig, persistPricingConfig } from './pricingConfig';
 import { resolvedDeliveryNotice } from './deliveryNotice';
 import { newestOrderFirst } from '../src/utils/orderSorting';
+import { getPaymentSettings } from './paymentSettings';
 
 const now = () => new Date().toISOString();
 const id = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -70,7 +71,7 @@ export async function listVariantSummaries(): Promise<VariantSummary[]> {
 
 export async function adminBootstrap() {
   const db = getFirestore();
-  const [ordersSnap, requestsSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, bundlesSnap, laptopsSnap, categoriesSnap, landingSnap, variants, pricing] = await Promise.all([
+  const [ordersSnap, requestsSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, bundlesSnap, laptopsSnap, categoriesSnap, landingSnap, variants, pricing, payments] = await Promise.all([
     db.collection(COLLECTIONS.orders).get(),
     db.collection(COLLECTIONS.requests).get(),
     db.collection(COLLECTIONS.licencePool).get(),
@@ -82,7 +83,8 @@ export async function adminBootstrap() {
     db.collection(COLLECTIONS.categories).get(),
     db.collection(COLLECTIONS.storeSettings).doc('landing').get(),
     listVariantSummaries(),
-    getPricingConfig()
+    getPricingConfig(),
+    getPaymentSettings()
   ]);
 
   const orders = ordersSnap.docs
@@ -133,7 +135,7 @@ export async function adminBootstrap() {
     ...categories.map((item) => ({ kind: 'category' as const, itemId: item.categoryId, name: item.name, imagePath: item.imagePath, iconImagePath: item.iconImagePath, sortOrder: item.sortOrder }))
   ].sort((a, b) => a.name.localeCompare(b.name));
 
-  return { orders, requests, licences, services, announcements, products, bundles, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {}, pricing };
+  return { orders, requests, licences, services, announcements, products, bundles, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {}, pricing, payments };
 }
 
 export async function savePricingConfiguration(input: Partial<PricingConfig>): Promise<PricingConfig> {
@@ -535,6 +537,12 @@ const fulfilmentStatuses: FulfilmentStatus[] = [
   'awaiting-licence', 'awaiting-seller-activation', 'ready'
 ];
 
+export function assertWorkflowPaymentTransition(current: Order['paymentStatus'], requested?: Order['paymentStatus']): void {
+  if (requested === 'paid' && current !== 'paid') {
+    throw new Error('Use Record offline payment with the MoMo transaction reference. Payment status cannot be set directly.');
+  }
+}
+
 /** Admin-only editor for the stepwise order workflow. */
 export async function updateOrderWorkflow(
   orderId: string,
@@ -548,6 +556,7 @@ export async function updateOrderWorkflow(
   const snap = await ref.get();
   if (!snap.exists) throw new Error('Order not found.');
   const order = snap.data() as Order;
+  assertWorkflowPaymentTransition(order.paymentStatus, input.paymentStatus);
   if (input.paymentStatus && !['pending', 'paid'].includes(input.paymentStatus)) throw new Error('Invalid payment status.');
   if (input.fulfilmentStatus && !fulfilmentStatuses.includes(input.fulfilmentStatus)) throw new Error('Invalid fulfilment status.');
   if (input.amountPesewas !== undefined && (!Number.isInteger(input.amountPesewas) || input.amountPesewas <= 0)) {
@@ -564,11 +573,6 @@ export async function updateOrderWorkflow(
   // Admin order responses mask saved licence codes. A blank field means keep
   // the existing secret; only a newly entered value replaces it.
   if (String(input.activationCodeOrKey || '').trim()) patch.activationCodeOrKey = clean(input.activationCodeOrKey) as string;
-  if (input.paymentStatus === 'paid' && order.paymentStatus !== 'paid') {
-    patch.paidAt = now();
-    patch.paymentMethod = 'offline';
-    patch.offlinePaymentReason = 'Payment status set by administrator.';
-  }
   if (input.fulfilmentStatus && input.fulfilmentStatus !== order.fulfilmentStatus) {
     patch.fulfilmentHistory = [
       ...(order.fulfilmentHistory || []),

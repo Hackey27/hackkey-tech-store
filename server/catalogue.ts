@@ -15,6 +15,7 @@ import {
 } from '../src/types';
 import { COLLECTIONS, getFirestore, toIsoString } from './firestore';
 import { getPricingConfig } from './pricingConfig';
+import { getPublicPaymentOptions } from './paymentSettings';
 import {
   applyPricingRules,
   cedisToPesewas,
@@ -319,7 +320,7 @@ function matchesSearch(item: CatalogueItem, query: string): boolean {
 async function buildCatalogue(): Promise<CatalogResponse> {
   const db = getFirestore();
 
-  const [categories, products, bundles, services, laptops, announcements, landingSnap, pricingConfig] = await Promise.all([
+  const [categories, products, bundles, services, laptops, announcements, landingSnap, pricingConfig, paymentOptions] = await Promise.all([
     readCollection<Category>(db, COLLECTIONS.categories),
     readCollection<Product>(db, COLLECTIONS.products),
     readCollection<Bundle>(db, COLLECTIONS.bundles),
@@ -327,7 +328,8 @@ async function buildCatalogue(): Promise<CatalogResponse> {
     readCollection<Laptop>(db, COLLECTIONS.laptops),
     readCollection<Announcement>(db, COLLECTIONS.announcements),
     db.collection(COLLECTIONS.storeSettings).doc('landing').get(),
-    getPricingConfig()
+    getPricingConfig(),
+    getPublicPaymentOptions()
   ]);
 
   const activeProducts = products.filter((p) => p.active);
@@ -382,6 +384,7 @@ async function buildCatalogue(): Promise<CatalogResponse> {
     totalProducts: items.length,
     source: 'Firestore',
     timestamp: new Date().toISOString(),
+    paymentOptions,
     announcement: selectAnnouncement(announcements, new Date()),
     landing: landingSnap.exists
       ? {

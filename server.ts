@@ -14,6 +14,7 @@ import {
   lookupOrdersByPhone,
   markDocumentUploadPending,
   normalisePhone,
+  recordCheckoutMode,
   recordPaystackReference,
   saveServiceAnswers,
   submitCustomerInput
@@ -41,6 +42,7 @@ import { createAdminRouter } from './server/adminRoutes';
 import { publicOrder } from './server/publicOrder';
 import { turnitinDocumentUploadPolicy } from './server/documentUploadPolicy';
 import { renderProductSocialPreview } from './server/socialPreview';
+import { getPublicPaymentOptions, paymentModeUsesPaystack } from './server/paymentSettings';
 
 // Cloud Run injects PORT (8080 by default); 3000 keeps local dev unchanged.
 const PORT = Number(process.env.PORT) || 3000;
@@ -50,6 +52,7 @@ const HOST = '0.0.0.0';
 const LOOKUP_WINDOW_MS = 60_000;
 const LOOKUP_MAX_PER_WINDOW = 10;
 const lookupHits = new Map<string, number[]>();
+const adminApiHits = new Map<string, number[]>();
 
 function isRateLimited(key: string): boolean {
   const now = Date.now();
@@ -57,6 +60,14 @@ function isRateLimited(key: string): boolean {
   hits.push(now);
   lookupHits.set(key, hits);
   return hits.length > LOOKUP_MAX_PER_WINDOW;
+}
+
+function isAdminApiRateLimited(key: string): boolean {
+  const now = Date.now();
+  const hits = (adminApiHits.get(key) || []).filter((time) => now - time < 60_000);
+  hits.push(now);
+  adminApiHits.set(key, hits);
+  return hits.length > 120;
 }
 
 function failed(res: Response, err: unknown, message: string, status = 500) {
@@ -128,9 +139,30 @@ async function startServer() {
 
   app.use(express.json());
 
+  // The admin URL is intentionally discoverable, but must never be indexed,
+  // framed, or cached with authenticated content by an intermediary.
+  app.use('/admin', (_req: Request, res: Response, next) => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
+
   // Every route below this mount is protected by the single Firebase custom-
   // claim middleware in createAdminRouter. There is no legacy shared token.
-  app.use('/api/admin', createAdminRouter());
+  app.use('/api/admin', (req: Request, res: Response, next) => {
+    // Cloud Run appends the immediate upstream address to X-Forwarded-For.
+    // Use the right-most value so a caller cannot select an arbitrary rate-
+    // limit bucket by prepending a forged address.
+    const forwardedValues = String(req.headers['x-forwarded-for'] || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const forwarded = forwardedValues.at(-1) || req.socket.remoteAddress || 'unknown';
+    if (isAdminApiRateLimited(forwarded)) return res.status(429).json({ error: 'Too many admin requests. Please wait a minute and try again.' });
+    next();
+  }, createAdminRouter());
 
   // Health endpoint
   app.get('/api/health', (req: Request, res: Response) => {
@@ -157,6 +189,15 @@ async function startServer() {
       res.json(await getCatalogue(categoryFilter, searchQuery));
     } catch (err) {
       failed(res, err, 'Failed to retrieve catalogue from Firestore');
+    }
+  });
+
+  app.get('/api/payment-options', async (_req: Request, res: Response) => {
+    try {
+      res.setHeader('Cache-Control', 'public, max-age=15');
+      res.json(await getPublicPaymentOptions());
+    } catch (err) {
+      failed(res, err, 'Failed to retrieve payment options');
     }
   });
 
@@ -255,10 +296,15 @@ async function startServer() {
         return res.status(409).json({ error: 'Part of this checkout is already paid. Please contact support.' });
       }
       const totalPesewas = cart.reduce((sum, row) => sum + row.amountPesewas, 0);
+      const paymentOptions = await getPublicPaymentOptions();
+      await recordCheckoutMode(cart, paymentOptions.mode);
+      if (!paymentModeUsesPaystack(paymentOptions.mode)) {
+        return res.json({ success: true, orderIds: cart.map((row) => row.orderId), totalPesewas, paymentOptions });
+      }
       const reference = `${order.orderId}-R${Date.now()}`;
       const init = await initialiseTransaction({ email: order.email, amountPesewas: totalPesewas, reference, orderId: order.orderId });
       await recordPaystackReference(cart, init.reference);
-      res.json({ authorizationUrl: init.authorizationUrl, reference: init.reference });
+      res.json({ authorizationUrl: init.authorizationUrl, reference: init.reference, orderIds: cart.map((row) => row.orderId), totalPesewas, paymentOptions });
     } catch (err) { failed(res, err, 'Failed to start payment', 400); }
   });
 
@@ -270,9 +316,10 @@ async function startServer() {
     }
 
     try {
+      const paymentOptions = await getPublicPaymentOptions();
       // Priced entirely from the catalogue. `items` names what was chosen —
       // variant ids, option ids, quantities — never what it costs.
-      const orders = await createOrders({ customerName, phone, email, items });
+      const orders = await createOrders({ customerName, phone, email, items, checkoutMode: paymentOptions.mode });
       if (!orders.length) {
         return res.status(400).json({ error: 'Nothing to pay for.' });
       }
@@ -280,6 +327,16 @@ async function startServer() {
       const totalPesewas = orders.reduce((sum, o) => sum + o.amountPesewas, 0);
       const primary = orders[0];
       const reference = referenceForOrder(primary.orderId);
+
+      if (!paymentModeUsesPaystack(paymentOptions.mode)) {
+        return res.json({
+          success: true,
+          orders: orders.map(publicOrder),
+          cartId: primary.cartId,
+          totalPesewas,
+          paymentOptions
+        });
+      }
 
       try {
         const init = await initialiseTransaction({
@@ -296,7 +353,9 @@ async function startServer() {
           orders,
           cartId: primary.cartId,
           reference: init.reference,
-          authorizationUrl: init.authorizationUrl
+          authorizationUrl: init.authorizationUrl,
+          totalPesewas,
+          paymentOptions
         });
       } catch (err) {
         // The order stays Pending Payment. An orphaned pending order is

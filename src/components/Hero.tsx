@@ -1,16 +1,18 @@
 import React from 'react';
-import { CreditCard, Clock } from 'lucide-react';
+import { CreditCard, Clock, Smartphone } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 import { WhatsAppIcon } from './WhatsAppIcon';
+import { CheckoutPaymentMode } from '../types';
 
 interface HeroProps {
   onBrowseClick?: () => void;
   onFindOrderClick?: () => void;
   desktopImageUrl?: string;
   mobileImageUrl?: string;
+  paymentMode?: CheckoutPaymentMode;
 }
 
-export const Hero: React.FC<HeroProps> = ({ onFindOrderClick, desktopImageUrl, mobileImageUrl }) => {
+export const Hero: React.FC<HeroProps> = ({ onFindOrderClick, desktopImageUrl, mobileImageUrl, paymentMode = 'paystack' }) => {
   const style = {
     '--landing-desktop-image': `url("${desktopImageUrl || '/landing-workspace.webp'}")`,
     '--landing-mobile-image': `url("${mobileImageUrl || '/landing-workspace-mobile.webp'}")`
@@ -33,8 +35,8 @@ export const Hero: React.FC<HeroProps> = ({ onFindOrderClick, desktopImageUrl, m
           <div className="pt-3 flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 text-xs font-semibold text-[#014040]">
             {/* 1. Secure Paystack checkout */}
             <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/90 border border-white/60 shadow-xs backdrop-blur-sm hover:bg-white transition-colors">
-              <CreditCard className="w-4 h-4 text-[#014040]" />
-              <span>{STORE_COPY.hero.trustChips[0]}</span>
+              {paymentMode === 'momo' ? <Smartphone className="w-4 h-4 text-[#014040]" /> : <CreditCard className="w-4 h-4 text-[#014040]" />}
+              <span>{paymentMode === 'momo' ? STORE_COPY.hero.momoTrust : paymentMode === 'both' ? STORE_COPY.hero.bothPaymentTrust : STORE_COPY.hero.trustChips[0]}</span>
             </div>
 
             {/* 2. Find your order anytime */}

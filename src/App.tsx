@@ -16,7 +16,7 @@ import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { PaymentReturnView } from './components/PaymentReturnView';
 import { AnnouncementModal, shouldShowAnnouncement } from './components/AnnouncementModal';
 import { STORE_COPY } from './config/storeCopy';
-import { CatalogResponse, CatalogueItem, ServiceOption, Variant } from './types';
+import { CatalogResponse, CatalogueItem, PublicPaymentOptions, ServiceOption, Variant } from './types';
 import {
   ArrowLeft,
   AlertCircle,
@@ -54,6 +54,7 @@ function currentRoute(): StoreRoute {
 
 export const App: React.FC = () => {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
+  const [paymentOptions, setPaymentOptions] = useState<PublicPaymentOptions | null>(null);
   const [route, setRoute] = useState<StoreRoute>(() => currentRoute());
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -86,6 +87,7 @@ export const App: React.FC = () => {
       }
       const data: CatalogResponse = await res.json();
       setCatalog(data);
+      setPaymentOptions(data.paymentOptions);
       if (data.announcement && !announcementHandledRef.current && shouldShowAnnouncement(data.announcement)) {
         announcementHandledRef.current = true;
         setAnnouncementOpen(true);
@@ -100,6 +102,18 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     void fetchCatalogData();
+  }, []);
+
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const response = await fetch('/api/payment-options');
+        if (response.ok) setPaymentOptions(await response.json());
+      } catch { /* checkout re-checks the mode server-side */ }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -340,7 +354,7 @@ export const App: React.FC = () => {
           )
         )}
 
-        {route.view === 'order-access' && <FindOrderView catalogItems={catalog?.products || []} sharedOrderId={route.orderId} sharedAccessToken={new URLSearchParams(window.location.search).get('access') || ''} />}
+        {route.view === 'order-access' && <FindOrderView catalogItems={catalog?.products || []} paymentOptions={paymentOptions || undefined} sharedOrderId={route.orderId} sharedAccessToken={new URLSearchParams(window.location.search).get('access') || ''} />}
 
         {/* Tab 1: Storefront Home */}
         {route.view === 'home' && activeTab === 'home' && (
@@ -350,6 +364,7 @@ export const App: React.FC = () => {
               <Hero
                 desktopImageUrl={catalog?.landing?.desktopImageUrl}
                 mobileImageUrl={catalog?.landing?.mobileImageUrl}
+                paymentMode={paymentOptions?.mode}
                 onBrowseClick={() => {
                   const el = document.getElementById('browse-categories');
                   el?.scrollIntoView({ behavior: 'smooth' });
@@ -508,7 +523,7 @@ export const App: React.FC = () => {
         )}
 
         {/* Tab 2: Find my order */}
-        {route.view === 'home' && activeTab === 'find-order' && <FindOrderView catalogItems={catalog?.products || []} initialPhone={nextSteps?.phone} focusOrderId={nextSteps?.orderId} />}
+        {route.view === 'home' && activeTab === 'find-order' && <FindOrderView catalogItems={catalog?.products || []} paymentOptions={paymentOptions || undefined} initialPhone={nextSteps?.phone} focusOrderId={nextSteps?.orderId} />}
 
         {/* Tab 3: Help support hub */}
         {route.view === 'home' && activeTab === 'help' && <HelpHubView />}
@@ -524,6 +539,7 @@ export const App: React.FC = () => {
             onClearCart={() => setCartItems([])}
             onContinueShopping={() => setActiveTab('home')}
             onNavigateToFindOrder={() => setActiveTab('find-order')}
+            paymentOptions={paymentOptions || undefined}
           />
         )}
       </main>
@@ -535,7 +551,7 @@ export const App: React.FC = () => {
         <AnnouncementModal announcement={catalog.announcement} onClose={() => setAnnouncementOpen(false)} />
       )}
 
-      {buyNowItem && <DirectCheckoutModal item={buyNowItem} onClose={() => setBuyNowItem(null)} />}
+      {buyNowItem && <DirectCheckoutModal item={buyNowItem} paymentOptions={paymentOptions || undefined} onClose={() => setBuyNowItem(null)} />}
       {pendingBuyNowItem && <DeliveryWindowGate item={pendingBuyNowItem} onCancel={() => setPendingBuyNowItem(null)} onConfirm={() => { setBuyNowItem(pendingBuyNowItem); setPendingBuyNowItem(null); }} />}
 
       {/* Mobile Fixed Bottom Navigation */}

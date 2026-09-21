@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CatalogueItem, Variant, ServiceOption } from '../types';
+import { CatalogueItem, Variant, ServiceOption, PublicPaymentOptions } from '../types';
 import { ShoppingBag, Trash2, ChevronRight, Check } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
 import { STORE_COPY } from '../config/storeCopy';
@@ -7,6 +7,7 @@ import { ProductImage } from './ProductImage';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
 import { cartItemToCheckoutItem } from '../utils/checkout';
 import { useBackDismiss } from '../utils/useBackDismiss';
+import { PaymentMethodPanel } from './PaymentMethodPanel';
 
 export interface CartItem {
   id: string;
@@ -26,6 +27,7 @@ interface CartViewProps {
   onClearCart: () => void;
   onContinueShopping: () => void;
   onNavigateToFindOrder?: () => void;
+  paymentOptions?: PublicPaymentOptions;
 }
 
 export const CartView: React.FC<CartViewProps> = ({
@@ -33,7 +35,8 @@ export const CartView: React.FC<CartViewProps> = ({
   onRemoveItem,
   onClearCart,
   onContinueShopping,
-  onNavigateToFindOrder
+  onNavigateToFindOrder,
+  paymentOptions
 }) => {
   const [showCheckout, setShowCheckout] = useState(false);
   const [cFirst, setCFirst] = useState('');
@@ -42,6 +45,8 @@ export const CartView: React.FC<CartViewProps> = ({
   const [cEmail, setCEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
+  const [submittedItemCount, setSubmittedItemCount] = useState(0);
+  const [paymentResult, setPaymentResult] = useState<{ options: PublicPaymentOptions; orderIds: string[]; totalPesewas: number; authorizationUrl?: string } | null>(null);
 
   const totalPesewas = items.reduce((sum, item) => {
     return sum + resolveLinePricePesewas({
@@ -83,17 +88,22 @@ export const CartView: React.FC<CartViewProps> = ({
         throw new Error(data.error || 'Failed to submit order');
       }
 
-      setCreatedOrderIds(data.orders?.map((o: any) => o.orderId) || []);
+      const orderIds = data.orders?.map((o: any) => o.orderId) || [];
+      setCreatedOrderIds(orderIds);
+      setSubmittedItemCount(items.length);
       onClearCart();
 
       // Hand the browser to Paystack. Payment is never recorded here: the
       // order becomes paid only when the webhook or the return handler has
       // verified the reference against Paystack's API.
-      if (data.authorizationUrl) {
+      if (data.paymentOptions?.mode === 'paystack' && data.authorizationUrl) {
         window.location.href = data.authorizationUrl;
         return;
       }
 
+      if (data.paymentOptions) {
+        setPaymentResult({ options: data.paymentOptions, orderIds, totalPesewas: data.totalPesewas, authorizationUrl: data.authorizationUrl });
+      }
       setOrderComplete(true);
     } catch (err: any) {
       setCheckoutError(err.message || 'Error processing checkout');
@@ -121,7 +131,7 @@ export const CartView: React.FC<CartViewProps> = ({
         )}
       </div>
 
-      {items.length === 0 ? (
+      {items.length === 0 && !orderComplete ? (
         <div className="bg-white rounded-2xl border border-[#d8e7e4] p-12 text-center space-y-4 shadow-xs">
           <div className="w-16 h-16 rounded-2xl bg-[#edf5f3] text-[#014040] flex items-center justify-center mx-auto">
             <ShoppingBag className="w-8 h-8 text-[#014040]" />
@@ -139,7 +149,7 @@ export const CartView: React.FC<CartViewProps> = ({
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Item List */}
-          <div className="lg:col-span-8 space-y-3">
+          <div className={orderComplete ? 'hidden' : 'lg:col-span-8 space-y-3'}>
             {items.map((item) => {
               const itemPrice = resolveLinePricePesewas({
                 item: item.product,
@@ -204,19 +214,19 @@ export const CartView: React.FC<CartViewProps> = ({
           </div>
 
           {/* Checkout Summary Panel */}
-          <div className="lg:col-span-4 bg-white rounded-2xl border border-[#d8e7e4] p-6 shadow-xs space-y-5 sticky top-24">
+          <div className={`${orderComplete ? 'lg:col-span-12 w-full max-w-3xl mx-auto' : 'lg:col-span-4 sticky top-24'} bg-white rounded-2xl border border-[#d8e7e4] p-6 shadow-xs space-y-5`}>
             <h2 className="text-base font-bold text-[#014040] border-b border-[#edf4f3] pb-3">
               Summary
             </h2>
 
             <div className="space-y-2 text-xs sm:text-sm">
               <div className="flex justify-between text-slate-600">
-                <span>{STORE_COPY.cart.subtotal(items.length)}</span>
-                <span className="font-bold text-slate-800">{formatPesewas(totalPesewas)}</span>
+                <span>{STORE_COPY.cart.subtotal(orderComplete ? submittedItemCount : items.length)}</span>
+                <span className="font-bold text-slate-800">{formatPesewas(paymentResult?.totalPesewas ?? totalPesewas)}</span>
               </div>
               <div className="flex justify-between text-base font-black text-[#014040] pt-2 border-t border-[#edf4f3]">
                 <span>{STORE_COPY.cart.total}</span>
-                <span>{formatPesewas(totalPesewas)}</span>
+                <span>{formatPesewas(paymentResult?.totalPesewas ?? totalPesewas)}</span>
               </div>
             </div>
 
@@ -308,7 +318,7 @@ export const CartView: React.FC<CartViewProps> = ({
                   disabled={isSubmitting}
                   className="w-full py-3 px-4 bg-[#05ef28] hover:bg-[#04d824] active:scale-98 text-[#014040] font-black text-xs sm:text-sm rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Submitting...' : STORE_COPY.cart.submitAndPay}
+                  {isSubmitting ? 'Submitting...' : paymentOptions?.mode === 'momo' ? STORE_COPY.payment.momoOnlyButton : paymentOptions?.mode === 'both' ? STORE_COPY.payment.bothButton : STORE_COPY.cart.submitAndPay}
                 </button>
               </form>
             ) : (
@@ -325,6 +335,7 @@ export const CartView: React.FC<CartViewProps> = ({
                     Order Ref: {createdOrderIds.join(', ')}
                   </div>
                 )}
+                {paymentResult && <div className="pt-2 text-left"><PaymentMethodPanel options={paymentResult.options} orderIds={paymentResult.orderIds} totalPesewas={paymentResult.totalPesewas} authorizationUrl={paymentResult.authorizationUrl} /></div>}
                 {onNavigateToFindOrder && (
                   <button
                     type="button"

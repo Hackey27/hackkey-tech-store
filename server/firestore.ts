@@ -24,6 +24,7 @@ export const COLLECTIONS = {
   announcements: 'announcements',
   reviews: 'reviews',
   adminAudit: 'admin_audit',
+  settings: 'settings',
   storeSettings: 'storeSettings'
 } as const;
 

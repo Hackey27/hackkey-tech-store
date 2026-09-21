@@ -1,6 +1,7 @@
 import { Firestore } from '@google-cloud/firestore';
 import { createHash, randomBytes } from 'node:crypto';
 import {
+  CheckoutPaymentMode,
   CustomerInputType,
   BundleItem,
   CustomerRequest,
@@ -89,6 +90,7 @@ export interface CheckoutRequest {
   phone: string;
   email: string;
   items: CheckoutItem[];
+  checkoutMode?: CheckoutPaymentMode;
 }
 
 /** Keep every fixed bundle row and exactly one row from each alternative group. */
@@ -187,6 +189,7 @@ async function createServiceOrder(
     amountPesewas: applied.payablePesewas * quantity,
     originalAmountPesewas: applied.listPesewas * quantity,
     paymentStatus: 'pending',
+    checkoutMode: request.checkoutMode || 'paystack',
     fulfilmentStatus: 'pending-payment',
     fulfilmentType: SERVICE_FULFILMENT_TYPE,
     fulfilmentMethod: 'manual',
@@ -253,6 +256,7 @@ async function createBundleOrders(
         amountPesewas: totalPesewas,
         originalAmountPesewas: applied.listPesewas * quantity,
         paymentStatus: 'pending',
+        checkoutMode: request.checkoutMode || 'paystack',
         fulfilmentStatus: 'pending-payment',
         fulfilmentType: 'Bundle',
         fulfilmentMethod: 'manual',
@@ -282,6 +286,7 @@ async function createBundleOrders(
     deliveryOs: found?.variant.osList?.[0] || found?.variant.os || '',
     amountPesewas: parts[i],
     paymentStatus: 'pending' as const,
+    checkoutMode: request.checkoutMode || 'paystack',
     fulfilmentStatus: 'pending-payment' as const,
     // Part of a bundle, so the seller sees the whole purchase together.
     fulfilmentType: found?.variant.fulfilmentType || 'Bundle',
@@ -341,6 +346,7 @@ async function createLaptopOrder(
     amountPesewas: applied.payablePesewas * quantity,
     originalAmountPesewas: applied.listPesewas * quantity,
     paymentStatus: 'pending',
+    checkoutMode: request.checkoutMode || 'paystack',
     fulfilmentStatus: 'pending-payment',
     fulfilmentType: 'Laptop',
     fulfilmentMethod: 'manual',
@@ -409,6 +415,7 @@ export async function createOrders(request: CheckoutRequest): Promise<Order[]> {
         amountPesewas: variant.payablePricePesewas ?? cedisToPesewas(variant.priceGhs),
         originalAmountPesewas: variant.listPricePesewas ?? cedisToPesewas(variant.priceGhs),
         paymentStatus: 'pending',
+        checkoutMode: request.checkoutMode || 'paystack',
         fulfilmentStatus: 'pending-payment',
         fulfilmentType: variant.fulfilmentType,
         fulfilmentMethod: variant.autoFulfil ? 'automatic' : 'manual',
@@ -454,6 +461,18 @@ export async function recordPaystackReference(
       lastUpdated: nowIso()
     });
     order.paystackReference = reference;
+  }
+  await batch.commit();
+}
+
+/** Record the payment choices shown for a retry from Find Order. */
+export async function recordCheckoutMode(orders: Order[], checkoutMode: CheckoutPaymentMode): Promise<void> {
+  const batch = getFirestore().batch();
+  const lastUpdated = nowIso();
+  for (const order of orders) {
+    order.checkoutMode = checkoutMode;
+    order.lastUpdated = lastUpdated;
+    batch.update(getFirestore().collection(COLLECTIONS.orders).doc(order.orderId), { checkoutMode, lastUpdated });
   }
   await batch.commit();
 }

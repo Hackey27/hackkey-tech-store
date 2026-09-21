@@ -28,6 +28,7 @@ import {
 } from './adminData';
 import { createOrderAccessToken, getOrder } from './orders';
 import { applyOfflinePayment } from './payments';
+import { savePaymentSettings } from './paymentSettings';
 import {
   catalogueImageObjectPath,
   deleteCatalogueImage,
@@ -83,6 +84,15 @@ export function createAdminRouter(): Router {
       res.json(await adminBootstrap());
     } catch (err) {
       routeError(res, err, 'Failed to load the admin portal.');
+    }
+  });
+
+  router.put('/payments', async (req: AdminRequest, res) => {
+    try {
+      const { newValue } = await savePaymentSettings(req.body, actor(req));
+      res.json({ payments: newValue });
+    } catch (err) {
+      routeError(res, err, 'Failed to save payment settings.');
     }
   });
 

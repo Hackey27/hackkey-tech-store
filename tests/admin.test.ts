@@ -6,7 +6,7 @@ import { Order, Service, TurnitinReportDocument } from '../src/types';
 import express from 'express';
 import { createAdminRouter } from '../server/adminRoutes';
 import { announcementStorageKey, shouldShowAnnouncement } from '../src/components/AnnouncementModal';
-import { turnitinReportReadyPatch } from '../server/adminData';
+import { assertWorkflowPaymentTransition, turnitinReportReadyPatch } from '../server/adminData';
 
 const PROJECT = 'hack-key-tech-store-staging';
 const validClaims = {
@@ -106,6 +106,30 @@ test('the report upload route returns 401 without admin authentication', async (
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
+});
+
+test('saving payment settings returns 401 without admin authentication', async () => {
+  const app = express();
+  app.use(express.json());
+  app.use('/api/admin', createAdminRouter());
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => server.once('listening', resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === 'object');
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/admin/payments`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'momo' })
+    });
+    assert.equal(response.status, 401);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test('the generic workflow cannot mark an unpaid order paid', () => {
+  assert.throws(() => assertWorkflowPaymentTransition('pending', 'paid'), /Record offline payment/i);
+  assert.doesNotThrow(() => assertWorkflowPaymentTransition('paid', 'paid'));
+  assert.doesNotThrow(() => assertWorkflowPaymentTransition('pending', 'pending'));
 });
 
 test('attaching a Turnitin report automatically makes the order ready', () => {

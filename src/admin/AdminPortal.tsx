@@ -25,6 +25,7 @@ import {
   Settings2,
   Trash2,
   UploadCloud,
+  WalletCards,
   X
 } from 'lucide-react';
 import { ADMIN_COPY } from '../config/storeCopy';
@@ -41,8 +42,9 @@ import { isTurnitinOrder } from '../utils/orderProgress';
 import { documentContentType } from '../utils/documentFiles';
 import { newestOrderFirst } from '../utils/orderSorting';
 import { adminOrderMatchesSearch } from '../utils/adminOrderSearch';
+import { adminSignInWaitSeconds, afterFailedAdminSignIn, EMPTY_ADMIN_SIGN_IN_THROTTLE, AdminSignInThrottleState } from '../utils/adminSignInThrottle';
 
-type Section = 'orders' | 'requests' | 'categories' | 'services' | 'announcements' | 'landing' | 'pricing';
+type Section = 'orders' | 'requests' | 'categories' | 'services' | 'announcements' | 'landing' | 'pricing' | 'payments';
 
 const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#014040] focus:ring-2 focus:ring-[#014040]/10';
 const labelClass = 'space-y-1 text-xs font-bold text-slate-700';
@@ -60,9 +62,24 @@ function SignIn() {
   const [resetBusy, setResetBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [throttle, setThrottle] = useState<AdminSignInThrottleState>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('hk-admin-sign-in-throttle') || 'null');
+      return stored && Number.isFinite(stored.failures) && Number.isFinite(stored.lockedUntil) ? stored : EMPTY_ADMIN_SIGN_IN_THROTTLE;
+    } catch { return EMPTY_ADMIN_SIGN_IN_THROTTLE; }
+  });
+  const [now, setNow] = useState(Date.now());
+  const waitSeconds = adminSignInWaitSeconds(throttle, now);
+
+  useEffect(() => {
+    if (!waitSeconds) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [waitSeconds]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (waitSeconds) { setError(ADMIN_COPY.signInCooldown(waitSeconds)); return; }
     setBusy(true);
     setError('');
     setNotice('');
@@ -73,8 +90,14 @@ function SignIn() {
         await signOut(adminAuth);
         throw new Error('This account does not have administrator access.');
       }
+      localStorage.removeItem('hk-admin-sign-in-throttle');
+      setThrottle(EMPTY_ADMIN_SIGN_IN_THROTTLE);
     } catch (err) {
-      setError(messageOf(err).replace('Firebase: ', ''));
+      const next = afterFailedAdminSignIn(throttle);
+      localStorage.setItem('hk-admin-sign-in-throttle', JSON.stringify(next));
+      setThrottle(next); setNow(Date.now());
+      const seconds = adminSignInWaitSeconds(next);
+      setError(seconds ? ADMIN_COPY.signInCooldown(seconds) : ADMIN_COPY.signInFailed);
     } finally {
       setBusy(false);
     }
@@ -113,7 +136,7 @@ function SignIn() {
         </div>
         {error && <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700">{error}</p>}
         {notice && <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800">{notice}</p>}
-        <button className={`${primaryButton} mt-6 w-full`} disabled={busy}>{busy ? ADMIN_COPY.signingIn : ADMIN_COPY.signIn}</button>
+        <button className={`${primaryButton} mt-6 w-full`} disabled={busy || waitSeconds > 0}>{busy ? ADMIN_COPY.signingIn : waitSeconds ? ADMIN_COPY.signInCooldown(waitSeconds) : ADMIN_COPY.signIn}</button>
         <button type="button" className="mt-3 w-full py-2 text-sm font-bold text-[#014040] hover:underline disabled:opacity-50" disabled={busy || resetBusy} onClick={resetPassword}>
           {resetBusy ? ADMIN_COPY.sendingReset : ADMIN_COPY.forgotPassword}
         </button>
@@ -132,7 +155,7 @@ const bucketLabel: Record<Order['fulfilmentStatus'], string> = {
 };
 
 function OrdersSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
-  const [filter, setFilter] = useState<'action' | 'all' | Order['fulfilmentStatus']>('all');
+  const [filter, setFilter] = useState<'action' | 'all' | 'momo' | Order['fulfilmentStatus']>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Order | null>(null);
   const [manualKey, setManualKey] = useState('');
@@ -186,6 +209,7 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
   }, [selected?.orderId, selected?.salesCode, selected?.customerInputValue, selected?.paymentStatus, selected?.fulfilmentStatus, selected?.amountPesewas]);
 
   const rows = useMemo(() => data.orders.filter((order) => {
+    if (filter === 'momo') return order.checkoutMode === 'momo' && order.paymentStatus !== 'paid' && adminOrderMatchesSearch(order, search);
     if (filter === 'action' && ['ready', 'pending-payment'].includes(order.fulfilmentStatus)) return false;
     if (filter !== 'action' && filter !== 'all' && order.fulfilmentStatus !== filter) return false;
     return adminOrderMatchesSearch(order, search);
@@ -242,6 +266,14 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
       popup?.close();
       setMessage(messageOf(error));
     } finally { setBusy(''); }
+  };
+
+  const openMomoPayment = (event: React.MouseEvent, order: Order) => {
+    event.stopPropagation();
+    setSelected(order);
+    setOfflineReference('');
+    setOfflineReason('MoMo manual payment');
+    window.setTimeout(() => document.getElementById(`offline-payment-${order.orderId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
   };
 
   const downloadDocument = async () => {
@@ -325,7 +357,7 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
       <div className="grid gap-3 md:grid-cols-[1fr_240px]">
         <input className={inputClass} placeholder={ADMIN_COPY.orders.searchPlaceholder} value={search} onChange={(e) => setSearch(e.target.value)} />
         <select className={inputClass} value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}>
-          <option value="action">{ADMIN_COPY.orders.actionRequired}</option><option value="all">{ADMIN_COPY.orders.all}</option>
+          <option value="action">{ADMIN_COPY.orders.actionRequired}</option><option value="momo">{ADMIN_COPY.orders.awaitingMomo}</option><option value="all">{ADMIN_COPY.orders.all}</option>
           {Object.entries(bucketLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
       </div>
@@ -355,19 +387,21 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
             : whatsAppPurpose === 'turnitin-report'
               ? 'Notify customer on WhatsApp that their Turnitin report is ready'
               : 'Notify customer on WhatsApp that their order is complete';
+          const awaitingMomo = order.checkoutMode === 'momo' && order.paymentStatus !== 'paid';
           return <div key={order.orderId} role="button" tabIndex={0} onClick={() => { setSelected(order); setMessage(''); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setSelected(order); }} className="grid w-full cursor-pointer gap-3 rounded-2xl border border-[#cbdcd9] border-b-4 border-b-[#014040] bg-white p-4 text-left shadow-sm hover:bg-[#f3faf8] md:grid-cols-[140px_1fr_1fr_140px] md:items-center">
             <span className="font-mono text-xs font-bold text-[#014040]">{order.orderId}<small className="mt-1 block font-sans font-normal text-slate-500">{new Date(order.orderDate).toLocaleString()}</small></span>
             <span><strong className="block text-sm text-slate-900">{order.customerName}</strong><small className="text-slate-500">{order.phone}</small></span>
             <span><strong className="block text-sm text-slate-800">{order.productName}</strong><small className="text-slate-500">{order.versionOrPlan}</small></span>
-            <span className="text-xs font-bold text-amber-700">{bucketLabel[order.fulfilmentStatus]}</span>
+            <span className="text-xs font-bold text-amber-700">{bucketLabel[order.fulfilmentStatus]}{awaitingMomo && <small className="mt-1 block rounded-full bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-900">{ADMIN_COPY.orders.awaitingMomo}</small>}</span>
             {(order.customerInputValue || order.salesCode) && <div className="flex flex-wrap items-center gap-2 rounded-xl bg-[#edf5f3] p-3 md:col-span-4">
               {order.customerInputValue && <span className="inline-flex items-center gap-2 rounded-lg bg-white px-2.5 py-1 text-xs"><span><b>{orderInputType || 'Machine detail'}:</b> <span className="font-mono">{order.customerInputValue}</span></span><button type="button" onClick={(event) => void copyPreviewValue(event, `${order.orderId}-input`, order.customerInputValue!)} className="rounded-md p-1 text-[#014040] hover:bg-[#edf5f3]" aria-label={`Copy ${orderInputType || 'machine detail'}`}>{copiedPreviewValue === `${order.orderId}-input` ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}</button></span>}
               {order.salesCode && <span className="inline-flex items-center gap-2 rounded-lg bg-white px-2.5 py-1 text-xs"><span><b>Sales code:</b> <span className="font-mono">{order.salesCode}</span></span><button type="button" onClick={(event) => void copyPreviewValue(event, `${order.orderId}-sales`, order.salesCode!)} className="rounded-md p-1 text-[#014040] hover:bg-[#edf5f3]" aria-label="Copy Sales code" title="Copy Sales code">{copiedPreviewValue === `${order.orderId}-sales` ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}</button></span>}
               {orderActivationUrl && <a href={orderActivationUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="rounded-lg bg-[#014040] px-3 py-1.5 text-xs font-black text-white">Activation link</a>}
             </div>}
-            {(orderProduct || whatsAppPurpose) && <div className="flex flex-wrap items-center gap-2 border-t border-[#e4efed] pt-3 md:col-span-4" onClick={(event) => event.stopPropagation()}>
+            {(orderProduct || whatsAppPurpose || awaitingMomo) && <div className="flex flex-wrap items-center gap-2 border-t border-[#e4efed] pt-3 md:col-span-4" onClick={(event) => event.stopPropagation()}>
               {orderProduct && <button type="button" disabled={order.paymentStatus !== 'paid' || hasSavedLicence} title={order.paymentStatus !== 'paid' ? 'The order must be paid first.' : hasSavedLicence ? 'A licence is already attached.' : 'Add a licence without opening the full order.'} onClick={() => { setQuickLicenceOrderId((current) => current === order.orderId ? '' : order.orderId); setQuickLicenceValue(''); setQuickLicenceMessage(''); }} className={secondaryButton}><KeyRound className="h-4 w-4" />{hasSavedLicence ? 'Licence added' : 'Add license'}</button>}
               {whatsAppPurpose && <button type="button" disabled={busy === `whatsapp-${order.orderId}`} onClick={(event) => void openWhatsAppNotification(event, order, whatsAppPurpose)} className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#25d366] text-[#014040] shadow-sm transition hover:scale-105 disabled:opacity-50" aria-label={whatsAppLabel} title={whatsAppLabel}><WhatsAppIcon className={`h-5 w-5 ${busy === `whatsapp-${order.orderId}` ? 'animate-pulse' : ''}`} /></button>}
+              {awaitingMomo && <button type="button" onClick={(event) => openMomoPayment(event, order)} className={primaryButton}>{ADMIN_COPY.orders.recordMomo}</button>}
             </div>}
             {quickLicenceOpen && <section aria-label={`Add licence for ${order.orderId}`} onClick={(event) => event.stopPropagation()} className="rounded-2xl border border-[#9dbbb5] bg-[#f3faf8] p-4 md:col-span-4">
               <div className="flex items-start justify-between gap-3"><div><h4 className="text-sm font-black text-[#014040]">Add license</h4><p className="mt-1 text-xs text-slate-500">{order.productName} · {order.versionOrPlan}</p></div><button type="button" className="rounded-full p-1 text-slate-500 hover:bg-white" onClick={() => setQuickLicenceOrderId('')} aria-label="Close licence entry"><X className="h-4 w-4" /></button></div>
@@ -406,7 +440,7 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
 
             <section className="mt-5 rounded-2xl border border-[#cbdcd9] p-4 sm:p-5"><div className="flex flex-wrap gap-2">{orderSteps.map((item, index) => <button key={item.id} type="button" onClick={() => setStep(index)} className={`rounded-full px-3 py-2 text-xs font-black ${step === index ? 'bg-[#014040] text-white' : 'bg-slate-100 text-slate-600'}`}>{index + 1}. {item.label}</button>)}</div>
               <div className="mt-5">
-                {activeStep === 'payment' && <div className="grid gap-4 sm:grid-cols-2"><label className={labelClass}>Payment status<select className={inputClass} value={workflow.paymentStatus} onChange={(e) => setWorkflow((old) => ({ ...old, paymentStatus: e.target.value as Order['paymentStatus'] }))}><option value="pending">Pending</option><option value="paid">Paid</option></select></label><label className={labelClass}>Adjusted price (GHS)<input className={inputClass} type="number" min="0.01" step="0.01" value={(workflow.amountPesewas || 0) / 100} onChange={(e) => setWorkflow((old) => ({ ...old, amountPesewas: Math.round(Number(e.target.value) * 100) }))} /></label><p className="sm:col-span-2 text-xs text-slate-500">The buyer sees this new amount immediately in Find Order and pays it when they click Proceed to pay.</p></div>}
+                {activeStep === 'payment' && <div className="grid gap-4 sm:grid-cols-2"><label className={labelClass}>Payment status<input className={`${inputClass} bg-slate-100`} readOnly value={workflow.paymentStatus === 'paid' ? 'Paid' : 'Pending'} /></label><label className={labelClass}>Adjusted price (GHS)<input className={inputClass} type="number" min="0.01" step="0.01" value={(workflow.amountPesewas || 0) / 100} onChange={(e) => setWorkflow((old) => ({ ...old, amountPesewas: Math.round(Number(e.target.value) * 100) }))} /></label><p className="sm:col-span-2 text-xs text-slate-500">The buyer sees this new amount immediately in Find Order. Confirm MoMo payments with the audited Record offline payment action below; Paystack payments update automatically after verification.</p></div>}
                 {activeStep === 'activation' && <div className="grid gap-4 sm:grid-cols-2">
                   <label className={labelClass}>{effectiveInputType}<input className={inputClass} value={workflow.customerInputValue || ''} onChange={(e) => setWorkflow((old) => ({ ...old, customerInputValue: e.target.value }))} /></label>
                   {usesSalesId && <label className={labelClass}>Sales ID (admin only)<input className={inputClass} value={workflow.salesCode || ''} placeholder={selectedVariant?.autoFulfil ? 'Assigned automatically after payment' : 'Enter a Sales ID or choose one below'} onChange={(e) => setWorkflow((old) => ({ ...old, salesCode: e.target.value }))} /></label>}
@@ -429,7 +463,7 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
               {selected.fulfilmentStatus === 'awaiting-customer-input' && <div className="rounded-2xl border p-4"><button className={secondaryButton} disabled={!!busy} onClick={() => act('nudge', `/orders/${selected.orderId}/nudge`)}><Send className="h-4 w-4" />{ADMIN_COPY.orders.nudgeCustomer}</button></div>}
               {selected.documentPath && !selectedIsTurnitin && <div className="rounded-2xl border p-4"><button className={secondaryButton} disabled={!!busy} onClick={downloadDocument}><Download className="h-4 w-4" />{ADMIN_COPY.orders.downloadDocument}</button></div>}
               <div className="rounded-2xl border p-4"><h4 className="font-black">Email</h4><div className="mt-3 flex flex-wrap gap-2"><button className={secondaryButton} disabled={!!busy} onClick={() => act('receipt', `/orders/${selected.orderId}/resend`, { kind: 'receipt' })}><Send className="h-4 w-4" />{ADMIN_COPY.orders.resendReceipt}</button><button className={secondaryButton} disabled={!!busy} onClick={() => act('delivery', `/orders/${selected.orderId}/resend`, { kind: 'delivery' })}>{ADMIN_COPY.orders.resendDelivery}</button></div></div>
-              {selected.paymentStatus !== 'paid' && <div className="rounded-2xl border p-4"><h4 className="font-black">{ADMIN_COPY.orders.offlinePayment}</h4><input className={`${inputClass} mt-3`} placeholder={ADMIN_COPY.orders.offlineReference} value={offlineReference} onChange={(e) => setOfflineReference(e.target.value)} /><input className={`${inputClass} mt-2`} placeholder={ADMIN_COPY.orders.offlineReason} value={offlineReason} onChange={(e) => setOfflineReason(e.target.value)} /><button className={`${primaryButton} mt-3`} disabled={!!busy || !offlineReference || !offlineReason} onClick={() => act('offline', `/orders/${selected.orderId}/record-offline-payment`, { reference: offlineReference, reason: offlineReason })}>{ADMIN_COPY.orders.offlinePayment}</button></div>}
+              {selected.paymentStatus !== 'paid' && <div id={`offline-payment-${selected.orderId}`} className="rounded-2xl border p-4"><h4 className="font-black">{ADMIN_COPY.orders.offlinePayment}</h4><input className={`${inputClass} mt-3`} placeholder={ADMIN_COPY.orders.offlineReference} value={offlineReference} onChange={(e) => setOfflineReference(e.target.value)} /><input className={`${inputClass} mt-2`} placeholder={ADMIN_COPY.orders.offlineReason} value={offlineReason} onChange={(e) => setOfflineReason(e.target.value)} /><button className={`${primaryButton} mt-3`} disabled={!!busy || !offlineReference || !offlineReason} onClick={() => act('offline', `/orders/${selected.orderId}/record-offline-payment`, { reference: offlineReference, reason: offlineReason })}>{ADMIN_COPY.orders.offlinePayment}</button></div>}
               <div className="rounded-2xl border p-4"><h4 className="font-black">{ADMIN_COPY.orders.internalNote}</h4><textarea className={`${inputClass} mt-3`} placeholder={ADMIN_COPY.orders.notePlaceholder} value={note} onChange={(e) => setNote(e.target.value)} /><button className={`${secondaryButton} mt-3`} disabled={!!busy || !note.trim()} onClick={async () => { await act('note', `/orders/${selected.orderId}/note`, { text: note }); setNote(''); }}>{ADMIN_COPY.orders.internalNote}</button></div>
             </div>
             {selected.paymentStatus === 'paid' && selected.fulfilmentStatus !== 'ready' && <div className="mt-6 rounded-2xl bg-[#014040] p-4 sm:flex sm:items-center sm:justify-between sm:gap-4"><div><h4 className="font-black text-white">Complete this order</h4><p className="mt-1 text-xs text-white/75">Marks the order fulfilled and emails the customer their next steps.</p></div><button className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-5 py-3 text-sm font-black text-[#014040] hover:bg-[#20f43d] disabled:opacity-50 sm:mt-0 sm:w-auto" disabled={Boolean(busy)} onClick={() => act('fulfil', `/orders/${selected.orderId}/fulfil`, workflow.activationCodeOrKey?.trim() ? { activationCodeOrKey: workflow.activationCodeOrKey } : {})}><Send className="h-4 w-4" />Mark fulfilled and email customer</button></div>}
@@ -756,6 +790,34 @@ function dateTimeLocal(value?: string): string {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
+function PaymentsSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
+  const [settings, setSettings] = useState(() => structuredClone(data.payments));
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const modes = [
+    { id: 'paystack' as const, title: ADMIN_COPY.payments.paystackTitle, description: ADMIN_COPY.payments.paystackDescription },
+    { id: 'momo' as const, title: ADMIN_COPY.payments.momoTitle, description: ADMIN_COPY.payments.momoDescription },
+    { id: 'both' as const, title: ADMIN_COPY.payments.bothTitle, description: ADMIN_COPY.payments.bothDescription }
+  ];
+  const setMomo = (key: keyof typeof settings.momo, value: string) => setSettings((old) => ({ ...old, momo: { ...old.momo, [key]: value } }));
+  const save = async () => {
+    if (settings.mode !== data.payments.mode && !window.confirm(ADMIN_COPY.payments.confirm(modes.find((mode) => mode.id === settings.mode)?.title || settings.mode))) return;
+    setBusy(true); setMessage('');
+    try {
+      await adminRequest(user, '/payments', { method: 'PUT', body: JSON.stringify(settings) });
+      setMessage(ADMIN_COPY.payments.saved);
+      await reload();
+    } catch (error) { setMessage(messageOf(error)); }
+    finally { setBusy(false); }
+  };
+  return <div className="space-y-6">
+    <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-black text-[#014040]">{ADMIN_COPY.payments.title}</h2><p className="mt-1 max-w-3xl text-sm text-slate-600">{ADMIN_COPY.payments.subtitle}</p></div><button type="button" className={primaryButton} disabled={busy} onClick={() => void save()}><Save className="h-4 w-4" />{busy ? ADMIN_COPY.saving : ADMIN_COPY.payments.save}</button></div>
+    <section className="rounded-2xl border bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black text-[#014040]">{ADMIN_COPY.payments.liveMode}: {modes.find((mode) => mode.id === data.payments.mode)?.title}</h3><p className="text-xs text-slate-500">{data.payments.updatedAt ? `${new Date(data.payments.updatedAt).toLocaleString()} · ${data.payments.updatedBy || 'administrator'}` : ADMIN_COPY.payments.defaultConfiguration}</p></div><div className="mt-4 grid gap-3 lg:grid-cols-3">{modes.map((mode) => <label key={mode.id} className={`cursor-pointer rounded-2xl border-2 p-4 transition motion-reduce:transition-none ${settings.mode === mode.id ? 'border-[#014040] bg-[#edf5f3]' : 'border-slate-200 bg-white hover:border-[#9dbbb5]'}`}><span className="flex items-start gap-3"><input type="radio" name="payment-mode" className="mt-1" checked={settings.mode === mode.id} onChange={() => setSettings((old) => ({ ...old, mode: mode.id }))} /><span><b className="block text-sm text-[#014040]">{mode.title}</b><small className="mt-1 block leading-5 text-slate-600">{mode.description}</small></span></span></label>)}</div></section>
+    <section className="space-y-4 rounded-2xl border bg-white p-5"><div><h3 className="text-lg font-black text-[#014040]">{ADMIN_COPY.payments.detailsTitle}</h3><p className="mt-1 text-xs text-slate-500">{ADMIN_COPY.payments.detailsDescription}</p></div><div className="grid gap-4 md:grid-cols-2"><label className={labelClass}>{ADMIN_COPY.payments.merchantId}<input className={inputClass} inputMode="numeric" value={settings.momo.merchantId} onChange={(event) => setMomo('merchantId', event.target.value)} /></label><label className={labelClass}>{ADMIN_COPY.payments.merchantName}<input className={inputClass} value={settings.momo.merchantName} onChange={(event) => setMomo('merchantName', event.target.value)} /></label><label className={labelClass}>{ADMIN_COPY.payments.transferNumber}<input className={inputClass} inputMode="numeric" value={settings.momo.transferNumber} onChange={(event) => setMomo('transferNumber', event.target.value)} /></label><label className={labelClass}>{ADMIN_COPY.payments.transferName}<input className={inputClass} value={settings.momo.transferName} onChange={(event) => setMomo('transferName', event.target.value)} /></label><label className={labelClass}>{ADMIN_COPY.payments.whatsappNumber}<input className={inputClass} inputMode="numeric" value={settings.momo.whatsappNumber} onChange={(event) => setMomo('whatsappNumber', event.target.value)} /></label></div></section>
+    {message && <p role="status" className={`rounded-xl p-3 text-sm font-bold ${/saved/i.test(message) ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800'}`}>{message}</p>}
+  </div>;
+}
+
 function PricingPromotionsSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
   const catalogueItems = data.mediaItems.filter((item) => item.kind !== 'category');
   const [pricing, setPricing] = useState<PricingConfig>(() => structuredClone(data.pricing));
@@ -1059,13 +1121,14 @@ export default function AdminPortal() {
 
   if (checking) return <div className="min-h-screen bg-[#f7faf9] p-8 text-[#014040]">{ADMIN_COPY.loading}</div>;
   if (!user) return <SignIn />;
-  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'requests', icon: <FileText /> }, { id: 'categories', icon: <Settings2 /> }, { id: 'services', icon: <Settings2 /> }, { id: 'pricing', icon: <BadgePercent /> }, { id: 'landing', icon: <ImagePlus /> }, { id: 'announcements', icon: <Bell /> }];
+  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'requests', icon: <FileText /> }, { id: 'categories', icon: <Settings2 /> }, { id: 'services', icon: <Settings2 /> }, { id: 'pricing', icon: <BadgePercent /> }, { id: 'payments', icon: <WalletCards /> }, { id: 'landing', icon: <ImagePlus /> }, { id: 'announcements', icon: <Bell /> }];
   const content = !data ? <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">{ADMIN_COPY.loading}</div>
     : section === 'orders' ? <OrdersSection data={data} user={user} reload={reload} />
     : section === 'requests' ? <RequestsSection requests={data.requests} />
     : section === 'categories' ? <CategorySetupSection data={data} user={user} reload={reload} />
     : section === 'services' ? <ServicesSection data={data} user={user} reload={reload} />
     : section === 'pricing' ? <PricingPromotionsSection data={data} user={user} reload={reload} />
+    : section === 'payments' ? <PaymentsSection data={data} user={user} reload={reload} />
     : section === 'landing' ? <LandingBannersSection data={data} user={user} reload={reload} />
     : <AnnouncementsSection data={data} user={user} reload={reload} />;
   return <div className="min-h-screen bg-[#f7faf9] text-slate-900"><header className="border-b border-[#cbdcd9] bg-[#014040] text-white"><div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-4 sm:px-6"><div><p className="text-lg font-black">{ADMIN_COPY.brand}</p><p className="text-xs text-slate-300">{user.email}</p></div><div className="flex gap-2"><button className="rounded-xl border border-white/20 p-2 hover:bg-white/10" onClick={reload} aria-label={ADMIN_COPY.refresh}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button><button className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 text-xs font-bold hover:bg-white/10" onClick={() => signOut(adminAuth)}><LogOut className="h-4 w-4" />{ADMIN_COPY.signOut}</button></div></div></header><div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[210px_1fr]"><label className="space-y-1 text-xs font-black uppercase tracking-wider text-slate-600 lg:hidden">Admin section<select className={inputClass} value={section} onChange={(event) => setSection(event.target.value as Section)}>{nav.map((item) => <option key={item.id} value={item.id}>{ADMIN_COPY.sections[item.id]}</option>)}</select></label><nav className="hidden h-fit gap-2 rounded-2xl border border-slate-200 bg-white p-2 lg:flex lg:flex-col">{nav.map((item) => <button key={item.id} onClick={() => setSection(item.id)} className={`inline-flex min-w-fit items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black ${section === item.id ? 'bg-[#014040] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{React.cloneElement(item.icon as React.ReactElement, { className: 'h-4 w-4' })}{ADMIN_COPY.sections[item.id]}</button>)}</nav><main className="min-w-0">{error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-sm font-bold text-rose-800">{error}</p>}{content}</main></div></div>;

@@ -394,6 +394,26 @@ export type FulfilmentStatus =
 
 export type FulfilmentMethod = 'automatic' | 'manual';
 
+export type CheckoutPaymentMode = 'paystack' | 'momo' | 'both';
+
+export interface MomoPaymentDetails {
+  merchantId: string;
+  merchantName: string;
+  transferNumber: string;
+  transferName: string;
+  whatsappNumber: string;
+}
+
+export interface PublicPaymentOptions {
+  mode: CheckoutPaymentMode;
+  momo: MomoPaymentDetails;
+  updatedAt?: string;
+}
+
+export interface PaymentSettings extends PublicPaymentOptions {
+  updatedBy?: string;
+}
+
 export interface TurnitinReportDocument {
   reportId: string;
   label: string;
@@ -429,6 +449,8 @@ export interface Order {
   amountPesewas: number;
   originalAmountPesewas?: number;
   paymentStatus: PaymentStatus;
+  /** Payment choices offered when this order was created or last retried. */
+  checkoutMode?: CheckoutPaymentMode;
   fulfilmentStatus: FulfilmentStatus;
   fulfilmentType?: string;
   fulfilmentMethod?: FulfilmentMethod;
@@ -613,6 +635,7 @@ export interface CatalogResponse {
     percent: number;
     endsAt?: string;
   };
+  paymentOptions: PublicPaymentOptions;
 }
 
 export interface HealthResponse {

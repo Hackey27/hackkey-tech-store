@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
 import { WhatsAppIcon } from './WhatsAppIcon';
-import { CatalogueItem, Order } from '../types';
+import { CatalogueItem, Order, PublicPaymentOptions } from '../types';
 import { ProductImage } from './ProductImage';
 import { STORE_COPY } from '../config/storeCopy';
 import { cedisToPesewas, formatPesewas } from '../utils/money';
@@ -25,6 +25,7 @@ import { isTurnitinOrder, turnitinOrderStep } from '../utils/orderProgress';
 import { TurnitinReportDownloads } from './TurnitinReportDownloads';
 import { whatsAppDocumentLink } from '../utils/whatsapp';
 import { FulfilmentTimeNotice } from './FulfilmentTimeNotice';
+import { PaymentMethodPanel } from './PaymentMethodPanel';
 
 /** The stored statuses are kebab-case; these are what the customer reads. */
 const FULFILMENT_LABELS: Record<string, string> = {
@@ -43,7 +44,7 @@ const fulfilmentLabel = (status: string) => FULFILMENT_LABELS[status] || status;
  * document arrives identifying the order it belongs to rather than as an
  * anonymous file.
  */
-export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPhone?: string; focusOrderId?: string; sharedOrderId?: string; sharedAccessToken?: string }> = ({ catalogItems = [], initialPhone = '', focusOrderId, sharedOrderId, sharedAccessToken }) => {
+export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOptions?: PublicPaymentOptions; initialPhone?: string; focusOrderId?: string; sharedOrderId?: string; sharedAccessToken?: string }> = ({ catalogItems = [], paymentOptions, initialPhone = '', focusOrderId, sharedOrderId, sharedAccessToken }) => {
   const [phoneNumber, setPhoneNumber] = useState(initialPhone);
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -55,6 +56,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
   const [isSubmittingInput, setIsSubmittingInput] = useState<Record<string, boolean>>({});
   const [actionSuccessMessage, setActionSuccessMessage] = useState<Record<string, string>>({});
   const [actionErrorMessage, setActionErrorMessage] = useState<Record<string, string>>({});
+  const [paymentResults, setPaymentResults] = useState<Record<string, { options: PublicPaymentOptions; orderIds: string[]; totalPesewas: number; authorizationUrl?: string }>>({});
 
   // Copied states
   const [copiedKeys, setCopiedKeys] = useState<Record<string, boolean>>({});
@@ -136,7 +138,12 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
       const response = await fetch(`/api/orders/${encodeURIComponent(order.orderId)}/pay`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: phoneNumber }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Unable to start payment.');
-      window.location.assign(data.authorizationUrl);
+      if (data.paymentOptions?.mode === 'paystack' && data.authorizationUrl) {
+        window.location.assign(data.authorizationUrl);
+        return;
+      }
+      if (!data.paymentOptions) throw new Error(STORE_COPY.payment.unavailable);
+      setPaymentResults((old) => ({ ...old, [order.orderId]: { options: data.paymentOptions, orderIds: data.orderIds || [order.orderId], totalPesewas: data.totalPesewas, authorizationUrl: data.authorizationUrl } }));
     } catch (caught) {
       setActionErrorMessage((old) => ({ ...old, [order.orderId]: caught instanceof Error ? caught.message : 'Unable to start payment.' }));
     }
@@ -360,12 +367,11 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; initialPh
                           <h4 className="text-sm font-bold text-amber-900">
                             Payment Pending: {formatPesewas(order.amountPesewas)}
                           </h4>
-                          <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-                            This order is awaiting payment confirmation. You can pay securely online or transfer via MTN Mobile Money.
-                          </p>
+                          <p className="text-xs text-amber-800 mt-1 leading-relaxed">{STORE_COPY.payment.paymentPendingDescription}</p>
                         </div>
                       </div>
-                      <button type="button" onClick={() => void handlePay(order)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#014040] px-4 py-3 text-sm font-black text-white"><CreditCard className="h-4 w-4" />Proceed to pay</button>
+                      {!paymentResults[order.orderId] && <button type="button" onClick={() => void handlePay(order)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#014040] px-4 py-3 text-sm font-black text-white"><CreditCard className="h-4 w-4" />{paymentOptions?.mode === 'momo' ? STORE_COPY.payment.viewMomo : 'Proceed to pay'}</button>}
+                      {paymentResults[order.orderId] && <PaymentMethodPanel options={paymentResults[order.orderId].options} orderIds={paymentResults[order.orderId].orderIds} totalPesewas={paymentResults[order.orderId].totalPesewas} authorizationUrl={paymentResults[order.orderId].authorizationUrl} />}
                     </div>
                   )}
 
