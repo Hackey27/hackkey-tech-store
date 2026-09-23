@@ -26,6 +26,7 @@ import { TurnitinReportDownloads } from './TurnitinReportDownloads';
 import { whatsAppDocumentLink } from '../utils/whatsapp';
 import { FulfilmentTimeNotice } from './FulfilmentTimeNotice';
 import { PaymentMethodPanel } from './PaymentMethodPanel';
+import { OrderPaymentWatcher } from './OrderPaymentWatcher';
 
 /** The stored statuses are kebab-case; these are what the customer reads. */
 const FULFILMENT_LABELS: Record<string, string> = {
@@ -365,13 +366,13 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
                         <Clock className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
                         <div>
                           <h4 className="text-sm font-bold text-amber-900">
-                            Payment Pending: {formatPesewas(order.amountPesewas)}
+                            {order.paymentArrangement === 'pay-later' ? 'Payment later arranged' : 'Payment Pending'}: {formatPesewas(order.amountPesewas)}
                           </h4>
-                          <p className="text-xs text-amber-800 mt-1 leading-relaxed">{STORE_COPY.payment.paymentPendingDescription}</p>
+                          <p className="text-xs text-amber-800 mt-1 leading-relaxed">{order.paymentArrangement === 'pay-later' ? STORE_COPY.payment.deferredDescription : STORE_COPY.payment.paymentPendingDescription}</p>
                         </div>
                       </div>
                       {!paymentResults[order.orderId] && <button type="button" onClick={() => void handlePay(order)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#014040] px-4 py-3 text-sm font-black text-white"><CreditCard className="h-4 w-4" />{paymentOptions?.mode === 'momo' ? STORE_COPY.payment.viewMomo : 'Proceed to pay'}</button>}
-                      {paymentResults[order.orderId] && <PaymentMethodPanel options={paymentResults[order.orderId].options} orderIds={paymentResults[order.orderId].orderIds} totalPesewas={paymentResults[order.orderId].totalPesewas} authorizationUrl={paymentResults[order.orderId].authorizationUrl} />}
+                      {paymentResults[order.orderId] && <div className="space-y-3"><PaymentMethodPanel options={paymentResults[order.orderId].options} orderIds={paymentResults[order.orderId].orderIds} totalPesewas={paymentResults[order.orderId].totalPesewas} authorizationUrl={paymentResults[order.orderId].authorizationUrl} /><OrderPaymentWatcher orderId={order.orderId} onResolved={(updated) => { setOrders((previous) => previous.map((candidate) => candidate.orderId === updated.orderId ? updated : candidate)); setPaymentResults((previous) => { const next = { ...previous }; delete next[order.orderId]; return next; }); }} /></div>}
                     </div>
                   )}
 

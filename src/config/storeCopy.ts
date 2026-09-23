@@ -354,6 +354,11 @@ export const STORE_COPY = {
     paymentPendingDescription: 'Choose an available payment method below. Payment status changes only after Paystack verification or seller confirmation of your MoMo transaction.',
     viewMomo: 'View MoMo payment details',
     unavailable: 'Payment options could not be loaded. Please try again.',
+    confirmedTitle: 'Payment confirmed',
+    confirmedDescription: 'Your payment has been confirmed. Continue to your order to see the next steps and submit any required details.',
+    deferredTitle: 'Payment later arrangement confirmed',
+    deferredDescription: 'Your payment-later arrangement has been recorded. You can open your order now; paid-only downloads and deliverables remain locked until payment is confirmed.',
+    seeNextSteps: 'See next steps',
   },
 
   // Fulfilment & Delivery Windows

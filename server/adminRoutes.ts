@@ -1,5 +1,5 @@
 import express, { Router } from 'express';
-import { sendCustomerDelivery, sendCustomerReceipt } from './email';
+import { sendCustomerDelivery, sendCustomerOrderNotification, sendCustomerReceipt } from './email';
 import { AdminRequest, requireAdmin } from './adminAuth';
 import { writeAdminAudit } from './adminAudit';
 import {
@@ -29,6 +29,9 @@ import {
 import { createOrderAccessToken, getOrder } from './orders';
 import { applyOfflinePayment } from './payments';
 import { savePaymentSettings } from './paymentSettings';
+import { setPaymentLater } from './paymentReminders';
+import { buildOrderNotification, validateNotificationPurpose } from '../src/utils/orderNotification';
+import { CustomerNotificationPurpose, Order } from '../src/types';
 import {
   catalogueImageObjectPath,
   deleteCatalogueImage,
@@ -71,6 +74,23 @@ function publicBaseUrl(req: AdminRequest): string {
   if (configured) return configured;
   const forwarded = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
   return `${forwarded}://${req.get('host')}`;
+}
+
+const notificationPurposes: CustomerNotificationPurpose[] = [
+  'payment-reminder', 'customer-input', 'status-update', 'complete', 'turnitin-document', 'turnitin-report'
+];
+
+function notificationPurpose(value: unknown): CustomerNotificationPurpose | null {
+  const purpose = String(value || '') as CustomerNotificationPurpose;
+  return notificationPurposes.includes(purpose) ? purpose : null;
+}
+
+async function prepareOrderNotification(req: AdminRequest, order: Order, purpose: CustomerNotificationPurpose) {
+  const validationError = validateNotificationPurpose(order, purpose);
+  if (validationError) throw new Error(validationError);
+  const access = await createOrderAccessToken(order.orderId);
+  const orderUrl = `${publicBaseUrl(req)}/order/${encodeURIComponent(access.order.orderId)}?access=${encodeURIComponent(access.token)}`;
+  return { order: access.order, orderUrl, content: buildOrderNotification(access.order, purpose, orderUrl) };
 }
 
 export function createAdminRouter(): Router {
@@ -284,35 +304,41 @@ export function createAdminRouter(): Router {
     try {
       const existing = await getOrder(String(req.params.orderId));
       if (!existing) return res.status(404).json({ error: 'Order not found.' });
-      const purpose = String(req.body?.purpose || 'complete');
-      const isTurnitin = existing.productId === 'TURNITIN' || existing.variantId === 'TURNITIN';
-      const turnitinHasDocument = Boolean(existing.documentPath || existing.documentReceivedAt || existing.documentUploadedAt || existing.documentUploadStatus === 'uploaded' || existing.documentSubmissionMethod === 'whatsapp');
-      if (purpose === 'turnitin-document' && (!isTurnitin || existing.paymentStatus !== 'paid' || turnitinHasDocument)) {
-        return res.status(409).json({ error: 'Document reminders are available for paid Turnitin orders that are still awaiting a document.' });
-      }
-      if (purpose === 'turnitin-report' && (!isTurnitin || existing.fulfilmentStatus !== 'ready' || !existing.reportDocuments?.length)) {
-        return res.status(409).json({ error: 'Upload a Turnitin report before notifying the customer that it is ready.' });
-      }
-      if (purpose === 'complete' && existing.fulfilmentStatus !== 'ready') {
-        return res.status(409).json({ error: 'Complete the order before notifying the customer on WhatsApp.' });
-      }
-      if (!['complete', 'turnitin-document', 'turnitin-report'].includes(purpose)) {
-        return res.status(400).json({ error: 'Unsupported WhatsApp notification type.' });
-      }
-      const { order, token } = await createOrderAccessToken(existing.orderId);
-      const orderUrl = `${publicBaseUrl(req)}/order/${encodeURIComponent(order.orderId)}?access=${encodeURIComponent(token)}`;
-      const message = purpose === 'turnitin-document'
-        ? `Hello ${order.customerName}, payment has been received for your Hack-Key Tech Turnitin order ${order.orderId}. Please use this secure link to submit your document: ${orderUrl}`
-        : purpose === 'turnitin-report'
-          ? `Hello ${order.customerName}, your Turnitin report for order ${order.orderId} is ready. Use this secure link to view and download your report: ${orderUrl}`
-          : `Hello ${order.customerName}, your Hack-Key Tech order ${order.orderId} for ${order.productName} is complete. Use this secure link to submit any required details and view your deliverables: ${orderUrl}`;
-      const whatsappUrl = `https://wa.me/${whatsappRecipient(order.phone)}?text=${encodeURIComponent(message)}`;
+      const purpose = notificationPurpose(req.body?.purpose || 'complete');
+      if (!purpose) return res.status(400).json({ error: 'Unsupported WhatsApp notification type.' });
+      const prepared = await prepareOrderNotification(req, existing, purpose);
+      const whatsappUrl = `https://wa.me/${whatsappRecipient(prepared.order.phone)}?text=${encodeURIComponent(prepared.content.message)}`;
       await writeAdminAudit(actor(req), {
-        action: 'order.whatsapp-link-create', targetType: 'order', targetId: order.orderId, orderId: order.orderId, details: { purpose }
+        action: 'order.whatsapp-link-create', targetType: 'order', targetId: prepared.order.orderId, orderId: prepared.order.orderId, details: { purpose }
       });
-      res.json({ orderUrl, whatsappUrl });
+      res.json({ orderUrl: prepared.orderUrl, whatsappUrl });
     } catch (err) {
       routeError(res, err, 'Failed to prepare the WhatsApp notification.');
+    }
+  });
+
+  router.post('/orders/:orderId/notify', async (req: AdminRequest, res) => {
+    try {
+      const existing = await getOrder(String(req.params.orderId));
+      if (!existing) return res.status(404).json({ error: 'Order not found.' });
+      const purpose = notificationPurpose(req.body?.purpose);
+      const channel = req.body?.channel === 'email' ? 'email' : req.body?.channel === 'whatsapp' ? 'whatsapp' : null;
+      if (!purpose || !channel) return res.status(400).json({ error: 'Choose a supported notification and channel.' });
+      const prepared = await prepareOrderNotification(req, existing, purpose);
+      let whatsappUrl: string | undefined;
+      if (channel === 'email') {
+        await sendCustomerOrderNotification(prepared.order, prepared.content.subject, prepared.content.message);
+      } else {
+        whatsappUrl = `https://wa.me/${whatsappRecipient(prepared.order.phone)}?text=${encodeURIComponent(prepared.content.message)}`;
+      }
+      await writeAdminAudit(actor(req), {
+        action: `order.notify-${channel}`, targetType: 'order', targetId: prepared.order.orderId, orderId: prepared.order.orderId,
+        // Never persist the bearer link itself in the audit collection.
+        details: { purpose }
+      });
+      res.json({ success: true, orderUrl: prepared.orderUrl, whatsappUrl });
+    } catch (err) {
+      routeError(res, err, 'Failed to notify the customer.');
     }
   });
 
@@ -363,11 +389,10 @@ export function createAdminRouter(): Router {
   });
 
   router.post('/orders/:orderId/record-offline-payment', async (req: AdminRequest, res) => {
-    const reference = String(req.body?.reference || '').trim();
+    const suppliedReference = String(req.body?.reference || '').trim();
     const reason = String(req.body?.reason || '').trim();
-    if (!reference || !reason) {
-      return res.status(400).json({ error: 'A payment reference and reason are required.' });
-    }
+    if (!reason) return res.status(400).json({ error: 'A payment reason is required.' });
+    const reference = suppliedReference || `MOMO-NO-ID-${Date.now()}`;
     try {
       const result = await applyOfflinePayment(String(req.params.orderId), { reference, reason });
       if (result.result === 'unknown-order') return res.status(404).json({ error: 'Order not found.' });
@@ -377,11 +402,25 @@ export function createAdminRouter(): Router {
         targetType: 'order',
         targetId: result.order.orderId,
         orderId: result.order.orderId,
-        details: { reference, reason }
+        details: { reference, reason, transactionIdProvided: Boolean(suppliedReference) }
       });
       res.json(result);
     } catch (err) {
       routeError(res, err, 'Failed to record offline payment.');
+    }
+  });
+
+  router.post('/orders/:orderId/payment-later', async (req: AdminRequest, res) => {
+    try {
+      const reminderDate = String(req.body?.reminderDate || '').trim() || undefined;
+      const order = await setPaymentLater(String(req.params.orderId), reminderDate, actor(req));
+      await writeAdminAudit(actor(req), {
+        action: 'order.payment-later', targetType: 'order', targetId: order.orderId, orderId: order.orderId,
+        details: { reminderDate: reminderDate || null }
+      });
+      res.json({ order });
+    } catch (err) {
+      routeError(res, err, 'Failed to record payment-later arrangement.');
     }
   });
 

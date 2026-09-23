@@ -11,6 +11,12 @@ export function publicOrder(order: Order): Order {
     fulfilmentHistory: _fulfilmentHistory,
     salesCode: _salesCode,
     customerAccessTokenHashes: _customerAccessTokenHashes,
+    paymentReminderDate: _paymentReminderDate,
+    paymentReminderScheduledAt: _paymentReminderScheduledAt,
+    paymentReminderScheduledBy: _paymentReminderScheduledBy,
+    paymentReminderSentAt: _paymentReminderSentAt,
+    paymentReminderProcessingAt: _paymentReminderProcessingAt,
+    paymentReminderPrimary: _paymentReminderPrimary,
     ...safe
   } = order;
   return {

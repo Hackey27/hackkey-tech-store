@@ -43,6 +43,9 @@ import { publicOrder } from './server/publicOrder';
 import { turnitinDocumentUploadPolicy } from './server/documentUploadPolicy';
 import { renderProductSocialPreview } from './server/socialPreview';
 import { getPublicPaymentOptions, paymentModeUsesPaystack } from './server/paymentSettings';
+import { sendSellerOrderSubmittedAlert } from './server/email';
+import { sendDuePaymentReminders } from './server/paymentReminders';
+import { requireTaskCaller } from './server/taskAuth';
 
 // Cloud Run injects PORT (8080 by default); 3000 keeps local dev unchanged.
 const PORT = Number(process.env.PORT) || 3000;
@@ -201,6 +204,17 @@ async function startServer() {
     }
   });
 
+  // Cloud Scheduler calls this with a Google-signed OIDC token. The storefront
+  // is public, so trusting only a scheduler header would let anyone trigger
+  // seller email; the caller service account and audience are both verified.
+  app.post('/api/tasks/payment-reminders', requireTaskCaller, async (_req: Request, res: Response) => {
+    try {
+      res.json(await sendDuePaymentReminders());
+    } catch (err) {
+      failed(res, err, 'Failed to process payment reminders');
+    }
+  });
+
   // Catalogue artwork is public content but the bucket is not. Only objects in
   // the dedicated prefix can be streamed; customer documents remain private.
   app.get('/api/catalog/images', async (req: Request, res: Response) => {
@@ -327,6 +341,12 @@ async function startServer() {
       const totalPesewas = orders.reduce((sum, o) => sum + o.amountPesewas, 0);
       const primary = orders[0];
       const reference = referenceForOrder(primary.orderId);
+
+      // A submitted checkout and a confirmed online payment are deliberately
+      // separate seller alerts. This first message never says the order is paid.
+      await sendSellerOrderSubmittedAlert(orders, totalPesewas).catch((error) => {
+        console.error(`[MAIL] New-order alert failed for ${primary.orderId}:`, error);
+      });
 
       if (!paymentModeUsesPaystack(paymentOptions.mode)) {
         return res.json({

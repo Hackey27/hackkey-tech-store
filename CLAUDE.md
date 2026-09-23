@@ -94,6 +94,13 @@ only after server-side verification; seller-confirmed offline payments use a
 separate Firebase-admin-authenticated, audited route and the same fulfilment
 transaction.
 
+`paymentArrangement: 'pay-later'` is deliberately not a paid status. It leaves
+paid-only downloads, fulfilment and document uploads locked. Optional reminder
+dates are checked hourly by the `hackkey-payment-reminders` Cloud Scheduler job,
+which calls `/api/tasks/payment-reminders` with a Google-signed OIDC token. The
+server verifies both the token audience and the exact caller service account;
+never replace that check with the spoofable `X-CloudScheduler` header.
+
 Both the webhook and the customer's return call that one routine. Neither has
 its own copy, because two copies drift and one ends up missing the amount
 check.

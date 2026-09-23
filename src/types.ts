@@ -396,6 +396,14 @@ export type FulfilmentMethod = 'automatic' | 'manual';
 
 export type CheckoutPaymentMode = 'paystack' | 'momo' | 'both';
 
+export type CustomerNotificationPurpose =
+  | 'payment-reminder'
+  | 'customer-input'
+  | 'status-update'
+  | 'complete'
+  | 'turnitin-document'
+  | 'turnitin-report';
+
 export interface MomoPaymentDetails {
   merchantId: string;
   merchantName: string;
@@ -451,6 +459,15 @@ export interface Order {
   paymentStatus: PaymentStatus;
   /** Payment choices offered when this order was created or last retried. */
   checkoutMode?: CheckoutPaymentMode;
+  /** An administrator agreed that the customer will pay later. This does not
+   * mean paid and never unlocks paid-only fulfilment or downloads. */
+  paymentArrangement?: 'pay-later';
+  paymentReminderDate?: string;
+  paymentReminderScheduledAt?: string;
+  paymentReminderScheduledBy?: string;
+  paymentReminderSentAt?: string;
+  paymentReminderProcessingAt?: string;
+  paymentReminderPrimary?: boolean;
   fulfilmentStatus: FulfilmentStatus;
   fulfilmentType?: string;
   fulfilmentMethod?: FulfilmentMethod;

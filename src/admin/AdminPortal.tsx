@@ -6,6 +6,7 @@ import {
   ArrowUp,
   Bell,
   BadgePercent,
+  CalendarClock,
   Check,
   ChevronDown,
   ChevronRight,
@@ -17,6 +18,7 @@ import {
   KeyRound,
   ImagePlus,
   LogOut,
+  Mail,
   Plus,
   RefreshCw,
   Save,
@@ -29,7 +31,7 @@ import {
   X
 } from 'lucide-react';
 import { ADMIN_COPY } from '../config/storeCopy';
-import { Announcement, Bundle, Category, CustomerRequest, Laptop as LaptopType, Order, PricingConfig, Product, Service, ServiceField, ServiceFieldType, ServiceOption, Variant } from '../types';
+import { Announcement, Bundle, Category, CustomerNotificationPurpose, CustomerRequest, Laptop as LaptopType, Order, PricingConfig, Product, Service, ServiceField, ServiceFieldType, ServiceOption, Variant } from '../types';
 import { formatPesewas } from '../utils/money';
 import { defaultCustomerInputType, defaultDeliveryCodeType, effectiveActivationWebsiteUrl } from '../utils/softwareFulfilment';
 import { AnnouncementModal } from '../components/AnnouncementModal';
@@ -43,6 +45,7 @@ import { documentContentType } from '../utils/documentFiles';
 import { newestOrderFirst } from '../utils/orderSorting';
 import { adminOrderMatchesSearch } from '../utils/adminOrderSearch';
 import { adminSignInWaitSeconds, afterFailedAdminSignIn, EMPTY_ADMIN_SIGN_IN_THROTTLE, AdminSignInThrottleState } from '../utils/adminSignInThrottle';
+import { notificationActionLabel, notificationPurposeForOrder } from '../utils/orderNotification';
 
 type Section = 'orders' | 'requests' | 'categories' | 'services' | 'announcements' | 'landing' | 'pricing' | 'payments';
 
@@ -161,7 +164,9 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
   const [manualKey, setManualKey] = useState('');
   const [note, setNote] = useState('');
   const [offlineReference, setOfflineReference] = useState('');
-  const [offlineReason, setOfflineReason] = useState('');
+  const [paymentLaterOpen, setPaymentLaterOpen] = useState(false);
+  const [showReminderDate, setShowReminderDate] = useState(false);
+  const [reminderDate, setReminderDate] = useState('');
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [step, setStep] = useState(0);
@@ -185,6 +190,8 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
   const usesSalesId = selected?.deliveryCodeType === 'sales-code' || selectedVariant?.deliveryCodeType === 'sales-code' || defaultDeliveryCodeType(productId) === 'sales-code';
   const usesLicence = Boolean(selectedVariant && !usesSalesId && !effectiveInputType && selected?.fulfilmentType !== 'Service');
   const activationUrl = effectiveActivationWebsiteUrl(selectedVariant);
+  const selectedNotificationPurpose = selected ? notificationPurposeForOrder(selected) : 'status-update';
+  const selectedNotificationLabel = notificationActionLabel(selectedNotificationPurpose);
   const availableCodes = data.licences.filter((licence) => licence.variantId === selected?.variantId && licence.status === 'available');
   const orderSteps = [
     { id: 'payment', label: 'Payment & price' },
@@ -205,8 +212,12 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
     setSelectedSalesLicenceId('');
     setReportFile(null);
     setReportProgress(0);
+    setOfflineReference('');
+    setPaymentLaterOpen(false);
+    setShowReminderDate(false);
+    setReminderDate(selected.paymentReminderDate || '');
     setStep(0);
-  }, [selected?.orderId, selected?.salesCode, selected?.customerInputValue, selected?.paymentStatus, selected?.fulfilmentStatus, selected?.amountPesewas]);
+  }, [selected?.orderId, selected?.salesCode, selected?.customerInputValue, selected?.paymentStatus, selected?.fulfilmentStatus, selected?.amountPesewas, selected?.paymentArrangement, selected?.paymentReminderDate]);
 
   const rows = useMemo(() => data.orders.filter((order) => {
     if (filter === 'momo') return order.checkoutMode === 'momo' && order.paymentStatus !== 'paid' && adminOrderMatchesSearch(order, search);
@@ -253,15 +264,16 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
     finally { setBusy(''); }
   };
 
-  const openWhatsAppNotification = async (event: React.MouseEvent, order: Order, purpose: 'complete' | 'turnitin-document' | 'turnitin-report') => {
-    event.stopPropagation();
-    const popup = window.open('about:blank', '_blank');
+  const notifyCustomer = async (event: React.MouseEvent | null, order: Order, purpose: CustomerNotificationPurpose, channel: 'whatsapp' | 'email') => {
+    event?.stopPropagation();
+    const popup = channel === 'whatsapp' ? window.open('about:blank', '_blank') : null;
     if (popup) popup.opener = null;
-    setBusy(`whatsapp-${order.orderId}`); setMessage('');
+    setBusy(`${channel}-${order.orderId}`); setMessage('');
     try {
-      const result = await adminRequest<{ whatsappUrl: string }>(user, `/orders/${encodeURIComponent(order.orderId)}/whatsapp-link`, { method: 'POST', body: JSON.stringify({ purpose }) });
-      if (popup) popup.location.replace(result.whatsappUrl);
-      else setMessage('WhatsApp is ready, but the browser blocked the new tab. Allow pop-ups and try again.');
+      const result = await adminRequest<{ whatsappUrl?: string }>(user, `/orders/${encodeURIComponent(order.orderId)}/notify`, { method: 'POST', body: JSON.stringify({ purpose, channel }) });
+      if (channel === 'whatsapp' && result.whatsappUrl && popup) popup.location.replace(result.whatsappUrl);
+      else if (channel === 'whatsapp') setMessage('WhatsApp is ready, but the browser blocked the new tab. Allow pop-ups and try again.');
+      else setMessage(`Email sent to ${order.email}.`);
     } catch (error) {
       popup?.close();
       setMessage(messageOf(error));
@@ -272,8 +284,13 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
     event.stopPropagation();
     setSelected(order);
     setOfflineReference('');
-    setOfflineReason('MoMo manual payment');
     window.setTimeout(() => document.getElementById(`offline-payment-${order.orderId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+  };
+
+  const savePaymentLater = async () => {
+    if (!selected) return;
+    await act('payment-later', `/orders/${selected.orderId}/payment-later`, { reminderDate: reminderDate || undefined });
+    setPaymentLaterOpen(false);
   };
 
   const downloadDocument = async () => {
@@ -373,36 +390,25 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
           const nextAvailableLicence = data.licences
             .filter((licence) => licence.variantId === order.variantId && licence.status === 'available')
             .sort((a, b) => (a.dateAdded || '').localeCompare(b.dateAdded || ''))[0];
-          const orderIsTurnitin = isTurnitinOrder(order);
-          const turnitinHasDocument = Boolean(order.documentPath || order.documentReceivedAt || order.documentUploadedAt || order.documentUploadStatus === 'uploaded' || order.documentSubmissionMethod === 'whatsapp');
-          const whatsAppPurpose = orderIsTurnitin && order.fulfilmentStatus === 'ready' && Boolean(order.reportDocuments?.length)
-            ? 'turnitin-report'
-            : orderIsTurnitin && order.paymentStatus === 'paid' && !turnitinHasDocument
-              ? 'turnitin-document'
-              : !orderIsTurnitin && order.fulfilmentStatus === 'ready'
-                ? 'complete'
-                : null;
-          const whatsAppLabel = whatsAppPurpose === 'turnitin-document'
-            ? 'Notify customer on WhatsApp to submit their document'
-            : whatsAppPurpose === 'turnitin-report'
-              ? 'Notify customer on WhatsApp that their Turnitin report is ready'
-              : 'Notify customer on WhatsApp that their order is complete';
+          const notificationPurpose = notificationPurposeForOrder(order);
+          const notificationLabel = notificationActionLabel(notificationPurpose);
           const awaitingMomo = order.checkoutMode === 'momo' && order.paymentStatus !== 'paid';
           return <div key={order.orderId} role="button" tabIndex={0} onClick={() => { setSelected(order); setMessage(''); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setSelected(order); }} className="grid w-full cursor-pointer gap-3 rounded-2xl border border-[#cbdcd9] border-b-4 border-b-[#014040] bg-white p-4 text-left shadow-sm hover:bg-[#f3faf8] md:grid-cols-[140px_1fr_1fr_140px] md:items-center">
             <span className="font-mono text-xs font-bold text-[#014040]">{order.orderId}<small className="mt-1 block font-sans font-normal text-slate-500">{new Date(order.orderDate).toLocaleString()}</small></span>
             <span><strong className="block text-sm text-slate-900">{order.customerName}</strong><small className="text-slate-500">{order.phone}</small></span>
             <span><strong className="block text-sm text-slate-800">{order.productName}</strong><small className="text-slate-500">{order.versionOrPlan}</small></span>
-            <span className="text-xs font-bold text-amber-700">{bucketLabel[order.fulfilmentStatus]}{awaitingMomo && <small className="mt-1 block rounded-full bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-900">{ADMIN_COPY.orders.awaitingMomo}</small>}</span>
+            <span className="text-xs font-bold text-amber-700">{bucketLabel[order.fulfilmentStatus]}{awaitingMomo && <small className="mt-1 block rounded-full bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-900">{ADMIN_COPY.orders.awaitingMomo}</small>}{order.paymentArrangement === 'pay-later' && order.paymentStatus !== 'paid' && <small className="mt-1 block rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-800">Payment later{order.paymentReminderDate ? ` · ${order.paymentReminderDate}` : ''}</small>}</span>
             {(order.customerInputValue || order.salesCode) && <div className="flex flex-wrap items-center gap-2 rounded-xl bg-[#edf5f3] p-3 md:col-span-4">
               {order.customerInputValue && <span className="inline-flex items-center gap-2 rounded-lg bg-white px-2.5 py-1 text-xs"><span><b>{orderInputType || 'Machine detail'}:</b> <span className="font-mono">{order.customerInputValue}</span></span><button type="button" onClick={(event) => void copyPreviewValue(event, `${order.orderId}-input`, order.customerInputValue!)} className="rounded-md p-1 text-[#014040] hover:bg-[#edf5f3]" aria-label={`Copy ${orderInputType || 'machine detail'}`}>{copiedPreviewValue === `${order.orderId}-input` ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}</button></span>}
               {order.salesCode && <span className="inline-flex items-center gap-2 rounded-lg bg-white px-2.5 py-1 text-xs"><span><b>Sales code:</b> <span className="font-mono">{order.salesCode}</span></span><button type="button" onClick={(event) => void copyPreviewValue(event, `${order.orderId}-sales`, order.salesCode!)} className="rounded-md p-1 text-[#014040] hover:bg-[#edf5f3]" aria-label="Copy Sales code" title="Copy Sales code">{copiedPreviewValue === `${order.orderId}-sales` ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}</button></span>}
               {orderActivationUrl && <a href={orderActivationUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="rounded-lg bg-[#014040] px-3 py-1.5 text-xs font-black text-white">Activation link</a>}
             </div>}
-            {(orderProduct || whatsAppPurpose || awaitingMomo) && <div className="flex flex-wrap items-center gap-2 border-t border-[#e4efed] pt-3 md:col-span-4" onClick={(event) => event.stopPropagation()}>
+            <div className="flex flex-wrap items-center gap-2 border-t border-[#e4efed] pt-3 md:col-span-4" onClick={(event) => event.stopPropagation()}>
               {orderProduct && <button type="button" disabled={order.paymentStatus !== 'paid' || hasSavedLicence} title={order.paymentStatus !== 'paid' ? 'The order must be paid first.' : hasSavedLicence ? 'A licence is already attached.' : 'Add a licence without opening the full order.'} onClick={() => { setQuickLicenceOrderId((current) => current === order.orderId ? '' : order.orderId); setQuickLicenceValue(''); setQuickLicenceMessage(''); }} className={secondaryButton}><KeyRound className="h-4 w-4" />{hasSavedLicence ? 'Licence added' : 'Add license'}</button>}
-              {whatsAppPurpose && <button type="button" disabled={busy === `whatsapp-${order.orderId}`} onClick={(event) => void openWhatsAppNotification(event, order, whatsAppPurpose)} className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#25d366] text-[#014040] shadow-sm transition hover:scale-105 disabled:opacity-50" aria-label={whatsAppLabel} title={whatsAppLabel}><WhatsAppIcon className={`h-5 w-5 ${busy === `whatsapp-${order.orderId}` ? 'animate-pulse' : ''}`} /></button>}
+              <button type="button" disabled={busy === `whatsapp-${order.orderId}`} onClick={(event) => void notifyCustomer(event, order, notificationPurpose, 'whatsapp')} className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#25d366] text-[#014040] shadow-sm transition hover:scale-105 disabled:opacity-50" aria-label={`${notificationLabel} on WhatsApp`} title={`${notificationLabel} on WhatsApp`}><WhatsAppIcon className={`h-5 w-5 ${busy === `whatsapp-${order.orderId}` ? 'animate-pulse' : ''}`} /></button>
+              <button type="button" disabled={!order.email || busy === `email-${order.orderId}`} onClick={(event) => void notifyCustomer(event, order, notificationPurpose, 'email')} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#014040] bg-white text-[#014040] shadow-sm transition hover:bg-[#edf5f3] disabled:opacity-40" aria-label={`${notificationLabel} by email`} title={order.email ? `${notificationLabel} by email` : 'This order has no email address'}><Mail className={`h-4.5 w-4.5 ${busy === `email-${order.orderId}` ? 'animate-pulse' : ''}`} /></button>
               {awaitingMomo && <button type="button" onClick={(event) => openMomoPayment(event, order)} className={primaryButton}>{ADMIN_COPY.orders.recordMomo}</button>}
-            </div>}
+            </div>
             {quickLicenceOpen && <section aria-label={`Add licence for ${order.orderId}`} onClick={(event) => event.stopPropagation()} className="rounded-2xl border border-[#9dbbb5] bg-[#f3faf8] p-4 md:col-span-4">
               <div className="flex items-start justify-between gap-3"><div><h4 className="text-sm font-black text-[#014040]">Add license</h4><p className="mt-1 text-xs text-slate-500">{order.productName} · {order.versionOrPlan}</p></div><button type="button" className="rounded-full p-1 text-slate-500 hover:bg-white" onClick={() => setQuickLicenceOrderId('')} aria-label="Close licence entry"><X className="h-4 w-4" /></button></div>
               <div className="mt-3 rounded-xl border border-[#cbdcd9] bg-white p-3"><p className="text-xs font-bold text-slate-700">Next available licence in stock</p>{nextAvailableLicence ? <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><span className="font-mono text-xs text-slate-600">{nextAvailableLicence.maskedCode}</span><button type="button" disabled={busy === `quick-licence-${order.orderId}`} onClick={(event) => void assignQuickLicence(event, order, nextAvailableLicence.licenceId)} className={primaryButton}><KeyRound className="h-4 w-4" />{busy === `quick-licence-${order.orderId}` ? 'Adding…' : 'Use next available'}</button></div> : <p className="mt-2 text-xs text-amber-700">No available licence is in stock for this version.</p>}</div>
@@ -422,7 +428,7 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
             <div className="mt-6 grid gap-4 rounded-2xl bg-slate-50 p-4 text-sm md:grid-cols-3">
               <div><b>Customer</b><p>{selected.customerName}<br />{selected.phone}<br />{selected.email}</p></div>
               <div><b>Purchase</b><p>{selected.productName}<br />{selected.versionOrPlan} × {selected.quantity || 1}<br />{formatPesewas(selected.amountPesewas)}</p></div>
-              <div><b>Status</b><p>{selected.paymentStatus} · {selected.paymentMethod || 'not recorded'}<br />{bucketLabel[selected.fulfilmentStatus]}<br />{new Date(selected.orderDate).toLocaleString()}</p></div>
+              <div><b>Status</b><p>{selected.paymentStatus} · {selected.paymentMethod || selected.paymentArrangement || 'not recorded'}<br />{bucketLabel[selected.fulfilmentStatus]}<br />{new Date(selected.orderDate).toLocaleString()}</p></div>
               <div className="md:col-span-3"><b>Payment reference</b><p className="break-all font-mono text-xs">{selected.paystackReference || selected.offlinePaymentReference || '—'}</p></div>
               {selected.customerInputValue && <div><b>{effectiveInputType || 'Machine detail'}</b><p className="break-all font-mono text-xs">{selected.customerInputValue}</p></div>}
               {selected.customerInputValue && selected.salesCode && <div><b>Sales ID</b><p className="break-all font-mono text-xs">{selected.salesCode}</p></div>}
@@ -452,6 +458,7 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
                 {activeStep === 'licence' && <div className="rounded-xl bg-slate-50 p-4"><h4 className="font-black">Assign a licence</h4><p className="mt-1 text-xs text-slate-500">For SmartPLS, NVivo and other direct-licence software.</p>{selected.licenceId ? <p className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-800">A licence has already been assigned to this order.</p> : selectedVariant?.autoFulfil && selected.fulfilmentStatus !== 'awaiting-licence' ? <p className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-800">Automatic licence delivery is on. The next key in stock is assigned when payment is confirmed.</p> : <><input className={`${inputClass} mt-3`} placeholder="Optional manual licence key" value={manualKey} onChange={(e) => setManualKey(e.target.value)} /><button className={`${primaryButton} mt-3`} disabled={Boolean(busy) || selected.paymentStatus !== 'paid'} onClick={() => act('assign', `/orders/${selected.orderId}/assign-licence`, manualKey ? { manualKey } : {})}><KeyRound className="h-4 w-4" />{manualKey ? 'Assign licence' : 'Use next key in stock'}</button>{selected.paymentStatus !== 'paid' && <p className="mt-2 text-xs text-slate-500">Save this order as paid before assigning a licence.</p>}</>}</div>}
                 {activeStep === 'finish' && <div className="grid gap-4 sm:grid-cols-2"><label className={labelClass}>Fulfilment status<select className={inputClass} value={workflow.fulfilmentStatus} onChange={(e) => setWorkflow((old) => ({ ...old, fulfilmentStatus: e.target.value as Order['fulfilmentStatus'] }))}>{Object.entries(bucketLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>}
               </div>
+              <div className="mt-5 rounded-2xl border border-[#cbdcd9] bg-[#f8fbfa] p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h4 className="text-sm font-black text-[#014040]">Customer message for this step</h4><p className="mt-1 text-xs text-slate-600">{selectedNotificationLabel}. Every message contains a new secure link to this order.</p></div><div className="flex flex-wrap gap-2"><button type="button" className="inline-flex items-center gap-2 rounded-xl bg-[#25d366] px-3 py-2 text-xs font-black text-[#014040] disabled:opacity-50" disabled={busy === `whatsapp-${selected.orderId}`} onClick={() => void notifyCustomer(null, selected, selectedNotificationPurpose, 'whatsapp')}><WhatsAppIcon className="h-4 w-4" />WhatsApp</button><button type="button" className={secondaryButton} disabled={!selected.email || busy === `email-${selected.orderId}`} onClick={() => void notifyCustomer(null, selected, selectedNotificationPurpose, 'email')}><Mail className="h-4 w-4" />Email</button></div></div></div>
               <div className="mt-5 flex flex-wrap justify-between gap-2"><div className="flex gap-2"><button className={secondaryButton} disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))}>Back</button><button className={secondaryButton} disabled={step >= orderSteps.length - 1} onClick={() => setStep((value) => Math.min(orderSteps.length - 1, value + 1))}>Next / skip</button></div><div className="flex gap-2">{selected.paymentStatus !== 'paid' && <button className="inline-flex items-center gap-2 rounded-xl border border-rose-300 px-3 py-2 text-xs font-black text-rose-700" disabled={Boolean(busy)} onClick={deleteOrder}><Trash2 className="h-4 w-4" />Delete order</button>}<button className={primaryButton} disabled={Boolean(busy)} onClick={saveWorkflow}><Save className="h-4 w-4" />Save workflow</button></div></div>
             </section>
 
@@ -463,7 +470,7 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
               {selected.fulfilmentStatus === 'awaiting-customer-input' && <div className="rounded-2xl border p-4"><button className={secondaryButton} disabled={!!busy} onClick={() => act('nudge', `/orders/${selected.orderId}/nudge`)}><Send className="h-4 w-4" />{ADMIN_COPY.orders.nudgeCustomer}</button></div>}
               {selected.documentPath && !selectedIsTurnitin && <div className="rounded-2xl border p-4"><button className={secondaryButton} disabled={!!busy} onClick={downloadDocument}><Download className="h-4 w-4" />{ADMIN_COPY.orders.downloadDocument}</button></div>}
               <div className="rounded-2xl border p-4"><h4 className="font-black">Email</h4><div className="mt-3 flex flex-wrap gap-2"><button className={secondaryButton} disabled={!!busy} onClick={() => act('receipt', `/orders/${selected.orderId}/resend`, { kind: 'receipt' })}><Send className="h-4 w-4" />{ADMIN_COPY.orders.resendReceipt}</button><button className={secondaryButton} disabled={!!busy} onClick={() => act('delivery', `/orders/${selected.orderId}/resend`, { kind: 'delivery' })}>{ADMIN_COPY.orders.resendDelivery}</button></div></div>
-              {selected.paymentStatus !== 'paid' && <div id={`offline-payment-${selected.orderId}`} className="rounded-2xl border p-4"><h4 className="font-black">{ADMIN_COPY.orders.offlinePayment}</h4><input className={`${inputClass} mt-3`} placeholder={ADMIN_COPY.orders.offlineReference} value={offlineReference} onChange={(e) => setOfflineReference(e.target.value)} /><input className={`${inputClass} mt-2`} placeholder={ADMIN_COPY.orders.offlineReason} value={offlineReason} onChange={(e) => setOfflineReason(e.target.value)} /><button className={`${primaryButton} mt-3`} disabled={!!busy || !offlineReference || !offlineReason} onClick={() => act('offline', `/orders/${selected.orderId}/record-offline-payment`, { reference: offlineReference, reason: offlineReason })}>{ADMIN_COPY.orders.offlinePayment}</button></div>}
+              {selected.paymentStatus !== 'paid' && <div id={`offline-payment-${selected.orderId}`} className="rounded-2xl border p-4 md:col-span-2"><h4 className="font-black">Offline payment status</h4><p className="mt-1 text-xs text-slate-500">Choose whether the customer paid by MoMo or agreed to pay later. Payment later remains unpaid and does not unlock paid-only deliverables.</p><div className="mt-4 grid gap-4 md:grid-cols-2"><div className="rounded-xl border border-[#cbdcd9] bg-[#f8fbfa] p-4"><h5 className="text-sm font-black text-[#014040]">Paid via MoMo</h5><label className={`${labelClass} mt-3 block`}>Transaction ID (optional)<input className={inputClass} placeholder="Enter transaction ID or leave blank" value={offlineReference} onChange={(e) => setOfflineReference(e.target.value)} /></label><button className={`${primaryButton} mt-3 w-full`} disabled={!!busy} onClick={() => act('offline', `/orders/${selected.orderId}/record-offline-payment`, { reference: offlineReference, reason: 'Paid via MoMo' })}>Confirm MoMo payment</button></div><div className="rounded-xl border border-[#cbdcd9] bg-[#f8fbfa] p-4"><h5 className="text-sm font-black text-[#014040]">Payment later</h5><p className="mt-1 text-xs text-slate-500">Record the arrangement now. A reminder date is optional.</p>{!paymentLaterOpen ? <button type="button" className={`${secondaryButton} mt-3 w-full`} onClick={() => setPaymentLaterOpen(true)}>Payment later</button> : <div className="mt-3 space-y-3">{!showReminderDate ? <button type="button" className={`${secondaryButton} w-full`} onClick={() => setShowReminderDate(true)}><CalendarClock className="h-4 w-4" />Set reminder date</button> : <label className={labelClass}>Reminder date<input type="date" className={inputClass} value={reminderDate} onChange={(event) => setReminderDate(event.target.value)} /></label>}<button type="button" className={`${primaryButton} w-full`} disabled={busy === 'payment-later'} onClick={() => void savePaymentLater()}>{reminderDate ? 'Save payment later and reminder' : 'Save payment later without reminder'}</button></div>}{selected.paymentArrangement === 'pay-later' && <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs font-bold text-amber-800">Payment later recorded{selected.paymentReminderDate ? ` · reminder ${selected.paymentReminderDate}` : ' · no reminder date'}.</p>}</div></div></div>}
               <div className="rounded-2xl border p-4"><h4 className="font-black">{ADMIN_COPY.orders.internalNote}</h4><textarea className={`${inputClass} mt-3`} placeholder={ADMIN_COPY.orders.notePlaceholder} value={note} onChange={(e) => setNote(e.target.value)} /><button className={`${secondaryButton} mt-3`} disabled={!!busy || !note.trim()} onClick={async () => { await act('note', `/orders/${selected.orderId}/note`, { text: note }); setNote(''); }}>{ADMIN_COPY.orders.internalNote}</button></div>
             </div>
             {selected.paymentStatus === 'paid' && selected.fulfilmentStatus !== 'ready' && <div className="mt-6 rounded-2xl bg-[#014040] p-4 sm:flex sm:items-center sm:justify-between sm:gap-4"><div><h4 className="font-black text-white">Complete this order</h4><p className="mt-1 text-xs text-white/75">Marks the order fulfilled and emails the customer their next steps.</p></div><button className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-5 py-3 text-sm font-black text-[#014040] hover:bg-[#20f43d] disabled:opacity-50 sm:mt-0 sm:w-auto" disabled={Boolean(busy)} onClick={() => act('fulfil', `/orders/${selected.orderId}/fulfil`, workflow.activationCodeOrKey?.trim() ? { activationCodeOrKey: workflow.activationCodeOrKey } : {})}><Send className="h-4 w-4" />Mark fulfilled and email customer</button></div>}

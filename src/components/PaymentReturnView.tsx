@@ -53,6 +53,14 @@ export const PaymentReturnView: React.FC<{ onDone: (order?: Order) => void }> = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reference]);
 
+  useEffect(() => {
+    if (!reference || confirmed) return;
+    const timer = window.setInterval(() => void check(), 5_000);
+    return () => window.clearInterval(timer);
+    // `check` deliberately reads the current reference from this render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reference, confirmed]);
+
   return (
     <div className="max-w-xl mx-auto px-4 py-10 sm:py-16">
       <div className="rounded-2xl bg-white border border-[#d8e7e4] shadow-xs p-6 sm:p-8 space-y-5">

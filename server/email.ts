@@ -106,6 +106,52 @@ export async function sendSellerRequestAlert(request: CustomerRequest): Promise<
   });
 }
 
+/** Alert the seller as soon as checkout details are submitted, before payment.
+ * The later verified-payment alert remains separate, so an abandoned checkout
+ * is visible without ever being described as paid. */
+export async function sendSellerOrderSubmittedAlert(orders: Order[], totalPesewas: number): Promise<void> {
+  const order = orders[0];
+  if (!order) return;
+  const rows = orders.map((row) => `  ${row.productName} — ${row.versionOrPlan}   ${formatPesewas(row.amountPesewas)}`);
+  await sendSellerAlert({
+    subject: `New order submitted — ${order.orderId} — awaiting payment`,
+    lines: [
+      'A customer submitted their checkout details. Payment has not yet been confirmed.',
+      '',
+      `Order: ${order.orderId}`,
+      `Customer: ${order.customerName}`,
+      `Phone: ${order.phone}`,
+      `Email: ${order.email}`,
+      `Total: ${formatPesewas(totalPesewas)}`,
+      '',
+      ...rows
+    ]
+  });
+}
+
+export async function sendCustomerOrderNotification(order: Order, subject: string, message: string): Promise<void> {
+  if (!order.email) throw new Error('The order has no email address.');
+  await send(order.email, subject, `${message}\n\n${STORE_COPY.brand.name} · ${STORE_COPY.brand.phone}`);
+}
+
+export async function sendSellerPaymentReminder(order: Order): Promise<void> {
+  await sendSellerAlert({
+    subject: `Payment follow-up due — ${order.orderId} — ${order.customerName}`,
+    lines: [
+      'A payment-later reminder is due today.',
+      '',
+      `Order: ${order.orderId}`,
+      `Customer: ${order.customerName}`,
+      `Phone: ${order.phone}`,
+      `Email: ${order.email}`,
+      `Amount: ${formatPesewas(order.amountPesewas)}`,
+      `Reminder date: ${order.paymentReminderDate || ''}`,
+      '',
+      'Contact the customer about payment and update the order in the admin portal.'
+    ]
+  });
+}
+
 /** The WhatsApp deep link, with the order reference already in the message. */
 function whatsAppLink(order: Order): string {
   const text = `Order ${order.orderId} — ${order.productName}. Here is my document.`;

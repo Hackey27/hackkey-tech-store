@@ -538,7 +538,7 @@ export const App: React.FC = () => {
             onRemoveItem={(id) => setCartItems(cartItems.filter((item) => item.id !== id))}
             onClearCart={() => setCartItems([])}
             onContinueShopping={() => setActiveTab('home')}
-            onNavigateToFindOrder={() => setActiveTab('find-order')}
+            onNavigateToFindOrder={(phone, orderId) => { if (phone && orderId) setNextSteps({ phone, orderId }); setActiveTab('find-order'); }}
             paymentOptions={paymentOptions || undefined}
           />
         )}
@@ -551,7 +551,7 @@ export const App: React.FC = () => {
         <AnnouncementModal announcement={catalog.announcement} onClose={() => setAnnouncementOpen(false)} />
       )}
 
-      {buyNowItem && <DirectCheckoutModal item={buyNowItem} paymentOptions={paymentOptions || undefined} onClose={() => setBuyNowItem(null)} />}
+      {buyNowItem && <DirectCheckoutModal item={buyNowItem} paymentOptions={paymentOptions || undefined} onClose={() => setBuyNowItem(null)} onPaymentResolved={(order) => { setBuyNowItem(null); setNextSteps({ phone: order.phone, orderId: order.orderId }); setActiveTab('find-order'); navigate('/'); }} />}
       {pendingBuyNowItem && <DeliveryWindowGate item={pendingBuyNowItem} onCancel={() => setPendingBuyNowItem(null)} onConfirm={() => { setBuyNowItem(pendingBuyNowItem); setPendingBuyNowItem(null); }} />}
 
       {/* Mobile Fixed Bottom Navigation */}

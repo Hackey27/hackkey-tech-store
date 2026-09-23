@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CatalogueItem, Variant, ServiceOption, PublicPaymentOptions } from '../types';
+import { CatalogueItem, Variant, ServiceOption, PublicPaymentOptions, Order } from '../types';
 import { ShoppingBag, Trash2, ChevronRight, Check } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
 import { STORE_COPY } from '../config/storeCopy';
@@ -8,6 +8,7 @@ import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
 import { cartItemToCheckoutItem } from '../utils/checkout';
 import { useBackDismiss } from '../utils/useBackDismiss';
 import { PaymentMethodPanel } from './PaymentMethodPanel';
+import { OrderPaymentWatcher } from './OrderPaymentWatcher';
 
 export interface CartItem {
   id: string;
@@ -26,7 +27,7 @@ interface CartViewProps {
   onRemoveItem: (id: string) => void;
   onClearCart: () => void;
   onContinueShopping: () => void;
-  onNavigateToFindOrder?: () => void;
+  onNavigateToFindOrder?: (phone?: string, orderId?: string) => void;
   paymentOptions?: PublicPaymentOptions;
 }
 
@@ -47,6 +48,7 @@ export const CartView: React.FC<CartViewProps> = ({
   const [orderComplete, setOrderComplete] = useState(false);
   const [submittedItemCount, setSubmittedItemCount] = useState(0);
   const [paymentResult, setPaymentResult] = useState<{ options: PublicPaymentOptions; orderIds: string[]; totalPesewas: number; authorizationUrl?: string } | null>(null);
+  const [paymentResolved, setPaymentResolved] = useState<Order | null>(null);
 
   const totalPesewas = items.reduce((sum, item) => {
     return sum + resolveLinePricePesewas({
@@ -326,23 +328,23 @@ export const CartView: React.FC<CartViewProps> = ({
                 <div className="w-10 h-10 bg-[#0d6520] text-[#05ef28] rounded-full flex items-center justify-center mx-auto">
                   <Check className="w-6 h-6 stroke-[3]" />
                 </div>
-                <div className="font-black text-base text-[#014040]">Order Placed Successfully!</div>
+                <div className="font-black text-base text-[#014040]">{paymentResolved ? paymentResolved.paymentStatus === 'paid' ? STORE_COPY.payment.confirmedTitle : STORE_COPY.payment.deferredTitle : 'Order Placed Successfully!'}</div>
                 <p className="text-slate-700">
-                  Your order has been registered. You can track progress, make payment, and retrieve your licence key anytime using your phone number <strong>{cPhone}</strong>.
+                  {paymentResolved ? paymentResolved.paymentStatus === 'paid' ? STORE_COPY.payment.confirmedDescription : STORE_COPY.payment.deferredDescription : <>Your order has been registered. You can track progress, make payment, and retrieve your licence key anytime using your phone number <strong>{cPhone}</strong>.</>}
                 </p>
                 {createdOrderIds.length > 0 && (
                   <div className="font-mono text-xs font-bold text-[#014040] bg-white/70 py-1.5 px-3 rounded-lg">
                     Order Ref: {createdOrderIds.join(', ')}
                   </div>
                 )}
-                {paymentResult && <div className="pt-2 text-left"><PaymentMethodPanel options={paymentResult.options} orderIds={paymentResult.orderIds} totalPesewas={paymentResult.totalPesewas} authorizationUrl={paymentResult.authorizationUrl} /></div>}
+                {paymentResult && !paymentResolved && <div className="space-y-3 pt-2 text-left"><PaymentMethodPanel options={paymentResult.options} orderIds={paymentResult.orderIds} totalPesewas={paymentResult.totalPesewas} authorizationUrl={paymentResult.authorizationUrl} /><OrderPaymentWatcher orderId={paymentResult.orderIds[0]} onResolved={setPaymentResolved} /></div>}
                 {onNavigateToFindOrder && (
                   <button
                     type="button"
-                    onClick={onNavigateToFindOrder}
+                    onClick={() => onNavigateToFindOrder(cPhone, paymentResolved?.orderId || createdOrderIds[0])}
                     className="w-full py-2.5 px-4 bg-[#014040] hover:bg-[#025656] text-white font-black text-xs rounded-xl transition-all cursor-pointer shadow-2xs"
                   >
-                    Track in Find My Order
+                    {paymentResolved ? STORE_COPY.payment.seeNextSteps : 'Track in Find My Order'}
                   </button>
                 )}
               </div>
