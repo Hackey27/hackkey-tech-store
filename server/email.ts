@@ -16,6 +16,10 @@ import { STORE_COPY } from '../src/config/storeCopy';
 
 const API_BASE = process.env.MAIL_API_BASE || 'https://api.resend.com';
 
+export interface MailReceipt {
+  providerId?: string;
+}
+
 function apiKey(): string | undefined {
   return process.env.MAIL_PROVIDER_API_KEY || undefined;
 }
@@ -46,7 +50,19 @@ export function mailConfigured(): boolean {
   return Boolean(apiKey());
 }
 
-async function send(to: string, subject: string, text: string): Promise<void> {
+function retryDelay(response: Response, attempt: number): number {
+  const retryAfter = Number(response.headers.get('retry-after'));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) return Math.min(retryAfter * 1000, 3_000);
+  return attempt === 0 ? 250 : 750;
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+/** Retry transient failures with one idempotency key so recovery never sends
+ * the same alert twice. */
+async function send(to: string, subject: string, text: string, idempotencyKey?: string): Promise<MailReceipt> {
   const key = apiKey();
   if (!key) {
     // Not configured is not a crash: log it so it is visible, and let the
@@ -54,43 +70,62 @@ async function send(to: string, subject: string, text: string): Promise<void> {
     throw new Error('MAIL_PROVIDER_API_KEY is not configured.');
   }
 
-  const res = await fetch(`${API_BASE}/emails`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      from: fromAddress(),
-      reply_to: replyToAddress(),
-      to: [to],
-      subject,
-      text
-    })
-  });
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const res = await fetch(`${API_BASE}/emails`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey.slice(0, 256) } : {})
+        },
+        body: JSON.stringify({
+          from: fromAddress(),
+          reply_to: replyToAddress(),
+          to: [to],
+          subject,
+          text
+        })
+      });
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Mail send failed: ${res.status} ${body.slice(0, 200)}`);
+      if (res.ok) {
+        const body = await res.json().catch(() => ({})) as { id?: string };
+        console.info(`[MAIL] Provider accepted ${idempotencyKey || 'message'}${body.id ? ` (${body.id})` : ''}.`);
+        return { providerId: body.id };
+      }
+
+      const body = await res.text().catch(() => '');
+      const error = new Error(`Mail send failed: ${res.status} ${body.slice(0, 200)}`);
+      if (res.status !== 429 && res.status < 500) throw error;
+      lastError = error;
+      if (attempt < 2) await wait(retryDelay(res, attempt));
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await wait(attempt === 0 ? 250 : 750);
+    }
   }
+  throw lastError instanceof Error ? lastError : new Error('Mail send failed after retries.');
 }
 
 export async function sendSellerAlert(alert: {
   subject: string;
   lines: string[];
-}): Promise<void> {
+  idempotencyKey?: string;
+}): Promise<MailReceipt> {
   const to = sellerAddress();
   if (!to) throw new Error('SELLER_ALERT_EMAIL is not configured.');
-  await send(to, alert.subject, alert.lines.join('\n'));
+  return send(to, alert.subject, alert.lines.join('\n'), alert.idempotencyKey);
 }
 
-export async function sendSellerRequestAlert(request: CustomerRequest): Promise<void> {
+export async function sendSellerRequestAlert(request: CustomerRequest): Promise<MailReceipt> {
   const detailLines = Object.entries(request.details || {}).map(([key, value]) => {
     const rendered = typeof value === 'string' ? value : JSON.stringify(value);
     return `${key}: ${rendered || ''}`;
   });
-  await sendSellerAlert({
-    subject: `New ${request.kind.replaceAll('-', ' ')} request — ${request.customerName}`,
+  return sendSellerAlert({
+    subject: `Action needed: new ${request.kind.replaceAll('-', ' ')} — ${request.customerName}`,
+    idempotencyKey: `seller-request-submitted/${request.requestId}`,
     lines: [
       'A new storefront request has been submitted.',
       '',
@@ -109,12 +144,13 @@ export async function sendSellerRequestAlert(request: CustomerRequest): Promise<
 /** Alert the seller as soon as checkout details are submitted, before payment.
  * The later verified-payment alert remains separate, so an abandoned checkout
  * is visible without ever being described as paid. */
-export async function sendSellerOrderSubmittedAlert(orders: Order[], totalPesewas: number): Promise<void> {
+export async function sendSellerOrderSubmittedAlert(orders: Order[], totalPesewas: number): Promise<MailReceipt> {
   const order = orders[0];
-  if (!order) return;
+  if (!order) return {};
   const rows = orders.map((row) => `  ${row.productName} — ${row.versionOrPlan}   ${formatPesewas(row.amountPesewas)}`);
-  await sendSellerAlert({
-    subject: `New order submitted — ${order.orderId} — awaiting payment`,
+  return sendSellerAlert({
+    subject: `Action needed: new checkout — ${order.orderId} — payment pending`,
+    idempotencyKey: `seller-order-submitted/${order.orderId}`,
     lines: [
       'A customer submitted their checkout details. Payment has not yet been confirmed.',
       '',

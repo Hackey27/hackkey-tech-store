@@ -439,6 +439,17 @@ export async function createOrders(request: CheckoutRequest): Promise<Order[]> {
     }
   }
 
+  // Only the primary row carries the cart-level alert state. This keeps a
+  // multi-item checkout from producing one seller email per line.
+  if (orders[0]) {
+    orders[0].sellerSubmissionAlertStatus = 'pending';
+    orders[0].sellerSubmissionAlertAttempts = 0;
+    await db.collection(COLLECTIONS.orders).doc(orders[0].orderId).update({
+      sellerSubmissionAlertStatus: 'pending',
+      sellerSubmissionAlertAttempts: 0
+    });
+  }
+
   return orders;
 }
 
@@ -816,12 +827,70 @@ export async function createRequest(
     email: payload.email?.trim(),
     status: 'new',
     notes: payload.notes,
-    details: payload.details
+    details: payload.details,
+    sellerSubmissionAlertStatus: 'pending',
+    sellerSubmissionAlertAttempts: 0
   };
 
-  await db.collection(COLLECTIONS.requests).doc(request.requestId).set(request);
-  await sendSellerRequestAlert(request).catch((error) => console.error(`[MAIL] Request alert failed for ${request.requestId}:`, error));
-  return request;
+  const ref = db.collection(COLLECTIONS.requests).doc(request.requestId);
+  await ref.set(request);
+  try {
+    const receipt = await sendSellerRequestAlert(request);
+    const sentAt = nowIso();
+    await ref.update({
+      sellerSubmissionAlertStatus: 'sent',
+      sellerSubmissionAlertSentAt: sentAt,
+      sellerSubmissionAlertProviderId: receipt.providerId || null,
+      sellerSubmissionAlertError: null,
+      sellerSubmissionAlertAttempts: 1
+    });
+    Object.assign(request, {
+      sellerSubmissionAlertStatus: 'sent',
+      sellerSubmissionAlertSentAt: sentAt,
+      sellerSubmissionAlertProviderId: receipt.providerId,
+      sellerSubmissionAlertAttempts: 1
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[MAIL] Request alert failed for ${request.requestId}:`, error);
+    await ref.update({
+      sellerSubmissionAlertStatus: 'failed',
+      sellerSubmissionAlertError: message.slice(0, 500),
+      sellerSubmissionAlertAttempts: 1
+    }).catch(() => undefined);
+    Object.assign(request, {
+      sellerSubmissionAlertStatus: 'failed',
+      sellerSubmissionAlertError: message.slice(0, 500),
+      sellerSubmissionAlertAttempts: 1
+    });
+  }
+  const {
+    sellerSubmissionAlertStatus: _sellerSubmissionAlertStatus,
+    sellerSubmissionAlertSentAt: _sellerSubmissionAlertSentAt,
+    sellerSubmissionAlertProviderId: _sellerSubmissionAlertProviderId,
+    sellerSubmissionAlertError: _sellerSubmissionAlertError,
+    sellerSubmissionAlertAttempts: _sellerSubmissionAlertAttempts,
+    ...publicRequest
+  } = request;
+  return publicRequest as CustomerRequest;
+}
+
+export async function recordOrderSubmissionAlert(
+  orderId: string,
+  result: { status: 'pending' | 'sent' | 'failed'; providerId?: string; error?: string; incrementAttempt?: boolean }
+): Promise<void> {
+  const ref = getFirestore().collection(COLLECTIONS.orders).doc(orderId);
+  const snap = await ref.get();
+  if (!snap.exists) return;
+  const current = snap.data() as Order;
+  await ref.update({
+    sellerSubmissionAlertStatus: result.status,
+    sellerSubmissionAlertSentAt: result.status === 'sent' ? nowIso() : current.sellerSubmissionAlertSentAt || null,
+    sellerSubmissionAlertProviderId: result.providerId || current.sellerSubmissionAlertProviderId || null,
+    sellerSubmissionAlertError: result.error ? result.error.slice(0, 500) : null,
+    sellerSubmissionAlertAttempts: (current.sellerSubmissionAlertAttempts || 0) + (result.incrementAttempt ? 1 : 0),
+    lastUpdated: nowIso()
+  });
 }
 
 export async function listRequests(): Promise<CustomerRequest[]> {

@@ -17,6 +17,11 @@ export function publicOrder(order: Order): Order {
     paymentReminderSentAt: _paymentReminderSentAt,
     paymentReminderProcessingAt: _paymentReminderProcessingAt,
     paymentReminderPrimary: _paymentReminderPrimary,
+    sellerSubmissionAlertStatus: _sellerSubmissionAlertStatus,
+    sellerSubmissionAlertSentAt: _sellerSubmissionAlertSentAt,
+    sellerSubmissionAlertProviderId: _sellerSubmissionAlertProviderId,
+    sellerSubmissionAlertError: _sellerSubmissionAlertError,
+    sellerSubmissionAlertAttempts: _sellerSubmissionAlertAttempts,
     ...safe
   } = order;
   return {

@@ -468,6 +468,13 @@ export interface Order {
   paymentReminderSentAt?: string;
   paymentReminderProcessingAt?: string;
   paymentReminderPrimary?: boolean;
+  /** Delivery state for the seller's pre-payment alert. Keeping this separate
+   * from the customer receipt makes a missed lead visible and retryable. */
+  sellerSubmissionAlertStatus?: 'pending' | 'sent' | 'failed';
+  sellerSubmissionAlertSentAt?: string;
+  sellerSubmissionAlertProviderId?: string;
+  sellerSubmissionAlertError?: string;
+  sellerSubmissionAlertAttempts?: number;
   fulfilmentStatus: FulfilmentStatus;
   fulfilmentType?: string;
   fulfilmentMethod?: FulfilmentMethod;
@@ -580,6 +587,13 @@ export interface CustomerRequest {
   notes?: string;
   /** Everything specific to this kind of request. */
   details: Record<string, unknown>;
+  /** Seller notification state. Failed sends are retried by the authenticated
+   * scheduler rather than silently disappearing. */
+  sellerSubmissionAlertStatus?: 'pending' | 'sent' | 'failed';
+  sellerSubmissionAlertSentAt?: string;
+  sellerSubmissionAlertProviderId?: string;
+  sellerSubmissionAlertError?: string;
+  sellerSubmissionAlertAttempts?: number;
 }
 
 // ==========================================

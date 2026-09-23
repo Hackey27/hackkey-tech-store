@@ -15,6 +15,7 @@ import {
   markDocumentUploadPending,
   normalisePhone,
   recordCheckoutMode,
+  recordOrderSubmissionAlert,
   recordPaystackReference,
   saveServiceAnswers,
   submitCustomerInput
@@ -46,6 +47,7 @@ import { getPublicPaymentOptions, paymentModeUsesPaystack } from './server/payme
 import { sendSellerOrderSubmittedAlert } from './server/email';
 import { sendDuePaymentReminders } from './server/paymentReminders';
 import { requireTaskCaller } from './server/taskAuth';
+import { retryFailedSubmissionAlerts } from './server/submissionAlerts';
 
 // Cloud Run injects PORT (8080 by default); 3000 keeps local dev unchanged.
 const PORT = Number(process.env.PORT) || 3000;
@@ -209,7 +211,11 @@ async function startServer() {
   // seller email; the caller service account and audience are both verified.
   app.post('/api/tasks/payment-reminders', requireTaskCaller, async (_req: Request, res: Response) => {
     try {
-      res.json(await sendDuePaymentReminders());
+      const [paymentReminders, submissionAlerts] = await Promise.all([
+        sendDuePaymentReminders(),
+        retryFailedSubmissionAlerts()
+      ]);
+      res.json({ paymentReminders, submissionAlerts });
     } catch (err) {
       failed(res, err, 'Failed to process payment reminders');
     }
@@ -344,8 +350,17 @@ async function startServer() {
 
       // A submitted checkout and a confirmed online payment are deliberately
       // separate seller alerts. This first message never says the order is paid.
-      await sendSellerOrderSubmittedAlert(orders, totalPesewas).catch((error) => {
+      await sendSellerOrderSubmittedAlert(orders, totalPesewas).then(async (receipt) => {
+        await recordOrderSubmissionAlert(primary.orderId, {
+          status: 'sent', providerId: receipt.providerId, incrementAttempt: true
+        });
+      }).catch(async (error) => {
         console.error(`[MAIL] New-order alert failed for ${primary.orderId}:`, error);
+        await recordOrderSubmissionAlert(primary.orderId, {
+          status: 'failed',
+          error: error instanceof Error ? error.message : String(error),
+          incrementAttempt: true
+        }).catch(() => undefined);
       });
 
       if (!paymentModeUsesPaystack(paymentOptions.mode)) {
