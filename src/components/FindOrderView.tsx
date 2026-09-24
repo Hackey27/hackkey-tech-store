@@ -28,7 +28,7 @@ import { FulfilmentTimeNotice } from './FulfilmentTimeNotice';
 import { PaymentMethodPanel } from './PaymentMethodPanel';
 import { OrderPaymentWatcher } from './OrderPaymentWatcher';
 import { InstallationGuide } from './InstallationGuide';
-import { installationGuideForOrder } from '../data/installationGuides';
+import { DEFAULT_INSTALLATION_BUTTON_LABEL, installationGuideForOrder } from '../data/installationGuides';
 
 /** The stored statuses are kebab-case; these are what the customer reads. */
 const FULFILMENT_LABELS: Record<string, string> = {
@@ -140,11 +140,12 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
   useEffect(() => {
     if (!focusOrderId || autoOpenedGuide.current === focusOrderId) return;
     const focused = orders.find((candidate) => candidate.orderId === focusOrderId);
-    if (focused && installationGuideForOrder(focused)) {
+    const product = catalogItems.find((item) => item.itemId === focused?.productId || item.name === focused?.productName);
+    if (focused && installationGuideForOrder(focused, product)) {
       autoOpenedGuide.current = focusOrderId;
       setGuideOpenOrderId(focusOrderId);
     }
-  }, [focusOrderId, orders]);
+  }, [focusOrderId, orders, catalogItems]);
 
   const refreshGuideOrder = async (order: Order): Promise<Order> => {
     const url = sharedOrderId === order.orderId && sharedAccessToken
@@ -384,7 +385,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
                     />
                   </div>
 
-                  {installationGuideForOrder(order) && <button type="button" onClick={() => setGuideOpenOrderId(order.orderId)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#014040] px-5 py-3 text-sm font-black text-white hover:bg-[#025656]"><BookOpen className="h-4 w-4" />Open installation steps</button>}
+                  {installationGuideForOrder(order, catalogueItem) && <div className="space-y-2"><button type="button" onClick={() => setGuideOpenOrderId(order.orderId)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(110deg,#014040_0%,#014040_35%,#00d082_100%)] px-5 py-3 text-sm font-black text-white shadow-sm transition-[filter,transform] hover:brightness-110 active:scale-[0.99]"><BookOpen className="h-4 w-4 shrink-0" />{catalogueItem?.installationButtonLabel?.trim() || DEFAULT_INSTALLATION_BUTTON_LABEL}</button><p className="text-center text-xs leading-5 text-slate-600 sm:hidden">We recommend following these steps on the computer where the software is being installed.</p></div>}
 
                   {!isTurnitin && order.paymentStatus === 'paid' && order.fulfilmentStatus !== 'ready' && order.showDeliveryNotice !== false && <FulfilmentTimeNotice kind={/account/i.test(order.fulfilmentType || '') ? 'account' : 'licence'} />}
 
@@ -586,7 +587,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
                                 <Download className="w-3.5 h-3.5 text-[#014040]" />
                                 <span>Download Software</span>
                               </a>}
-                              {order.guideUrl && <a
+                              {order.guideUrl && catalogueItem?.showInstallationGuideFallback === true && <a
                                 href={order.guideUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -635,6 +636,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
       )}
       {guideOpenOrderId && orders.find((order) => order.orderId === guideOpenOrderId) && <InstallationGuide
         order={orders.find((order) => order.orderId === guideOpenOrderId)!}
+        product={catalogItems.find((item) => item.itemId === orders.find((order) => order.orderId === guideOpenOrderId)?.productId || item.name === orders.find((order) => order.orderId === guideOpenOrderId)?.productName)}
         onClose={() => setGuideOpenOrderId(null)}
         onOrderUpdated={(updated) => setOrders((previous) => previous.map((candidate) => candidate.orderId === updated.orderId ? updated : candidate))}
         onRefresh={() => refreshGuideOrder(orders.find((order) => order.orderId === guideOpenOrderId)!)}

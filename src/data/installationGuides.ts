@@ -1,25 +1,16 @@
-import type { Order } from '../types';
+import type { CatalogueItem, InstallationGuideConfig, InstallationGuideStepConfig, Order, Product } from '../types';
 
-export interface GuideImage {
-  src: string;
-  alt: string;
-  markers?: Array<{ x: number; y: number; label: string }>;
-}
-
-export interface GuideStep {
-  title: string;
-  body: string;
-  kind?: 'download' | 'command' | 'licence' | 'customer-input';
-  optional?: boolean;
-  images?: GuideImage[];
-}
+export interface GuideStep extends InstallationGuideStepConfig {}
 
 export interface InstallationGuideDefinition {
   id: string;
   title: string;
+  caption?: string;
   steps: GuideStep[];
   command?: string;
 }
+
+export const DEFAULT_INSTALLATION_BUTTON_LABEL = 'Open installation and activation steps';
 
 const asset = (guide: string, image: string) => `/installation-guides/${guide}/${image}`;
 const mark = (x: number, y: number, label: string) => ({ x, y, label });
@@ -42,8 +33,8 @@ const smartPlsWindows: InstallationGuideDefinition = {
   ]
 };
 
-function smartPlsMac(order: Order): InstallationGuideDefinition {
-  const older = /(?:4\.1\.1\.6|4\.11\.6|4116)/.test(order.versionOrPlan);
+function smartPlsMac(versionOrPlan: string): InstallationGuideDefinition {
+  const older = /(?:4\.1\.1\.6|4\.11\.6|4116)/.test(versionOrPlan);
   const command = older ? 'curl smartpls.app/4116 | bash' : 'curl smartpls.app | bash';
   return {
     id: 'smartpls-mac',
@@ -181,14 +172,34 @@ const mplusWindows: InstallationGuideDefinition = {
   ]
 };
 
-export function installationGuideForOrder(order: Order): InstallationGuideDefinition | null {
-  if (order.paymentStatus !== 'paid' || order.macViaParallels) return null;
-  const identity = `${order.productId || ''} ${order.productName}`.toLowerCase();
-  const mac = /mac|os x/i.test(order.deliveryOs);
-  if (/smart\s?pls|\bpls\b/.test(identity)) return mac ? smartPlsMac(order) : smartPlsWindows;
+function builtInGuide(identity: string, mac: boolean, versionOrPlan: string): InstallationGuideDefinition | null {
+  if (/smart\s?pls|\bpls\b/.test(identity)) return mac ? smartPlsMac(versionOrPlan) : smartPlsWindows;
   if (/nvivo|\bnv\b/.test(identity)) return mac ? nvivoMac : nvivoWindows;
   if (/spss/.test(identity) && !/amos/.test(identity)) return mac ? spssMac : spssWindows;
   if (/amos/.test(identity) && !mac) return amosWindows;
   if (/m\s?plus/.test(identity) && !mac) return mplusWindows;
   return null;
+}
+
+/** Starting text shown in Category setup for the bundled software guides. */
+export function defaultInstallationGuideForProduct(product: Pick<Product, 'productId' | 'productName' | 'variants'>, os: 'windows' | 'macos'): InstallationGuideConfig | null {
+  const mac = os === 'macos';
+  const version = product.variants.find((variant) => /mac/i.test(variant.os) === mac)?.versionOrPlan || product.variants[0]?.versionOrPlan || '';
+  const builtIn = builtInGuide(`${product.productId} ${product.productName}`.toLowerCase(), mac, version);
+  return builtIn ? { title: builtIn.title, caption: 'Follow each step on the computer where you are installing the software.', steps: structuredClone(builtIn.steps) } : null;
+}
+
+export function installationGuideForOrder(order: Order, product?: Pick<CatalogueItem, 'installationGuides'>): InstallationGuideDefinition | null {
+  if (order.paymentStatus !== 'paid' || order.macViaParallels) return null;
+  const mac = /mac|os x/i.test(order.deliveryOs);
+  const builtIn = builtInGuide(`${order.productId || ''} ${order.productName}`.toLowerCase(), mac, order.versionOrPlan);
+  const custom = product?.installationGuides?.[mac ? 'macos' : 'windows'];
+  if (!custom?.steps?.length) return builtIn;
+  return {
+    id: builtIn?.id || `custom-${order.productId}-${mac ? 'macos' : 'windows'}`,
+    title: custom.title?.trim() || builtIn?.title || `Install ${order.productName}`,
+    caption: custom.caption?.trim() || undefined,
+    steps: custom.steps,
+    command: builtIn?.command
+  };
 }

@@ -28,6 +28,7 @@ import { getPricingConfig, persistPricingConfig } from './pricingConfig';
 import { resolvedDeliveryNotice } from './deliveryNotice';
 import { newestOrderFirst } from '../src/utils/orderSorting';
 import { getPaymentSettings } from './paymentSettings';
+import { cleanProductInstallationSettings } from '../src/utils/installationGuideConfig';
 
 const now = () => new Date().toISOString();
 const id = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -600,6 +601,7 @@ export async function saveProductConfiguration(productId: string, input: Product
     productId,
     productName: input.productName.trim(),
     licenceTerm: input.licenceTerm?.trim() || undefined,
+    ...cleanProductInstallationSettings(input),
     variants: (input.variants || []).map((variant) => ({
       ...variant,
       customerInputRequired: variant.customerInputRequired?.trim() || undefined,

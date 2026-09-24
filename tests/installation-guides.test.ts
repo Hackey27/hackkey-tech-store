@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Order } from '../src/types';
-import { installationGuideForOrder } from '../src/data/installationGuides';
+import type { Order, Product } from '../src/types';
+import { defaultInstallationGuideForProduct, installationGuideForOrder } from '../src/data/installationGuides';
+import { cleanProductInstallationSettings } from '../src/utils/installationGuideConfig';
 
 const order = (patch: Partial<Order> = {}): Order => ({
   orderId: 'HKT-GUIDE-1',
@@ -61,4 +62,31 @@ test('Mplus uses the Windows Hardware ID workflow and does not show a Mac guide'
   assert.equal(guide?.steps.filter((step) => step.kind === 'customer-input').length, 1);
   assert.ok(guide!.steps.findIndex((step) => step.kind === 'licence') > guide!.steps.findIndex((step) => step.kind === 'customer-input'));
   assert.equal(installationGuideForOrder({ ...mplus, deliveryOs: 'macOS' }), null);
+});
+
+test('product-level editable steps override the bundled guide for the matching OS only', () => {
+  const custom = {
+    installationGuides: {
+      windows: { title: 'Custom Windows guide', caption: 'Use this computer.', steps: [{ title: 'Open setup', body: 'Start here.', actionLabel: 'Open support', actionUrl: 'https://example.com/support' }] }
+    }
+  };
+  const windows = installationGuideForOrder(order({ deliveryOs: 'Windows' }), custom);
+  assert.equal(windows?.title, 'Custom Windows guide');
+  assert.equal(windows?.caption, 'Use this computer.');
+  assert.equal(windows?.steps[0].actionLabel, 'Open support');
+  assert.equal(installationGuideForOrder(order(), custom)?.id, 'smartpls-mac');
+  assert.equal(installationGuideForOrder(order({ productId: 'NEW', productName: 'New software', deliveryOs: 'Windows' }), custom)?.steps[0].title, 'Open setup');
+});
+
+test('admin starts with the existing OS guide and rejects incomplete or unsafe step links', () => {
+  const product = { productId: 'SPSS', productName: 'SPSS Statistics', variants: [] } as unknown as Product;
+  assert.equal(defaultInstallationGuideForProduct(product, 'windows')?.steps[0].kind, 'download');
+  assert.equal(defaultInstallationGuideForProduct(product, 'macos')?.steps[0].kind, 'download');
+  const guide = { title: 'Install SPSS', steps: [{ title: 'Start', body: 'Read this.', actionLabel: 'Open', actionUrl: 'javascript:alert(1)' }] };
+  assert.throws(() => cleanProductInstallationSettings({ ...product, installationGuides: { windows: guide } }), /HTTPS URL/);
+  assert.throws(() => cleanProductInstallationSettings({ ...product, installationGuides: { windows: { ...guide, steps: [{ title: 'Start', body: 'Read this.', actionLabel: 'Open' }] } } }), /both a button label and link/);
+  const settings = cleanProductInstallationSettings({ ...product, installationButtonLabel: '  Begin setup  ', installationGuides: { windows: { ...guide, steps: [{ title: 'Start', body: 'Read this.', actionLabel: 'Open', actionUrl: 'https://example.com/setup' }] } } });
+  assert.equal(settings.installationButtonLabel, 'Begin setup');
+  assert.equal(settings.showInstallationGuideFallback, false);
+  assert.equal(settings.installationGuides?.windows?.steps[0].actionUrl, 'https://example.com/setup');
 });

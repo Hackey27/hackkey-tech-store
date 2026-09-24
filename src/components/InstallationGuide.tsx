@@ -1,17 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookOpen, Check, Copy, Download, RefreshCw, X } from 'lucide-react';
-import type { Order } from '../types';
+import type { CatalogueItem, Order } from '../types';
 import { installationGuideForOrder } from '../data/installationGuides';
 
 interface Props {
   order: Order;
+  product?: Pick<CatalogueItem, 'installationGuides'>;
   onClose: () => void;
   onOrderUpdated: (order: Order) => void;
   onRefresh: () => Promise<Order>;
 }
 
-export function InstallationGuide({ order, onClose, onOrderUpdated, onRefresh }: Props) {
-  const guide = useMemo(() => installationGuideForOrder(order), [order]);
+export function InstallationGuide({ order, product, onClose, onOrderUpdated, onRefresh }: Props) {
+  const guide = useMemo(() => installationGuideForOrder(order, product), [order, product]);
   const storageKey = `hkt-install-guide:${order.orderId}:${guide?.id || 'none'}`;
   const [position, setPosition] = useState(() => {
     try { return Number(window.localStorage.getItem(storageKey) || 0); } catch { return 0; }
@@ -85,6 +86,7 @@ export function InstallationGuide({ order, onClose, onOrderUpdated, onRefresh }:
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-wide text-[#047857]">{order.productName} · {order.versionOrPlan} · {order.deliveryOs}</p>
             <h2 className="mt-1 text-xl font-black text-[#014040] sm:text-2xl">{guide.title}</h2>
+            {guide.caption && <p className="mt-1 text-sm leading-5 text-slate-600">{guide.caption}</p>}
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100" aria-label="Close installation guide"><X className="h-5 w-5" /></button>
         </div>
@@ -144,6 +146,8 @@ export function InstallationGuide({ order, onClose, onOrderUpdated, onRefresh }:
                   <button type="button" disabled={busy || !inputValue.trim()} onClick={() => void submitInput()} className="mt-3 rounded-xl bg-[#014040] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">Submit {order.customerInputType || 'code'}</button>
                 </>}
               </div>}
+
+              {step.actionLabel && step.actionUrl && <a href={step.actionUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-[#014040] px-5 py-3 text-sm font-bold text-white hover:bg-[#025656]">{step.actionLabel}<ArrowRight className="h-4 w-4" /></a>}
 
               {step.images?.map((picture) => <figure key={picture.src} className="overflow-hidden rounded-xl border border-[#d8e7e4] bg-slate-50 p-2">
                 <div className="relative mx-auto w-fit max-w-full">

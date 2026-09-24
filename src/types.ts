@@ -18,6 +18,24 @@ export type MachineCodeType = 'lock-code' | 'hardware-id' | 'none' | 'service' |
  *  all appear in the catalogue; the frontend renders them by `kind`. */
 export type CatalogueItemKind = 'product' | 'bundle' | 'service' | 'laptop';
 
+/** Customer-facing, product-wide installation steps. Separate OS guides can
+ * be edited without changing the version-specific download/licence URLs. */
+export interface InstallationGuideStepConfig {
+  title: string;
+  body: string;
+  kind?: 'download' | 'command' | 'licence' | 'customer-input';
+  optional?: boolean;
+  images?: Array<{ src: string; alt: string; markers?: Array<{ x: number; y: number; label: string }> }>;
+  actionLabel?: string;
+  actionUrl?: string;
+}
+
+export interface InstallationGuideConfig {
+  title: string;
+  caption?: string;
+  steps: InstallationGuideStepConfig[];
+}
+
 // ==========================================
 // Categories
 // ==========================================
@@ -104,6 +122,12 @@ export interface Product {
   /** Optional product-wide term displayed beside the software name. This is
    * deliberately not stored on a version because it applies to the title as a whole. */
   licenceTerm?: string;
+  /** Label for the interactive guide button on the customer's paid order. */
+  installationButtonLabel?: string;
+  /** Product-wide guides, split by operating system; version URLs stay on variants. */
+  installationGuides?: { windows?: InstallationGuideConfig; macos?: InstallationGuideConfig };
+  /** Show the older external installation-guide link beneath the order resources. */
+  showInstallationGuideFallback?: boolean;
   categoryId: string;
   description?: string;
   defaultContact?: string;
@@ -304,6 +328,9 @@ export interface CatalogueItem {
   name: string;
   /** Software-only product-wide licence term, omitted when the admin leaves it blank. */
   licenceTerm?: string;
+  installationButtonLabel?: string;
+  installationGuides?: Product['installationGuides'];
+  showInstallationGuideFallback?: boolean;
   categoryId: string;
   description?: string;
   imageUrl?: string;

@@ -31,7 +31,7 @@ import {
   X
 } from 'lucide-react';
 import { ADMIN_COPY } from '../config/storeCopy';
-import { Announcement, Bundle, Category, CustomerNotificationPurpose, CustomerRequest, Laptop as LaptopType, Order, PricingConfig, Product, Service, ServiceField, ServiceFieldType, ServiceOption, Variant } from '../types';
+import { Announcement, Bundle, Category, CustomerNotificationPurpose, CustomerRequest, InstallationGuideConfig, InstallationGuideStepConfig, Laptop as LaptopType, Order, PricingConfig, Product, Service, ServiceField, ServiceFieldType, ServiceOption, Variant } from '../types';
 import { formatPesewas } from '../utils/money';
 import { defaultCustomerInputType, defaultDeliveryCodeType, effectiveActivationWebsiteUrl } from '../utils/softwareFulfilment';
 import { AnnouncementModal } from '../components/AnnouncementModal';
@@ -46,6 +46,7 @@ import { newestOrderFirst } from '../utils/orderSorting';
 import { adminOrderMatchesSearch } from '../utils/adminOrderSearch';
 import { adminSignInWaitSeconds, afterFailedAdminSignIn, EMPTY_ADMIN_SIGN_IN_THROTTLE, AdminSignInThrottleState } from '../utils/adminSignInThrottle';
 import { notificationActionLabel, notificationPurposeForOrder } from '../utils/orderNotification';
+import { DEFAULT_INSTALLATION_BUTTON_LABEL, defaultInstallationGuideForProduct } from '../data/installationGuides';
 
 type Section = 'orders' | 'requests' | 'categories' | 'services' | 'announcements' | 'landing' | 'pricing' | 'payments';
 
@@ -990,6 +991,46 @@ function CategorySetupEditor({ category, media, user, reload }: { category: Cate
   return <div className="space-y-5"><section className="space-y-4 rounded-2xl border bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">Category card</p><h3 className="text-xl font-black text-[#014040]">{draft.name}</h3></div><button className={primaryButton} disabled={busy} onClick={save}><Save className="h-4 w-4" />Save category</button></div><PublishedControl checked={draft.active} onChange={(value) => set('active', value)} /><div className="grid gap-3 sm:grid-cols-2"><label className={labelClass}>Category name<input className={inputClass} value={draft.name} onChange={(e) => set('name', e.target.value)} /></label><label className={labelClass}>Icon label / fallback<input className={inputClass} value={draft.icon} onChange={(e) => set('icon', e.target.value)} /></label><label className={`${labelClass} sm:col-span-2`}>Tagline<input className={inputClass} value={draft.tagline} onChange={(e) => set('tagline', e.target.value)} /></label><label className={labelClass}>Display order<input className={inputClass} type="number" min="0" value={draft.sortOrder} onChange={(e) => set('sortOrder', Number(e.target.value))} /></label></div>{message && <p className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}</section><SetupMediaEditor media={media} user={user} reload={reload} /></div>;
 }
 
+function InstallationStepsEditor({ product, onChange }: { product: Product; onChange: (guides: Product['installationGuides']) => void }) {
+  const [expanded, setExpanded] = useState({ windows: Boolean(product.installationGuides?.windows), macos: Boolean(product.installationGuides?.macos) });
+  const updateGuide = (os: 'windows' | 'macos', guide: InstallationGuideConfig | undefined) => onChange({
+    ...product.installationGuides,
+    [os]: guide
+  });
+  const starter = (os: 'windows' | 'macos'): InstallationGuideConfig => ({
+    title: `Install and activate ${product.productName} on ${os === 'windows' ? 'Windows' : 'macOS'}`,
+    caption: 'Follow each step on the computer where you are installing the software.',
+    steps: [{ title: 'Download software', body: 'Download the installer for your order, then continue.', kind: 'download' }]
+  });
+  return <section className="space-y-4 rounded-2xl border bg-white p-5">
+    <div><h3 className="text-lg font-black text-[#014040]">Interactive installation and activation steps</h3><p className="mt-1 text-xs leading-5 text-slate-600">These instructions apply to this software across its versions. Windows and macOS can have different steps; each order still uses its own version-specific download and learning links.</p></div>
+    {(['windows', 'macos'] as const).map((os) => {
+      const saved = product.installationGuides?.[os];
+      const builtIn = defaultInstallationGuideForProduct(product, os);
+      const guide = saved || builtIn;
+      const osLabel = os === 'windows' ? 'Windows' : 'macOS';
+      const setGuide = (patch: Partial<InstallationGuideConfig>) => updateGuide(os, { ...(guide || starter(os)), ...patch });
+      const updateStep = (index: number, patch: Partial<InstallationGuideStepConfig>) => {
+        const steps = (guide || starter(os)).steps.map((step, stepIndex) => stepIndex === index ? { ...step, ...patch } : step);
+        setGuide({ steps });
+      };
+      return <details key={os} className="rounded-2xl border border-[#cbdcd9] bg-[#f8fbfa] p-4" open={expanded[os]} onToggle={(event) => { const open = event.currentTarget.open; setExpanded((old) => old[os] === open ? old : { ...old, [os]: open }); }}>
+        <summary className="cursor-pointer text-sm font-black text-[#014040]">{osLabel} steps <span className="ml-2 font-normal text-slate-500">{saved ? 'Customized' : builtIn ? 'Built-in template' : 'Not configured'}</span></summary>
+        {!guide ? <button type="button" className={`${secondaryButton} mt-4`} onClick={() => updateGuide(os, starter(os))}><Plus className="h-4 w-4" />Create {osLabel} guide</button> : <div className="mt-4 space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2"><label className={labelClass}>Guide title<input className={inputClass} value={guide.title} onChange={(event) => setGuide({ title: event.target.value })} /></label><label className={`${labelClass} sm:col-span-2`}>Caption<textarea className={inputClass} rows={2} value={guide.caption || ''} onChange={(event) => setGuide({ caption: event.target.value })} /></label></div>
+          <div className="space-y-3">{guide.steps.map((step, index) => <div key={`${os}-${index}`} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between gap-2"><h4 className="text-sm font-black text-[#014040]">Step {index + 1}</h4><button type="button" className={secondaryButton} disabled={guide.steps.length === 1} onClick={() => setGuide({ steps: guide.steps.filter((_, stepIndex) => stepIndex !== index) })}><Trash2 className="h-3.5 w-3.5" />Remove step</button></div>
+            <div className="grid gap-3 sm:grid-cols-2"><label className={labelClass}>Title<input className={inputClass} value={step.title} onChange={(event) => updateStep(index, { title: event.target.value })} /></label><label className={labelClass}>Built-in action<select className={inputClass} value={step.kind || ''} onChange={(event) => updateStep(index, { kind: (event.target.value || undefined) as InstallationGuideStepConfig['kind'] })}><option value="">None</option><option value="download">Download software</option>{step.kind === 'command' && <option value="command">Copy installation command</option>}<option value="customer-input">Submit Lock Code / Hardware ID</option><option value="licence">Show delivered licence</option></select></label><label className={`${labelClass} sm:col-span-2`}>Description<textarea className={inputClass} rows={3} value={step.body} onChange={(event) => updateStep(index, { body: event.target.value })} /></label><label className={labelClass}>Extra button label<input className={inputClass} placeholder="e.g. Open activation website" value={step.actionLabel || ''} onChange={(event) => updateStep(index, { actionLabel: event.target.value })} /></label><label className={labelClass}>Extra button link<input className={inputClass} type="url" placeholder="https://..." value={step.actionUrl || ''} onChange={(event) => updateStep(index, { actionUrl: event.target.value })} /></label></div>
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-600"><input type="checkbox" checked={step.optional === true} onChange={(event) => updateStep(index, { optional: event.target.checked })} />Optional step (customer may skip)</label>
+            {!!step.images?.length && <p className="text-xs text-slate-500">{step.images.length} illustration{step.images.length === 1 ? '' : 's'} from the original guide will remain with this step.</p>}
+          </div>)}</div>
+          <div className="flex flex-wrap gap-2"><button type="button" className={secondaryButton} onClick={() => setGuide({ steps: [...guide.steps, { title: '', body: '' }] })}><Plus className="h-4 w-4" />Add step</button>{saved && <button type="button" className={secondaryButton} onClick={() => updateGuide(os, undefined)}>{builtIn ? 'Reset to built-in steps' : `Remove ${osLabel} guide`}</button>}</div>
+        </div>}
+      </details>;
+    })}
+  </section>;
+}
+
 function ProductSetupEditor({ product, media, data, user, reload }: { product: Product; media?: AdminMediaItem; data: AdminData; user: User; reload: () => Promise<void> }) {
   const [draft, setDraft] = useState(() => structuredClone(product));
   const [busy, setBusy] = useState(false);
@@ -1022,12 +1063,14 @@ function ProductSetupEditor({ product, media, data, user, reload }: { product: P
       <div className="grid gap-3 sm:grid-cols-2">
         <label className={labelClass}>Product name<input className={inputClass} value={draft.productName} onChange={(e) => set('productName', e.target.value)} /></label>
         <label className={labelClass}>Licence term<input className={inputClass} value={draft.licenceTerm || ''} placeholder="e.g. Permanent Licence or 1 Year" onChange={(e) => set('licenceTerm', e.target.value || undefined)} /><small className="block font-normal text-slate-500">Applies to this software as a whole, not to an individual version.</small></label>
+        <label className={labelClass}>Installation steps button label<input className={inputClass} value={draft.installationButtonLabel || ''} placeholder={DEFAULT_INSTALLATION_BUTTON_LABEL} onChange={(e) => set('installationButtonLabel', e.target.value || undefined)} /><small className="block font-normal text-slate-500">Shown on paid orders. Leave blank for the default label.</small></label>
         <label className={labelClass}>Category<select className={inputClass} value={draft.categoryId} onChange={(e) => set('categoryId', e.target.value)}>{data.categories.map((category) => <option key={category.categoryId} value={category.categoryId}>{category.name}</option>)}</select></label>
         <label className={`${labelClass} sm:col-span-2`}>About this software<textarea className={inputClass} rows={5} value={draft.description || ''} onChange={(e) => set('description', e.target.value)} /></label>
         <label className={labelClass}>Display order<input className={inputClass} type="number" min="0" value={draft.sortOrder ?? 0} onChange={(e) => set('sortOrder', Number(e.target.value))} /></label>
         <label className={labelClass}>Featured order<input className={inputClass} type="number" min="0" placeholder="Leave blank if not featured" value={draft.featuredOrder ?? ''} onChange={(e) => set('featuredOrder', e.target.value === '' ? undefined : Number(e.target.value))} /></label>
         <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm font-bold"><input className="mt-1" type="checkbox" checked={allVariantsShowDeliveryNotice} onChange={(e) => setDeliveryNoticeForAllVersions(e.target.checked)} /><span>Show delivery-window notice on every version<small className="mt-1 block font-normal text-slate-500">Controls the storefront notice and outside-hours confirmation.</small></span></label>
         {supportsSingleLicenceNotice && <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm font-bold"><input className="mt-1" type="checkbox" checked={draft.showSingleLicenceDisclaimer === true} onChange={(e) => set('showSingleLicenceDisclaimer', e.target.checked)} /><span>Show single-licence, single-version and single-laptop disclaimer<small className="mt-1 block font-normal text-slate-500">For Data Analysis, Visualisation, Design and Engineering software.</small></span></label>}
+        <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm font-bold"><input className="mt-1" type="checkbox" checked={draft.showInstallationGuideFallback === true} onChange={(e) => set('showInstallationGuideFallback', e.target.checked)} /><span>Show external installation guide as a fallback<small className="mt-1 block font-normal text-slate-500">Uses the version's Installation guide URL beneath Download Software and Learning Resources. Off by default.</small></span></label>
       </div>
       {windowsOnlyVariants.length > 0 && <div className="space-y-3 rounded-2xl border border-[#cbdcd9] bg-[#f8fbfa] p-4">
         <label className="flex items-start gap-2 text-sm font-black text-[#014040]"><input className="mt-1" type="checkbox" checked={parallelsEnabled} onChange={(e) => updateWindowsOnlyVariants({ macViaParallels: e.target.checked })} /><span>Offer Mac via Parallels at no extra cost<small className="mt-1 block font-normal text-slate-500">Adds the option to all Windows-only versions of this software.</small></span></label>
@@ -1035,6 +1078,8 @@ function ProductSetupEditor({ product, media, data, user, reload }: { product: P
       </div>}
       {message && <p className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}
     </section>
+    <InstallationStepsEditor product={draft} onChange={(guides) => set('installationGuides', guides)} />
+    <div className="flex flex-wrap items-center justify-end gap-3"><button type="button" className={primaryButton} disabled={busy} onClick={save}><Save className="h-4 w-4" />Save product and steps</button>{message && <p className="w-full text-right text-sm font-bold text-[#014040]">{message}</p>}</div>
     <SetupMediaEditor media={media} user={user} reload={reload} />
   </div>;
 }
