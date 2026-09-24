@@ -48,6 +48,7 @@ import { sendSellerOrderSubmittedAlert } from './server/email';
 import { sendDuePaymentReminders } from './server/paymentReminders';
 import { requireTaskCaller } from './server/taskAuth';
 import { retryFailedSubmissionAlerts } from './server/submissionAlerts';
+import { resolveCustomBundleChoices } from './src/utils/customBundle';
 
 // Cloud Run injects PORT (8080 by default); 3000 keeps local dev unchanged.
 const PORT = Number(process.env.PORT) || 3000;
@@ -631,9 +632,12 @@ async function startServer() {
       return res.status(400).json({ error: 'Name, phone, email, and at least two software titles are required.' });
     }
     try {
+      const catalogue = await getCatalogue();
+      const selection = resolveCustomBundleChoices(catalogue.products, software);
+      if (selection.error) return res.status(400).json({ error: selection.error });
       const request = await createRequest('custom-bundle', {
         customerName, phone, email, notes,
-        details: { software: software.map((item: any) => ({ itemId: String(item.itemId || ''), name: String(item.name || '') })) }
+        details: { software: selection.choices }
       });
       res.json({ success: true, request });
     } catch (err) {

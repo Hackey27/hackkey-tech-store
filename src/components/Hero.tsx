@@ -22,7 +22,7 @@ export const Hero: React.FC<HeroProps> = ({ onFindOrderClick, desktopImageUrl, m
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto text-center space-y-4">
           {/* Main Title */}
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight drop-shadow-sm">
+          <h1 className="text-[2.8rem] sm:text-[3.4rem] lg:text-[4.5rem] font-black text-white tracking-tight leading-tight drop-shadow-sm">
             {STORE_COPY.hero.title}
           </h1>
 

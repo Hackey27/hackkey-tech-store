@@ -119,9 +119,12 @@ export async function sendSellerAlert(alert: {
 }
 
 export async function sendSellerRequestAlert(request: CustomerRequest): Promise<MailReceipt> {
-  const detailLines = Object.entries(request.details || {}).map(([key, value]) => {
+  const detailLines = Object.entries(request.details || {}).flatMap(([key, value]) => {
+    if (request.kind === 'custom-bundle' && key === 'software' && Array.isArray(value)) {
+      return ['software:', ...value.map((item) => `  ${String(item?.name || item?.itemId || '')} — ${String(item?.versionOrPlan || 'Version unspecified')} — ${String(item?.os || 'OS unspecified')}`)];
+    }
     const rendered = typeof value === 'string' ? value : JSON.stringify(value);
-    return `${key}: ${rendered || ''}`;
+    return [`${key}: ${rendered || ''}`];
   });
   return sendSellerAlert({
     subject: `Action needed: new ${request.kind.replaceAll('-', ' ')} — ${request.customerName}`,

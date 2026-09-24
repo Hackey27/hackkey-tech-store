@@ -74,7 +74,7 @@
 
 .hk-price-pattern {
   --hk-pattern-size: 190px;
-  --hk-pattern-opacity: 0.045;
+  --hk-pattern-opacity: 0.14;
   --hk-pattern-filter: brightness(0);
 }
 
@@ -85,7 +85,7 @@
 
 .hk-footer-pattern {
   --hk-pattern-size: 155px;
-  --hk-pattern-opacity: 0.09;
+  --hk-pattern-opacity: 0.11;
 }
 
 .hk-category-title {
@@ -94,18 +94,13 @@
   overflow: hidden;
 }
 
-.hk-category-title::after {
-  content: '';
+.hk-category-mark {
   position: absolute;
-  z-index: -1;
-  right: -1rem;
+  z-index: 0;
+  right: -0.5rem;
   top: 50%;
-  width: clamp(13rem, 27vw, 24rem);
-  aspect-ratio: 1496 / 380;
+  height: clamp(11rem, 20vw, 17rem);
   transform: translateY(-50%);
-  background: #05ef28;
-  mask: url('/brand-element.png') center / contain no-repeat;
-  opacity: 0.42;
   pointer-events: none;
 }
 
@@ -114,7 +109,7 @@
   .hk-price-pattern { --hk-pattern-size: 130px; }
   .hk-licence-pattern { --hk-pattern-size: 120px; }
   .hk-footer-pattern { --hk-pattern-size: 110px; }
-  .hk-category-title::after { top: auto; right: -2rem; bottom: 0.4rem; width: 10rem; transform: none; opacity: 0.22; }
+  .hk-category-mark { right: -2.5rem; top: auto; bottom: -1.5rem; height: 9rem; transform: none; }
 }
 
 .hk-landing-region {

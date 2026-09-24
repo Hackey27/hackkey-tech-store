@@ -13,7 +13,6 @@ interface HeaderProps {
   cartCount?: number;
   cartItems: CartItem[];
   isLandingTransparent?: boolean;
-  showScrolledPattern?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,7 +23,6 @@ export const Header: React.FC<HeaderProps> = ({
   cartCount = 0,
   cartItems,
   isLandingTransparent = false,
-  showScrolledPattern = false,
 }) => {
   const [cartOpen, setCartOpen] = useState(false);
   const cartButtonRef = useRef<HTMLButtonElement>(null);
@@ -37,7 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className={`hk-store-header sticky top-0 z-[55] w-full border-b ${showScrolledPattern ? 'hk-brand-pattern hk-pattern-outline hk-header-scrolled-pattern' : ''} ${
+    <header className={`hk-store-header sticky top-0 z-[55] w-full border-b ${!isLandingTransparent ? 'hk-brand-pattern hk-pattern-outline hk-header-scrolled-pattern' : ''} ${
       isLandingTransparent
         ? 'border-white/20 bg-transparent shadow-none'
         : 'border-[#0b5a59] bg-[#014040] shadow-sm'

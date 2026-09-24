@@ -307,7 +307,6 @@ export const App: React.FC = () => {
         cartCount={totalCartCount}
         cartItems={cartItems}
         isLandingTransparent={landingActive && !landingPassed}
-        showScrolledPattern={landingActive && landingPassed}
       />
 
       <SearchResultsOverlay
@@ -567,7 +566,7 @@ export const App: React.FC = () => {
       />
 
       {/* Storefront footer */}
-      <footer className={`${route.view === 'home' && activeTab === 'home' ? '' : 'hidden md:block'} border-t border-[#025656] bg-[#014040] pb-24 pt-9 text-xs text-white md:pb-8`}>
+      <footer className={`${route.view === 'home' && activeTab === 'home' ? '' : 'hidden md:block'} hk-brand-pattern hk-pattern-outline hk-footer-pattern relative border-t border-[#025656] bg-[#014040] pb-24 pt-9 text-xs text-white md:pb-8`}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 gap-8 border-b border-white/20 pb-7 md:grid-cols-3">
             <div className="space-y-3">
@@ -583,7 +582,7 @@ export const App: React.FC = () => {
               <div><span className="block text-[11px] font-bold uppercase tracking-wider text-[#05ef28]">Our location</span><p className="mt-2 font-bold text-white">University of Cape Coast Campus</p></div>
             </div>
           </div>
-          <div className="hk-brand-pattern hk-pattern-solid hk-footer-pattern relative pt-4 text-[11px] text-white/65">© {new Date().getFullYear()} {STORE_COPY.brand.name}. All rights reserved.</div>
+          <div className="pt-4 text-[11px] text-white/65">© {new Date().getFullYear()} {STORE_COPY.brand.name}. All rights reserved.</div>
         </div>
       </footer>
     </div>

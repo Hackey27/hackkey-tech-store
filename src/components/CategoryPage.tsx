@@ -4,6 +4,7 @@ import { CatalogueItem, Category } from '../types';
 import { STORE_COPY } from '../config/storeCopy';
 import { ProductCard } from './ProductCard';
 import { CustomBundleRequest } from './CustomBundleRequest';
+import { BrandLogo } from './BrandLogo';
 
 interface CategoryPageProps {
   category?: Category;
@@ -57,9 +58,10 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({
         <ArrowLeft className="h-4 w-4" />{STORE_COPY.catalog.backToBrowse}
       </button>
       <header className="hk-category-title hk-activation-gradient rounded-3xl p-6 text-white shadow-sm sm:p-9">
-        <h1 className="max-w-4xl text-2xl font-black tracking-tight sm:text-4xl">{category.name}</h1>
-        {category.tagline && <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200 sm:text-base">{category.tagline}</p>}
-        <p className="mt-4 text-xs font-bold text-[#d9ffe0]">{countLabel}</p>
+        <span className="hk-category-mark" aria-hidden="true"><BrandLogo variant="glyph" glyphColor="#07d28d" height="100%" /></span>
+        <h1 className="relative z-10 max-w-4xl text-2xl font-black tracking-tight sm:text-4xl">{category.name}</h1>
+        {category.tagline && <p className="relative z-10 mt-3 max-w-2xl text-sm leading-6 text-slate-200 sm:text-base">{category.tagline}</p>}
+        <p className="relative z-10 mt-4 text-xs font-bold text-[#d9ffe0]">{countLabel}</p>
       </header>
 
       {items.length > 0 ? (
