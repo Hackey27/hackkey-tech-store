@@ -34,3 +34,13 @@ test('SmartPLS macOS download command follows the purchased version', () => {
   assert.equal(installationGuideForOrder(order({ versionOrPlan: '4.1.1.6' }))?.command, 'curl smartpls.app/4116 | bash');
   assert.equal(installationGuideForOrder(order({ versionOrPlan: '4.1.1.8' }))?.command, 'curl smartpls.app | bash');
 });
+
+test('SPSS guides include one shared-order Lock Code submission step', () => {
+  for (const os of ['Windows', 'macOS']) {
+    const guide = installationGuideForOrder(order({ productId: 'SPSS', productName: 'SPSS Statistics', deliveryOs: os }));
+    assert.ok(guide);
+    assert.equal(guide.steps[0].kind, 'download');
+    assert.equal(guide.steps.filter((step) => step.kind === 'customer-input').length, 1);
+    assert.ok(guide.steps.findIndex((step) => step.kind === 'licence') > guide.steps.findIndex((step) => step.kind === 'customer-input'));
+  }
+});

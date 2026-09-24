@@ -101,11 +101,50 @@ const nvivoMac: InstallationGuideDefinition = {
   ]
 };
 
+const spssWindows: InstallationGuideDefinition = {
+  id: 'spss-windows',
+  title: 'Install and activate SPSS on Windows',
+  steps: [
+    { title: 'Download SPSS', body: 'Download the installer for your order. If it is already downloaded, continue.', kind: 'download' },
+    { title: 'Open the installer', body: 'Double-click the downloaded SPSS file. If a compressed ZIP window appears, click Run. User Account Control may take up to a minute to appear.' },
+    { title: 'Allow installation', body: 'Click Yes in User Account Control. Wait for the preparation window.' },
+    { title: 'Accept and install', body: 'Click Next in InstallShield, accept the licence agreement, click Next, then click Install.' },
+    { title: 'Finish installation', body: 'Wait for installation to complete. Leave Start IBM SPSS selected and click Finish.' },
+    { title: 'Open License Wizard', body: 'If SPSS says the licence is not valid, click Launch License Wizard.' },
+    { title: 'Copy your Lock Code', body: 'Choose Authorized user license. Highlight the Lock Code for this machine and copy it with Ctrl+C.',
+      images: [{ src: asset('spss-windows', 'image4.png'), alt: 'SPSS License Wizard showing the machine Lock Code', markers: [mark(32, 48, 'Copy Lock Code')] }] },
+    { title: 'Submit your Lock Code', body: 'Paste the Lock Code here. This updates the same order you can access from Find My Order. Check it carefully before submitting.', kind: 'customer-input' },
+    { title: 'Wait for your licence', body: 'When we add your licence, it will appear in this order. We will also notify you by email or WhatsApp. Use Check for licence to refresh.', kind: 'licence' },
+    { title: 'Enter the licence in SPSS', body: 'Return to License Wizard, click Next, paste your licence into Enter Code, click Add, then click Next twice.' },
+    { title: 'Finish activation', body: 'Confirm the licence expiry screen, click Finish, and launch SPSS. If Windows asks for network access, click Allow.',
+      images: [{ src: asset('spss-windows', 'image6.png'), alt: 'SPSS licensing completed screen', markers: [mark(78, 96, 'Click Finish')] }] }
+  ]
+};
+
+const spssMac: InstallationGuideDefinition = {
+  id: 'spss-mac',
+  title: 'Install and activate SPSS on macOS',
+  steps: [
+    { title: 'Download SPSS', body: 'Download the macOS installer for your order. If it is already downloaded, continue.', kind: 'download' },
+    { title: 'Open the package', body: 'Double-click the downloaded SPSS .pkg file.' },
+    { title: 'Continue setup', body: 'Click Continue in the macOS installation window.' },
+    { title: 'Accept the agreement', body: 'Click Agree in the licence agreement pop-up.' },
+    { title: 'Install SPSS', body: 'Click Install. Enter your Mac password when asked and click Install Software.' },
+    { title: 'Open SPSS', body: 'Click Close when installation finishes. Click Keep if prompted. Open IBM SPSS Statistics from Finder or Launchpad.' },
+    { title: 'Copy your Lock Code', body: 'Click Launch License Wizard. Highlight your machine Lock Code and copy it with Command+C.' },
+    { title: 'Submit your Lock Code', body: 'Paste the Lock Code here. This updates the same order you can access from Find My Order. Check it carefully before submitting.', kind: 'customer-input' },
+    { title: 'Wait for your licence', body: 'When we add your licence, it will appear in this order. We will also notify you by email or WhatsApp. Use Check for licence to refresh.', kind: 'licence' },
+    { title: 'Enter the licence in SPSS', body: 'Return to License Wizard, click Next, paste your licence into Enter Code, click Add, then click Next twice.' },
+    { title: 'Finish activation', body: 'Confirm the licence expiry screen, click Finish, and launch IBM SPSS Statistics from Launchpad.' }
+  ]
+};
+
 export function installationGuideForOrder(order: Order): InstallationGuideDefinition | null {
   if (order.paymentStatus !== 'paid' || order.macViaParallels) return null;
   const identity = `${order.productId || ''} ${order.productName}`.toLowerCase();
   const mac = /mac|os x/i.test(order.deliveryOs);
   if (/smart\s?pls|\bpls\b/.test(identity)) return mac ? smartPlsMac(order) : smartPlsWindows;
   if (/nvivo|\bnv\b/.test(identity)) return mac ? nvivoMac : nvivoWindows;
+  if (/spss/.test(identity) && !/amos/.test(identity)) return mac ? spssMac : spssWindows;
   return null;
 }
