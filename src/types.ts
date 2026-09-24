@@ -20,12 +20,18 @@ export type CatalogueItemKind = 'product' | 'bundle' | 'service' | 'laptop';
 
 /** Customer-facing, product-wide installation steps. Separate OS guides can
  * be edited without changing the version-specific download/licence URLs. */
+export interface InstallationGuideImageConfig {
+  src: string;
+  alt: string;
+  markers?: Array<{ x: number; y: number; label: string }>;
+}
+
 export interface InstallationGuideStepConfig {
   title: string;
   body: string;
   kind?: 'download' | 'command' | 'licence' | 'customer-input';
   optional?: boolean;
-  images?: Array<{ src: string; alt: string; markers?: Array<{ x: number; y: number; label: string }> }>;
+  images?: InstallationGuideImageConfig[];
   actionLabel?: string;
   actionUrl?: string;
 }

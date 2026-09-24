@@ -601,7 +601,7 @@ export async function saveProductConfiguration(productId: string, input: Product
     productId,
     productName: input.productName.trim(),
     licenceTerm: input.licenceTerm?.trim() || undefined,
-    ...cleanProductInstallationSettings(input),
+    ...cleanProductInstallationSettings({ ...input, productId }),
     variants: (input.variants || []).map((variant) => ({
       ...variant,
       customerInputRequired: variant.customerInputRequired?.trim() || undefined,

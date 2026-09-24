@@ -32,6 +32,7 @@ import { savePaymentSettings } from './paymentSettings';
 import { setPaymentLater } from './paymentReminders';
 import { buildOrderNotification, validateNotificationPurpose } from '../src/utils/orderNotification';
 import { CustomerNotificationPurpose, Order } from '../src/types';
+import { COLLECTIONS, getFirestore } from './firestore';
 import {
   catalogueImageObjectPath,
   deleteCatalogueImage,
@@ -182,6 +183,30 @@ export function createAdminRouter(): Router {
       res.json({ success: true });
     } catch (err) { routeError(res, err, 'Failed to update catalogue order.'); }
   });
+
+  router.post(
+    '/products/:productId/guide-images',
+    express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: MAX_CATALOGUE_IMAGE_BYTES }),
+    async (req: AdminRequest, res) => {
+      const productId = String(req.params.productId || '').trim();
+      const contentType = String(req.header('content-type') || '').split(';')[0].trim();
+      const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+      if (!productId) return res.status(400).json({ error: 'A software product is required.' });
+      const validation = validateCatalogueImage(contentType, bytes.length);
+      if (!validation.ok) return res.status(400).json({ error: validation.error });
+      const objectPath = catalogueImageObjectPath(productId, 'guide', contentType);
+      try {
+        const product = await getFirestore().collection(COLLECTIONS.products).doc(productId).get();
+        if (!product.exists) return res.status(404).json({ error: 'Software product not found.' });
+        await saveCatalogueImage(objectPath, bytes, contentType);
+        await writeAdminAudit(actor(req), { action: 'product.guide-image-upload', targetType: 'product', targetId: productId, details: { objectPath, sizeBytes: bytes.length } });
+        res.json({ objectPath });
+      } catch (err) {
+        await deleteCatalogueImage(objectPath).catch(() => undefined);
+        routeError(res, err, 'Failed to upload installation screenshot.');
+      }
+    }
+  );
 
   router.post(
     '/products/:productId/images',

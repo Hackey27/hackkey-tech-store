@@ -3,6 +3,7 @@ import test from 'node:test';
 import type { Order, Product } from '../src/types';
 import { defaultInstallationGuideForProduct, installationGuideForOrder } from '../src/data/installationGuides';
 import { cleanProductInstallationSettings } from '../src/utils/installationGuideConfig';
+import { guideMarkerPosition, guideScreenshotUrl } from '../src/utils/guideImages';
 
 const order = (patch: Partial<Order> = {}): Order => ({
   orderId: 'HKT-GUIDE-1',
@@ -89,4 +90,16 @@ test('admin starts with the existing OS guide and rejects incomplete or unsafe s
   assert.equal(settings.installationButtonLabel, 'Begin setup');
   assert.equal(settings.showInstallationGuideFallback, false);
   assert.equal(settings.installationGuides?.windows?.steps[0].actionUrl, 'https://example.com/setup');
+});
+
+test('step screenshots are product-scoped and amber marker coordinates stay on the image', () => {
+  const product = { productId: 'SPSS', productName: 'SPSS Statistics', variants: [] } as unknown as Product;
+  const image = { src: 'catalogue/SPSS/guide/123.webp', alt: 'SPSS licence window', markers: [{ x: 34.5, y: 72, label: 'Click Add' }] };
+  const guide = { title: 'Install SPSS', steps: [{ title: 'Activate', body: 'Click Add.', images: [image] }] };
+  assert.equal(cleanProductInstallationSettings({ ...product, installationGuides: { windows: guide } }).installationGuides?.windows?.steps[0].images?.[0].markers?.[0].label, 'Click Add');
+  assert.throws(() => cleanProductInstallationSettings({ ...product, installationGuides: { windows: { ...guide, steps: [{ ...guide.steps[0], images: [{ ...image, src: 'catalogue/AMOS/guide/123.webp' }] }] } } }), /screenshot 1 is invalid/);
+  assert.throws(() => cleanProductInstallationSettings({ ...product, installationGuides: { windows: { ...guide, steps: [{ ...guide.steps[0], images: [{ ...image, markers: [{ x: 101, y: 20, label: 'Bad' }] }] }] } } }), /invalid amber marker/);
+  assert.equal(guideScreenshotUrl(image.src), '/api/catalog/images?path=catalogue%2FSPSS%2Fguide%2F123.webp');
+  assert.deepEqual(guideMarkerPosition(150, 100, { left: 50, top: 50, width: 200, height: 100 }), { x: 50, y: 50 });
+  assert.deepEqual(guideMarkerPosition(1000, -20, { left: 50, top: 50, width: 200, height: 100 }), { x: 100, y: 0 });
 });

@@ -1,4 +1,4 @@
-import React, { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
 import {
   AlertTriangle,
@@ -31,7 +31,7 @@ import {
   X
 } from 'lucide-react';
 import { ADMIN_COPY } from '../config/storeCopy';
-import { Announcement, Bundle, Category, CustomerNotificationPurpose, CustomerRequest, InstallationGuideConfig, InstallationGuideStepConfig, Laptop as LaptopType, Order, PricingConfig, Product, Service, ServiceField, ServiceFieldType, ServiceOption, Variant } from '../types';
+import { Announcement, Bundle, Category, CustomerNotificationPurpose, CustomerRequest, InstallationGuideConfig, InstallationGuideImageConfig, InstallationGuideStepConfig, Laptop as LaptopType, Order, PricingConfig, Product, Service, ServiceField, ServiceFieldType, ServiceOption, Variant } from '../types';
 import { formatPesewas } from '../utils/money';
 import { defaultCustomerInputType, defaultDeliveryCodeType, effectiveActivationWebsiteUrl } from '../utils/softwareFulfilment';
 import { AnnouncementModal } from '../components/AnnouncementModal';
@@ -47,6 +47,7 @@ import { adminOrderMatchesSearch } from '../utils/adminOrderSearch';
 import { adminSignInWaitSeconds, afterFailedAdminSignIn, EMPTY_ADMIN_SIGN_IN_THROTTLE, AdminSignInThrottleState } from '../utils/adminSignInThrottle';
 import { notificationActionLabel, notificationPurposeForOrder } from '../utils/orderNotification';
 import { DEFAULT_INSTALLATION_BUTTON_LABEL, defaultInstallationGuideForProduct } from '../data/installationGuides';
+import { guideMarkerPosition, guideScreenshotUrl } from '../utils/guideImages';
 
 type Section = 'orders' | 'requests' | 'categories' | 'services' | 'announcements' | 'landing' | 'pricing' | 'payments';
 
@@ -991,12 +992,58 @@ function CategorySetupEditor({ category, media, user, reload }: { category: Cate
   return <div className="space-y-5"><section className="space-y-4 rounded-2xl border bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">Category card</p><h3 className="text-xl font-black text-[#014040]">{draft.name}</h3></div><button className={primaryButton} disabled={busy} onClick={save}><Save className="h-4 w-4" />Save category</button></div><PublishedControl checked={draft.active} onChange={(value) => set('active', value)} /><div className="grid gap-3 sm:grid-cols-2"><label className={labelClass}>Category name<input className={inputClass} value={draft.name} onChange={(e) => set('name', e.target.value)} /></label><label className={labelClass}>Icon label / fallback<input className={inputClass} value={draft.icon} onChange={(e) => set('icon', e.target.value)} /></label><label className={`${labelClass} sm:col-span-2`}>Tagline<input className={inputClass} value={draft.tagline} onChange={(e) => set('tagline', e.target.value)} /></label><label className={labelClass}>Display order<input className={inputClass} type="number" min="0" value={draft.sortOrder} onChange={(e) => set('sortOrder', Number(e.target.value))} /></label></div>{message && <p className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}</section><SetupMediaEditor media={media} user={user} reload={reload} /></div>;
 }
 
-function InstallationStepsEditor({ product, onChange }: { product: Product; onChange: (guides: Product['installationGuides']) => void }) {
-  const [expanded, setExpanded] = useState({ windows: Boolean(product.installationGuides?.windows), macos: Boolean(product.installationGuides?.macos) });
-  const updateGuide = (os: 'windows' | 'macos', guide: InstallationGuideConfig | undefined) => onChange({
-    ...product.installationGuides,
-    [os]: guide
+function GuideScreenshotMarkerEditor({ image, onChange, onRemove }: { image: InstallationGuideImageConfig; onChange: (image: InstallationGuideImageConfig) => void; onRemove: () => void }) {
+  const imageRef = useRef<HTMLImageElement>(null);
+  const markers = image.markers || [];
+  const position = (clientX: number, clientY: number) => {
+    const bounds = imageRef.current?.getBoundingClientRect();
+    return bounds ? guideMarkerPosition(clientX, clientY, bounds) : null;
+  };
+  const updateMarker = (index: number, patch: Partial<(typeof markers)[number]>) => onChange({
+    ...image,
+    markers: markers.map((marker, markerIndex) => markerIndex === index ? { ...marker, ...patch } : marker)
   });
+  return <div className="space-y-3 rounded-xl border border-[#cbdcd9] bg-[#f8fbfa] p-3">
+    <div className="flex flex-wrap items-center justify-between gap-2"><b className="text-xs text-[#014040]">Step screenshot</b><button type="button" className={secondaryButton} onClick={onRemove}><Trash2 className="h-3.5 w-3.5" />Remove screenshot</button></div>
+    <label className={labelClass}>Image description for accessibility<input className={inputClass} maxLength={200} value={image.alt} onChange={(event) => onChange({ ...image, alt: event.target.value })} /></label>
+    <p className="text-xs text-slate-600">Tap or click the screenshot to place an amber marker. Drag a marker to move it, or focus it and use the arrow keys for precise placement.</p>
+    <button type="button" className={secondaryButton} disabled={markers.length >= 20} onClick={() => onChange({ ...image, markers: [...markers, { x: 50, y: 50, label: 'Click here' }] })}><Plus className="h-3.5 w-3.5" />Add amber marker at centre</button>
+    <div className="relative mx-auto w-fit max-w-full touch-none cursor-crosshair select-none" aria-label="Click the screenshot to add an amber marker">
+      <img ref={imageRef} src={guideScreenshotUrl(image.src)} alt={image.alt} draggable={false} className="block h-auto max-h-80 max-w-full rounded-lg border object-contain" onPointerDown={(event) => {
+        const point = position(event.clientX, event.clientY);
+        if (point && markers.length < 20) onChange({ ...image, markers: [...markers, { ...point, label: 'Click here' }] });
+      }} />
+      {markers.map((marker, index) => <button key={index} type="button" aria-label={`Move amber marker ${index + 1}: ${marker.label}`} title={marker.label} className="absolute z-10 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center rounded-full border-2 border-white bg-amber-500 text-[10px] font-black text-[#3b2905] shadow-lg focus:outline-none focus:ring-2 focus:ring-[#014040]" style={{ left: `${marker.x}%`, top: `${marker.y}%` }} onPointerDown={(event) => { event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; const point = position(event.clientX, event.clientY); if (point) updateMarker(index, point); }} onKeyDown={(event) => { const direction = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key] as [number, number] | undefined; if (!direction) return; event.preventDefault(); const delta = event.shiftKey ? 5 : 1; updateMarker(index, { x: Math.max(0, Math.min(100, marker.x + direction[0] * delta)), y: Math.max(0, Math.min(100, marker.y + direction[1] * delta)) }); }}>{index + 1}</button>)}
+    </div>
+    {markers.length > 0 && <div className="space-y-2">{markers.map((marker, index) => <div key={index} className="flex flex-wrap items-center gap-2 rounded-lg bg-white p-2"><span className="min-w-7 text-center text-xs font-black text-amber-800">{index + 1}</span><input className={`${inputClass} min-w-40 flex-1`} aria-label={`Amber marker ${index + 1} label`} maxLength={80} value={marker.label} onChange={(event) => updateMarker(index, { label: event.target.value })} /><span className="text-[11px] text-slate-500">{marker.x}%, {marker.y}%</span><button type="button" className={secondaryButton} onClick={() => onChange({ ...image, markers: markers.filter((_, markerIndex) => markerIndex !== index) })}><Trash2 className="h-3.5 w-3.5" />Remove</button></div>)}</div>}
+  </div>;
+}
+
+function GuideStepScreenshotsEditor({ productId, user, images, onChange }: { productId: string; user: User; images: InstallationGuideImageConfig[]; onChange: (images: InstallationGuideImageConfig[]) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const upload = async (file?: File) => {
+    if (!file) return;
+    setBusy(true); setMessage('');
+    try {
+      const blob = await resizeProductImage(file, 'gallery');
+      const result = await adminRequest<{ objectPath: string }>(user, `/products/${encodeURIComponent(productId)}/guide-images`, { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
+      onChange([...images, { src: result.objectPath, alt: file.name.slice(0, 200) || 'Installation screenshot' }]);
+      setMessage('Screenshot uploaded. Place any amber markers, then save the product and steps to publish it.');
+    } catch (error) { setMessage(messageOf(error)); }
+    finally { setBusy(false); }
+  };
+  return <div className="space-y-3 rounded-xl border border-dashed border-[#bdd1cc] p-3">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><b className="text-xs text-[#014040]">Screenshots and amber markers</b><p className="text-[11px] text-slate-500">Up to 6 per step. A clear 1400 × 1050 px screenshot works well; its proportions are preserved.</p><p className="text-[11px] text-amber-800">Customers can see these images. Remove personal details and licence keys before uploading.</p></div><label className={secondaryButton}>{busy ? 'Uploading…' : 'Add screenshot'}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={busy || images.length >= 6} onChange={(event) => { void upload(event.target.files?.[0]); event.currentTarget.value = ''; }} /></label></div>
+    <div className={busy ? 'space-y-3 pointer-events-none opacity-60' : 'space-y-3'}>{images.map((image, index) => <GuideScreenshotMarkerEditor key={`${image.src}-${index}`} image={image} onChange={(updated) => onChange(images.map((entry, entryIndex) => entryIndex === index ? updated : entry))} onRemove={() => onChange(images.filter((_, entryIndex) => entryIndex !== index))} />)}</div>
+    {images.length === 0 && <p className="text-xs text-slate-500">No screenshot for this step yet.</p>}
+    {message && <p role="status" className="rounded-lg bg-slate-100 p-2 text-xs font-bold text-[#014040]">{message}</p>}
+  </div>;
+}
+
+function InstallationStepsEditor({ product, user, onChange }: { product: Product; user: User; onChange: (update: (guides: Product['installationGuides']) => Product['installationGuides']) => void }) {
+  const [expanded, setExpanded] = useState({ windows: Boolean(product.installationGuides?.windows), macos: Boolean(product.installationGuides?.macos) });
+  const updateGuide = (os: 'windows' | 'macos', guide: InstallationGuideConfig | undefined) => onChange((current) => ({ ...current, [os]: guide }));
   const starter = (os: 'windows' | 'macos'): InstallationGuideConfig => ({
     title: `Install and activate ${product.productName} on ${os === 'windows' ? 'Windows' : 'macOS'}`,
     caption: 'Follow each step on the computer where you are installing the software.',
@@ -1009,11 +1056,11 @@ function InstallationStepsEditor({ product, onChange }: { product: Product; onCh
       const builtIn = defaultInstallationGuideForProduct(product, os);
       const guide = saved || builtIn;
       const osLabel = os === 'windows' ? 'Windows' : 'macOS';
-      const setGuide = (patch: Partial<InstallationGuideConfig>) => updateGuide(os, { ...(guide || starter(os)), ...patch });
-      const updateStep = (index: number, patch: Partial<InstallationGuideStepConfig>) => {
-        const steps = (guide || starter(os)).steps.map((step, stepIndex) => stepIndex === index ? { ...step, ...patch } : step);
-        setGuide({ steps });
-      };
+      const setGuide = (patch: Partial<InstallationGuideConfig>) => onChange((current) => ({ ...current, [os]: { ...(current?.[os] || builtIn || starter(os)), ...patch } }));
+      const updateStep = (index: number, patch: Partial<InstallationGuideStepConfig>) => onChange((current) => {
+        const currentGuide = current?.[os] || builtIn || starter(os);
+        return { ...current, [os]: { ...currentGuide, steps: currentGuide.steps.map((step, stepIndex) => stepIndex === index ? { ...step, ...patch } : step) } };
+      });
       return <details key={os} className="rounded-2xl border border-[#cbdcd9] bg-[#f8fbfa] p-4" open={expanded[os]} onToggle={(event) => { const open = event.currentTarget.open; setExpanded((old) => old[os] === open ? old : { ...old, [os]: open }); }}>
         <summary className="cursor-pointer text-sm font-black text-[#014040]">{osLabel} steps <span className="ml-2 font-normal text-slate-500">{saved ? 'Customized' : builtIn ? 'Built-in template' : 'Not configured'}</span></summary>
         {!guide ? <button type="button" className={`${secondaryButton} mt-4`} onClick={() => updateGuide(os, starter(os))}><Plus className="h-4 w-4" />Create {osLabel} guide</button> : <div className="mt-4 space-y-4">
@@ -1022,7 +1069,7 @@ function InstallationStepsEditor({ product, onChange }: { product: Product; onCh
             <div className="flex items-center justify-between gap-2"><h4 className="text-sm font-black text-[#014040]">Step {index + 1}</h4><button type="button" className={secondaryButton} disabled={guide.steps.length === 1} onClick={() => setGuide({ steps: guide.steps.filter((_, stepIndex) => stepIndex !== index) })}><Trash2 className="h-3.5 w-3.5" />Remove step</button></div>
             <div className="grid gap-3 sm:grid-cols-2"><label className={labelClass}>Title<input className={inputClass} value={step.title} onChange={(event) => updateStep(index, { title: event.target.value })} /></label><label className={labelClass}>Built-in action<select className={inputClass} value={step.kind || ''} onChange={(event) => updateStep(index, { kind: (event.target.value || undefined) as InstallationGuideStepConfig['kind'] })}><option value="">None</option><option value="download">Download software</option>{step.kind === 'command' && <option value="command">Copy installation command</option>}<option value="customer-input">Submit Lock Code / Hardware ID</option><option value="licence">Show delivered licence</option></select></label><label className={`${labelClass} sm:col-span-2`}>Description<textarea className={inputClass} rows={3} value={step.body} onChange={(event) => updateStep(index, { body: event.target.value })} /></label><label className={labelClass}>Extra button label<input className={inputClass} placeholder="e.g. Open activation website" value={step.actionLabel || ''} onChange={(event) => updateStep(index, { actionLabel: event.target.value })} /></label><label className={labelClass}>Extra button link<input className={inputClass} type="url" placeholder="https://..." value={step.actionUrl || ''} onChange={(event) => updateStep(index, { actionUrl: event.target.value })} /></label></div>
             <label className="flex items-center gap-2 text-xs font-bold text-slate-600"><input type="checkbox" checked={step.optional === true} onChange={(event) => updateStep(index, { optional: event.target.checked })} />Optional step (customer may skip)</label>
-            {!!step.images?.length && <p className="text-xs text-slate-500">{step.images.length} illustration{step.images.length === 1 ? '' : 's'} from the original guide will remain with this step.</p>}
+            <GuideStepScreenshotsEditor productId={product.productId} user={user} images={step.images || []} onChange={(images) => updateStep(index, { images })} />
           </div>)}</div>
           <div className="flex flex-wrap gap-2"><button type="button" className={secondaryButton} onClick={() => setGuide({ steps: [...guide.steps, { title: '', body: '' }] })}><Plus className="h-4 w-4" />Add step</button>{saved && <button type="button" className={secondaryButton} onClick={() => updateGuide(os, undefined)}>{builtIn ? 'Reset to built-in steps' : `Remove ${osLabel} guide`}</button>}</div>
         </div>}
@@ -1078,7 +1125,7 @@ function ProductSetupEditor({ product, media, data, user, reload }: { product: P
       </div>}
       {message && <p className="rounded-xl bg-slate-100 p-3 text-sm font-bold">{message}</p>}
     </section>
-    <InstallationStepsEditor product={draft} onChange={(guides) => set('installationGuides', guides)} />
+    <InstallationStepsEditor product={draft} user={user} onChange={(update) => setDraft((old) => ({ ...old, installationGuides: update(old.installationGuides) }))} />
     <div className="flex flex-wrap items-center justify-end gap-3"><button type="button" className={primaryButton} disabled={busy} onClick={save}><Save className="h-4 w-4" />Save product and steps</button>{message && <p className="w-full text-right text-sm font-bold text-[#014040]">{message}</p>}</div>
     <SetupMediaEditor media={media} user={user} reload={reload} />
   </div>;

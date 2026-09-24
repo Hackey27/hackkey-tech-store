@@ -43,6 +43,7 @@ test('catalogue image paths stay inside their dedicated product prefix', () => {
   const path = catalogueImageObjectPath('AMOS', 'gallery', 'image/webp');
   assert.match(path, /^catalogue\/AMOS\/gallery\/.+\.webp$/);
   assert.match(catalogueImageObjectPath('category-DATA', 'icon', 'image/gif'), /^catalogue\/category-DATA\/icon\/.+\.gif$/);
+  assert.match(catalogueImageObjectPath('SPSS', 'guide', 'image/webp'), /^catalogue\/SPSS\/guide\/.+\.webp$/);
   assert.equal(isCatalogueImagePath(path), true);
   assert.equal(isCatalogueImagePath('orders/ORDER-1/document.pdf'), false);
   assert.equal(isCatalogueImagePath('catalogue/../orders/document.pdf'), false);

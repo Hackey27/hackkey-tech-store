@@ -108,6 +108,21 @@ test('the report upload route returns 401 without admin authentication', async (
   }
 });
 
+test('installation screenshot upload requires admin authentication', async () => {
+  const app = express();
+  app.use('/api/admin', createAdminRouter());
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => server.once('listening', resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === 'object');
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/admin/products/SPSS/guide-images`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: new Uint8Array([1, 2, 3]) });
+    assert.equal(response.status, 401);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
 test('saving payment settings returns 401 without admin authentication', async () => {
   const app = express();
   app.use(express.json());

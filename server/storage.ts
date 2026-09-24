@@ -69,7 +69,7 @@ function safeProductId(productId: string): string {
 
 export function catalogueImageObjectPath(
   productId: string,
-  role: 'icon' | 'banner' | 'mobile-banner' | 'gallery' | 'desktop' | 'mobile' | 'card',
+  role: 'icon' | 'banner' | 'mobile-banner' | 'gallery' | 'guide' | 'desktop' | 'mobile' | 'card',
   contentType: string
 ): string {
   const extension = ALLOWED_CATALOGUE_IMAGE_TYPES[contentType] || 'bin';
