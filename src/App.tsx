@@ -307,6 +307,7 @@ export const App: React.FC = () => {
         cartCount={totalCartCount}
         cartItems={cartItems}
         isLandingTransparent={landingActive && !landingPassed}
+        showScrolledPattern={landingActive && landingPassed}
       />
 
       <SearchResultsOverlay
@@ -582,7 +583,7 @@ export const App: React.FC = () => {
               <div><span className="block text-[11px] font-bold uppercase tracking-wider text-[#05ef28]">Our location</span><p className="mt-2 font-bold text-white">University of Cape Coast Campus</p></div>
             </div>
           </div>
-          <div className="pt-4 text-[11px] text-white/65">© {new Date().getFullYear()} {STORE_COPY.brand.name}. All rights reserved.</div>
+          <div className="hk-brand-pattern hk-pattern-solid hk-footer-pattern relative pt-4 text-[11px] text-white/65">© {new Date().getFullYear()} {STORE_COPY.brand.name}. All rights reserved.</div>
         </div>
       </footer>
     </div>

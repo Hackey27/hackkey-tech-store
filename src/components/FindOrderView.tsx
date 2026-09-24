@@ -27,8 +27,9 @@ import { whatsAppDocumentLink } from '../utils/whatsapp';
 import { FulfilmentTimeNotice } from './FulfilmentTimeNotice';
 import { PaymentMethodPanel } from './PaymentMethodPanel';
 import { OrderPaymentWatcher } from './OrderPaymentWatcher';
-import { InstallationGuide } from './InstallationGuide';
 import { DEFAULT_INSTALLATION_BUTTON_LABEL, installationGuideForOrder } from '../data/installationGuides';
+
+const InstallationGuide = React.lazy(() => import('./InstallationGuide').then((module) => ({ default: module.InstallationGuide })));
 
 /** The stored statuses are kebab-case; these are what the customer reads. */
 const FULFILMENT_LABELS: Record<string, string> = {
@@ -388,7 +389,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
                     />
                   </div>
 
-                  {installationGuideForOrder(order, installationProduct) && <div className="space-y-2"><button type="button" onClick={() => setGuideOpenOrderId(order.orderId)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(110deg,#014040_0%,#014040_35%,#00d082_100%)] px-5 py-3 text-sm font-black text-white shadow-sm transition-[filter,transform] hover:brightness-110 active:scale-[0.99]"><BookOpen className="h-4 w-4 shrink-0" />{installationProduct?.installationButtonLabel?.trim() || DEFAULT_INSTALLATION_BUTTON_LABEL}</button><p className="text-center text-xs leading-5 text-slate-600 sm:hidden">We recommend following these steps on the computer where the software is being installed.</p></div>}
+                  {installationGuideForOrder(order, installationProduct) && <div className="space-y-2"><button type="button" onClick={() => setGuideOpenOrderId(order.orderId)} className="hk-activation-gradient inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-black text-white shadow-sm transition-[filter,transform] hover:brightness-110 active:scale-[0.99]"><BookOpen className="h-4 w-4 shrink-0" />{installationProduct?.installationButtonLabel?.trim() || DEFAULT_INSTALLATION_BUTTON_LABEL}</button><p className="text-center text-xs leading-5 text-slate-600 sm:hidden">We recommend following these steps on the computer where the software is being installed.</p></div>}
 
                   {!isTurnitin && order.paymentStatus === 'paid' && order.fulfilmentStatus !== 'ready' && order.showDeliveryNotice !== false && <FulfilmentTimeNotice kind={/account/i.test(order.fulfilmentType || '') ? 'account' : 'licence'} />}
 
@@ -513,7 +514,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
                   {/* STATE 4: READY (Section 4 & 7) -> Licence code with Copy button and Resource Links */}
                   {order.paymentStatus === 'paid' && (order.activationCodeOrKey || order.windowsInstallerUrl || order.parallelsInstallerUrl || order.windows11DownloadUrl || order.guideUrl || order.learningResourcesUrl) && (
                     <div className="space-y-4">
-                      {order.activationCodeOrKey && <div className="p-5 rounded-2xl bg-[#014040] text-white space-y-2 shadow-xs">
+                      {order.activationCodeOrKey && <div className="hk-brand-pattern hk-pattern-outline hk-licence-pattern relative p-5 rounded-2xl bg-[#014040] text-white space-y-2 shadow-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-white/70 font-semibold uppercase tracking-wider">
                             Licence / Activation Code
@@ -637,13 +638,13 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
           )}
         </div>
       )}
-      {guideOpenOrderId && orders.find((order) => order.orderId === guideOpenOrderId) && <InstallationGuide
+      {guideOpenOrderId && orders.find((order) => order.orderId === guideOpenOrderId) && <React.Suspense fallback={<div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#001e1e]/80 text-sm font-bold text-white" role="status">Loading installation steps…</div>}><InstallationGuide
         order={orders.find((order) => order.orderId === guideOpenOrderId)!}
         product={installationSettingsFor(orders.find((order) => order.orderId === guideOpenOrderId)!)}
         onClose={() => setGuideOpenOrderId(null)}
         onOrderUpdated={(updated) => setOrders((previous) => previous.map((candidate) => candidate.orderId === updated.orderId ? { ...candidate, ...updated } : candidate))}
         onRefresh={() => refreshGuideOrder(orders.find((order) => order.orderId === guideOpenOrderId)!)}
-      />}
+      /></React.Suspense>}
     </div>
   );
 };

@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowLeft, ArrowRight, BookOpen, Check, Copy, Download, RefreshCw, X } from 'lucide-react';
 import type { CatalogueItem, Order } from '../types';
 import { installationGuideForOrder } from '../data/installationGuides';
 import { guideScreenshotUrl } from '../utils/guideImages';
+import { guideProgressKey, initialGuidePosition, shouldClearGuideProgress } from '../utils/guideProgress';
 
 interface Props {
   order: Order;
@@ -14,20 +16,30 @@ interface Props {
 
 export function InstallationGuide({ order, product, onClose, onOrderUpdated, onRefresh }: Props) {
   const guide = useMemo(() => installationGuideForOrder(order, product), [order, product]);
-  const storageKey = `hkt-install-guide:${order.orderId}:${guide?.id || 'none'}`;
+  const storageKey = guideProgressKey(order.orderId, guide?.id || 'none');
   const [position, setPosition] = useState(() => {
-    try { return Number(window.localStorage.getItem(storageKey) || 0); } catch { return 0; }
+    try { return initialGuidePosition(window.localStorage.getItem(storageKey), guide?.steps.length || 0); } catch { return 0; }
   });
+  const [direction, setDirection] = useState(1);
+  const reduceMotion = useReducedMotion();
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [inputValue, setInputValue] = useState(order.customerInputValue || '');
 
+  const closeGuide = useCallback(() => {
+    try {
+      if (shouldClearGuideProgress(position, guide?.steps.length || 0)) window.localStorage.removeItem(storageKey);
+      else window.localStorage.setItem(storageKey, String(position));
+    } catch { /* private browsing */ }
+    onClose();
+  }, [position, guide?.steps.length, storageKey, onClose]);
+
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') closeGuide(); };
     document.addEventListener('keydown', closeOnEscape);
     return () => document.removeEventListener('keydown', closeOnEscape);
-  }, [onClose]);
+  }, [closeGuide]);
 
   useEffect(() => {
     try { window.localStorage.setItem(storageKey, String(position)); } catch { /* private browsing */ }
@@ -41,6 +53,10 @@ export function InstallationGuide({ order, product, onClose, onOrderUpdated, onR
   const waitingForLicence = step?.kind === 'licence' && !order.activationCodeOrKey;
   const needsInput = step?.kind === 'customer-input' && !order.customerInputValue;
   const canContinue = !waitingForLicence && !needsInput && !busy;
+  const moveStep = (delta: number) => {
+    setDirection(delta > 0 ? 1 : -1);
+    setPosition((current) => Math.min(Math.max(0, current + delta), guide.steps.length));
+  };
 
   const copy = async (value: string) => {
     try {
@@ -71,7 +87,7 @@ export function InstallationGuide({ order, product, onClose, onOrderUpdated, onR
       const data = await response.json();
       if (!response.ok || !data.order) throw new Error(data.error || 'Could not submit your code.');
       onOrderUpdated(data.order);
-      setPosition((current) => Math.min(current + 1, guide.steps.length));
+      moveStep(1);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not submit your code.');
     } finally { setBusy(false); }
@@ -89,15 +105,21 @@ export function InstallationGuide({ order, product, onClose, onOrderUpdated, onR
             <h2 className="mt-1 text-xl font-black text-[#014040] sm:text-2xl">{guide.title}</h2>
             {guide.caption && <p className="mt-1 text-sm leading-5 text-slate-600">{guide.caption}</p>}
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100" aria-label="Close installation guide"><X className="h-5 w-5" /></button>
+          <button type="button" onClick={closeGuide} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100" aria-label="Close installation guide"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="px-5 pt-4 sm:px-7">
           <div className="flex justify-between text-sm font-bold text-[#014040]"><span>{complete ? 'Installation complete' : `Step ${stepIndex + 1} of ${guide.steps.length}`}</span><span>{percent}%</span></div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#d8e7e4]" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label="Installation progress"><div className="h-full rounded-full bg-[#05d92b] transition-[width] duration-300" style={{ width: `${percent}%` }} /></div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#d8e7e4]" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label="Installation progress"><motion.div className="hk-activation-gradient h-full rounded-full" initial={false} animate={{ width: `${percent}%` }} transition={{ duration: reduceMotion ? 0 : 0.35, ease: 'easeInOut' }} /></div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-7">
+          <AnimatePresence mode="wait" initial={false} custom={direction}>
+            <motion.div key={stepIndex} custom={direction} initial="enter" animate="center" exit="exit" variants={{
+              enter: (way: number) => ({ opacity: reduceMotion ? 1 : 0, x: reduceMotion ? 0 : way * 20 }),
+              center: { opacity: 1, x: 0 },
+              exit: (way: number) => ({ opacity: reduceMotion ? 1 : 0, x: reduceMotion ? 0 : way * -20 })
+            }} transition={{ duration: reduceMotion ? 0 : 0.16, ease: 'easeOut' }}>
           {complete ? (
             <div className="space-y-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#d9ffe0] text-[#047857]"><Check className="h-7 w-7" /></div>
@@ -164,13 +186,15 @@ export function InstallationGuide({ order, product, onClose, onOrderUpdated, onR
               {error && <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800" role="alert">{error}</p>}
             </div>
           )}
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#d8e7e4] px-5 py-4 sm:px-7">
-          <button type="button" disabled={stepIndex === 0} onClick={() => setPosition((current) => Math.max(0, current - 1))} className="inline-flex items-center gap-2 rounded-xl border border-[#bdd1cc] px-4 py-2.5 text-sm font-bold text-[#014040] disabled:opacity-40"><ArrowLeft className="h-4 w-4" />Back</button>
+          <button type="button" disabled={stepIndex === 0} onClick={() => moveStep(-1)} className="inline-flex items-center gap-2 rounded-xl border border-[#bdd1cc] px-4 py-2.5 text-sm font-bold text-[#014040] disabled:opacity-40"><ArrowLeft className="h-4 w-4" />Back</button>
           <div className="flex gap-2">
-            {step?.optional && <button type="button" onClick={() => setPosition((current) => Math.min(current + 1, guide.steps.length))} className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600">Skip</button>}
-            <button type="button" disabled={complete ? false : !canContinue} onClick={() => complete ? onClose() : setPosition((current) => Math.min(current + 1, guide.steps.length))} className="inline-flex items-center gap-2 rounded-xl bg-[#05ef28] px-5 py-2.5 text-sm font-black text-[#014040] disabled:opacity-45">{complete ? 'Back to order' : stepIndex === guide.steps.length - 1 ? 'Finish' : 'Done, next step'}{!complete && <ArrowRight className="h-4 w-4" />}</button>
+            {step?.optional && <button type="button" onClick={() => moveStep(1)} className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600">Skip</button>}
+            <button type="button" disabled={complete ? false : !canContinue} onClick={() => complete ? closeGuide() : moveStep(1)} className="inline-flex items-center gap-2 rounded-xl bg-[#05ef28] px-5 py-2.5 text-sm font-black text-[#014040] disabled:opacity-45">{complete ? 'Back to order' : stepIndex === guide.steps.length - 1 ? 'Finish' : 'Done, next step'}{!complete && <ArrowRight className="h-4 w-4" />}</button>
           </div>
         </div>
       </div>

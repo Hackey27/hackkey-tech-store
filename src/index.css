@@ -11,6 +11,7 @@
 :root {
   --landing-overlay-opacity: 0.52;
   --store-header-height: 68px;
+  --hk-activation-gradient: linear-gradient(110deg, #014040 0%, #014040 35%, #00d082 100%);
 }
 
 @layer base {
@@ -35,6 +36,85 @@
 
 .hk-store-header {
   transition: background-color 240ms ease, border-color 240ms ease, box-shadow 240ms ease;
+}
+
+.hk-activation-gradient {
+  background-image: var(--hk-activation-gradient);
+}
+
+/* All brand textures are separate, non-interactive layers behind their content. */
+.hk-brand-pattern {
+  isolation: isolate;
+}
+
+.hk-brand-pattern::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: var(--hk-pattern-image);
+  background-repeat: var(--hk-pattern-repeat, repeat);
+  background-size: var(--hk-pattern-size, 180px);
+  background-position: var(--hk-pattern-position, center);
+  opacity: var(--hk-pattern-opacity, 0.08);
+  mix-blend-mode: var(--hk-pattern-blend, normal);
+  filter: var(--hk-pattern-filter, none);
+}
+
+.hk-pattern-outline { --hk-pattern-image: url('/brand-pattern-outline.png'); }
+.hk-pattern-solid { --hk-pattern-image: url('/brand-pattern-solid.png'); }
+
+.hk-header-scrolled-pattern {
+  --hk-pattern-size: 190px;
+  --hk-pattern-opacity: 0.32;
+  --hk-pattern-blend: overlay;
+}
+
+.hk-price-pattern {
+  --hk-pattern-size: 190px;
+  --hk-pattern-opacity: 0.045;
+  --hk-pattern-filter: brightness(0);
+}
+
+.hk-licence-pattern {
+  --hk-pattern-size: 160px;
+  --hk-pattern-opacity: 0.085;
+}
+
+.hk-footer-pattern {
+  --hk-pattern-size: 155px;
+  --hk-pattern-opacity: 0.09;
+}
+
+.hk-category-title {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.hk-category-title::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  right: -1rem;
+  top: 50%;
+  width: clamp(13rem, 27vw, 24rem);
+  aspect-ratio: 1496 / 380;
+  transform: translateY(-50%);
+  background: #05ef28;
+  mask: url('/brand-element.png') center / contain no-repeat;
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+@media (max-width: 639px) {
+  .hk-header-scrolled-pattern { --hk-pattern-size: 140px; --hk-pattern-opacity: 0.26; }
+  .hk-price-pattern { --hk-pattern-size: 130px; }
+  .hk-licence-pattern { --hk-pattern-size: 120px; }
+  .hk-footer-pattern { --hk-pattern-size: 110px; }
+  .hk-category-title::after { top: auto; right: -2rem; bottom: 0.4rem; width: 10rem; transform: none; opacity: 0.22; }
 }
 
 .hk-landing-region {

@@ -278,7 +278,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
           </div>
         </section>
 
-        <aside className={product.kind === 'laptop' ? 'lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1' : 'rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-24'}>
+        <aside className={product.kind === 'laptop' ? 'lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1' : `relative rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-24 ${isQuoteOnly ? '' : 'hk-brand-pattern hk-pattern-outline hk-price-pattern'}`}>
           {isQuoteOnly ? (
             product.kind === 'laptop'
               ? <div className="space-y-5"><div className="rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6">{!showInterestForm
