@@ -161,6 +161,26 @@ const amosWindows: InstallationGuideDefinition = {
   ]
 };
 
+const mplusWindows: InstallationGuideDefinition = {
+  id: 'mplus-windows',
+  title: 'Install and activate Mplus on Windows',
+  steps: [
+    { title: 'Download Mplus', body: 'Download the installer for your order. If you already downloaded it, continue.', kind: 'download' },
+    { title: 'Open the installer', body: 'Double-click the Mplus ComboWindows ZIP file. Open the folder inside it, then double-click the installer.' },
+    { title: 'Accept the agreement', body: 'Click Next in InstallShield, accept the licence agreement, then click Next.' },
+    { title: 'Install Mplus', body: 'Leave the customer information fields blank. Click Next until you see Install, then click Install.' },
+    { title: 'Allow installation', body: 'If the User Account Control prompt is flashing on the Windows taskbar, open it and click Yes.' },
+    { title: 'Finish installation', body: 'Wait for the installation to complete, then click Finish.' },
+    { title: 'Skip the restart prompt', body: 'If Windows asks you to restart now, click No. You can restart later if Mplus Editor does not appear.' },
+    { title: 'Copy your Hardware ID', body: 'Open Mplus Editor from the Start menu. If you cannot find it, restart your computer and try again. In the registration window, click the copy icon next to Hardware ID.',
+      images: [{ src: asset('mplus-windows', 'image4.png'), alt: 'Mplus registration window showing the Hardware ID copy icon', markers: [mark(93, 24, 'Copy Hardware ID')] }] },
+    { title: 'Submit your Hardware ID', body: 'Paste your Hardware ID here. This updates the same order you can access from Find My Order. Check it carefully before submitting.', kind: 'customer-input' },
+    { title: 'Wait for your licence', body: 'When we add your licence, it will appear in this order. We will also notify you by email or WhatsApp. Use Check for licence to refresh.', kind: 'licence' },
+    { title: 'Register Mplus', body: 'Copy the licence from your order, paste it into Registration Information in the Mplus window, then click Register.' },
+    { title: 'Open Mplus Editor', body: 'When you see “Thanks for registration!”, click OK. Mplus Editor will launch.' }
+  ]
+};
+
 export function installationGuideForOrder(order: Order): InstallationGuideDefinition | null {
   if (order.paymentStatus !== 'paid' || order.macViaParallels) return null;
   const identity = `${order.productId || ''} ${order.productName}`.toLowerCase();
@@ -169,5 +189,6 @@ export function installationGuideForOrder(order: Order): InstallationGuideDefini
   if (/nvivo|\bnv\b/.test(identity)) return mac ? nvivoMac : nvivoWindows;
   if (/spss/.test(identity) && !/amos/.test(identity)) return mac ? spssMac : spssWindows;
   if (/amos/.test(identity) && !mac) return amosWindows;
+  if (/m\s?plus/.test(identity) && !mac) return mplusWindows;
   return null;
 }

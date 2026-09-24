@@ -52,3 +52,13 @@ test('AMOS uses the Windows Lock Code workflow and does not show a Mac guide', (
   assert.equal(guide?.steps.filter((step) => step.kind === 'customer-input').length, 1);
   assert.equal(installationGuideForOrder({ ...amos, deliveryOs: 'macOS' }), null);
 });
+
+test('Mplus uses the Windows Hardware ID workflow and does not show a Mac guide', () => {
+  const mplus = order({ productId: 'MPLUS', productName: 'Mplus', deliveryOs: 'Windows' });
+  const guide = installationGuideForOrder(mplus);
+  assert.equal(guide?.id, 'mplus-windows');
+  assert.equal(guide?.steps[0].kind, 'download');
+  assert.equal(guide?.steps.filter((step) => step.kind === 'customer-input').length, 1);
+  assert.ok(guide!.steps.findIndex((step) => step.kind === 'licence') > guide!.steps.findIndex((step) => step.kind === 'customer-input'));
+  assert.equal(installationGuideForOrder({ ...mplus, deliveryOs: 'macOS' }), null);
+});
