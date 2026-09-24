@@ -56,7 +56,7 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({
       <button type="button" onClick={onBack} className="mb-5 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-[#014040] hover:bg-[#edf5f3]">
         <ArrowLeft className="h-4 w-4" />{STORE_COPY.catalog.backToBrowse}
       </button>
-      <header className="rounded-3xl bg-[linear-gradient(90deg,#014040_0%,#014040_70%,#00d082_100%)] p-6 text-white shadow-sm sm:p-9">
+      <header className="rounded-3xl bg-[linear-gradient(110deg,#014040_0%,#014040_35%,#00d082_100%)] p-6 text-white shadow-sm sm:p-9">
         <h1 className="max-w-4xl text-2xl font-black tracking-tight sm:text-4xl">{category.name}</h1>
         {category.tagline && <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200 sm:text-base">{category.tagline}</p>}
         <p className="mt-4 text-xs font-bold text-[#d9ffe0]">{countLabel}</p>
