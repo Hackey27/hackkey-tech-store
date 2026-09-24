@@ -40,8 +40,17 @@ function newId(prefix: string): string {
   return `${prefix}-${Math.floor(100000 + Math.random() * 900000)}`;
 }
 
-function compactOrderCode(value: string, fallback: string, length: number): string {
-  return (value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, length) || fallback;
+function compactOrderCode(value: string, fallback: string, length: number, fromEnd = false): string {
+  const code = (value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return (fromEnd ? code.slice(-length) : code.slice(0, length)) || fallback;
+}
+
+function orderOptionCode(productId: string, versionOrPlan: string): string {
+  if (productId.toUpperCase() === 'TURNITIN') {
+    if (versionOrPlan.toUpperCase() === 'PLAG_AI') return 'AI';
+    if (versionOrPlan.toUpperCase() === 'PLAG') return 'PL';
+  }
+  return compactOrderCode(versionOrPlan, 'GEN', 3, true);
 }
 
 /**
@@ -58,8 +67,8 @@ export function buildOrderId(
   const stamp = date.toISOString().replace(/[-:]/g, '');
   const day = stamp.slice(0, 8);
   const time = stamp.slice(9, 15);
-  const productCode = compactOrderCode(productId, 'ITEM', 7);
-  const versionCode = compactOrderCode(versionOrPlan, 'GEN', 5);
+  const productCode = compactOrderCode(productId.replace(/[^a-zA-Z]/g, ''), 'ITE', 3);
+  const versionCode = orderOptionCode(productId, versionOrPlan);
   const uniqueCode = compactOrderCode(entropy, '000000', 6).padEnd(6, '0');
   return `HKT-${day}-${time}-${productCode}-${versionCode}-${uniqueCode}`;
 }

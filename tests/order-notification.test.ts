@@ -31,3 +31,42 @@ test('notification validation prevents misleading state-specific messages', () =
   assert.match(validateNotificationPurpose(order(), 'customer-input') || '', /paid order/i);
   assert.equal(validateNotificationPurpose(order(), 'status-update'), null);
 });
+
+test('Turnitin document received notification confirms processing and omits the order reference', () => {
+  const current = order({
+    productId: 'TURNITIN', variantId: 'TURNITIN', productName: 'Turnitin Plagiarism & AI Check',
+    versionOrPlan: 'Plagiarism + AI Check', paymentStatus: 'paid',
+    fulfilmentStatus: 'awaiting-seller-activation', documentReceivedAt: '2026-09-23T10:10:00.000Z'
+  });
+  assert.equal(notificationPurposeForOrder(current), 'turnitin-document-received');
+  assert.equal(validateNotificationPurpose(current, 'turnitin-document-received'), null);
+  const content = buildOrderNotification(current, 'turnitin-document-received', 'https://store.example/order/token');
+  assert.match(content.message, /Your document has been received and is being processed\. Your report will be ready in 30 to 40 minutes\./);
+  assert.doesNotMatch(content.subject + content.message, /HKT-TEST|Plagiarism \+ AI Check/);
+  assert.match(content.message, /https:\/\/store\.example\/order\/token/);
+});
+
+test('Turnitin references stay in details and payment messages, but not report-ready messages', () => {
+  const current = order({ productId: 'TURNITIN', variantId: 'TURNITIN', productName: 'Turnitin Plagiarism & AI Check', versionOrPlan: 'Plagiarism Only' });
+  const url = 'https://store.example/order/token';
+  for (const purpose of ['payment-reminder', 'turnitin-document'] as const) {
+    const content = buildOrderNotification(current, purpose, url);
+    assert.match(content.message, /HKT-TEST — Turnitin Plagiarism & AI Check Plagiarism Only/);
+  }
+  const ready = buildOrderNotification(current, 'turnitin-report', url);
+  assert.doesNotMatch(ready.subject + ready.message, /HKT-TEST|Plagiarism Only/);
+  for (const purpose of ['complete', 'status-update'] as const) {
+    const later = buildOrderNotification({ ...current, paymentStatus: 'paid' }, purpose, url);
+    assert.doesNotMatch(later.subject + later.message, /HKT-TEST|Plagiarism Only/);
+  }
+  assert.equal(notificationPurposeForOrder(order({ paymentStatus: 'paid', fulfilmentStatus: 'awaiting-seller-activation', documentReceivedAt: '2026-09-23T10:10:00.000Z' })), 'status-update');
+});
+
+test('non-Turnitin status templates keep their order reference and product details', () => {
+  const current = order({ paymentStatus: 'paid', fulfilmentStatus: 'ready' });
+  for (const purpose of ['complete', 'status-update'] as const) {
+    const content = buildOrderNotification(current, purpose, 'https://store.example/order/token');
+    assert.match(content.subject + content.message, /HKT-TEST/);
+    assert.match(content.message, /Order: HKT-TEST — SPSS 31\./);
+  }
+});

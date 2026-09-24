@@ -78,7 +78,7 @@ function publicBaseUrl(req: AdminRequest): string {
 }
 
 const notificationPurposes: CustomerNotificationPurpose[] = [
-  'payment-reminder', 'customer-input', 'status-update', 'complete', 'turnitin-document', 'turnitin-report'
+  'payment-reminder', 'customer-input', 'status-update', 'complete', 'turnitin-document', 'turnitin-document-received', 'turnitin-report'
 ];
 
 function notificationPurpose(value: unknown): CustomerNotificationPurpose | null {

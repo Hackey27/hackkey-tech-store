@@ -435,6 +435,7 @@ export type CustomerNotificationPurpose =
   | 'status-update'
   | 'complete'
   | 'turnitin-document'
+  | 'turnitin-document-received'
   | 'turnitin-report';
 
 export interface MomoPaymentDetails {
