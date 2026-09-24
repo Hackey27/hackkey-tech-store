@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { publicOrder } from '../server/publicOrder';
-import type { Order } from '../src/types';
+import { publicOrder, publicOrderWithProductGuide } from '../server/publicOrder';
+import type { Order, Product } from '../src/types';
 
 const order: Order = {
   orderId: 'HK-1', cartId: 'CART-1', orderDate: '2026-09-17T00:00:00Z',
@@ -33,4 +33,18 @@ test('the public order boundary never exposes an internal sales code', () => {
   assert.equal(visible.sellerSubmissionAlertError, undefined);
   assert.equal(visible.sellerSubmissionAlertAttempts, undefined);
   assert.equal(visible.activationCodeOrKey, 'CUSTOMER-LICENCE');
+});
+
+test('an existing order receives current guide settings even when its product is hidden', () => {
+  const product = {
+    productId: 'AMOS', active: false,
+    installationButtonLabel: 'Begin activation',
+    showInstallationGuideFallback: true,
+    installationGuides: { windows: { title: 'Updated AMOS guide', steps: [{ title: 'Download', body: 'Use your order link.', kind: 'download' }] } }
+  } as Product;
+  const visible = publicOrderWithProductGuide(order, product);
+  assert.equal(visible.installationButtonLabel, 'Begin activation');
+  assert.equal(visible.showInstallationGuideFallback, true);
+  assert.equal(visible.installationGuides?.windows?.steps[0].title, 'Download');
+  assert.equal(visible.salesCode, undefined);
 });

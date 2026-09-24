@@ -534,6 +534,11 @@ export interface Order {
   windows11DownloadUrl?: string;
   guideUrl?: string;
   learningResourcesUrl?: string;
+  /** Read-time product settings returned with a customer order lookup. They
+   * are not stored in the order, so later admin edits reach existing buyers. */
+  installationButtonLabel?: string;
+  installationGuides?: Product['installationGuides'];
+  showInstallationGuideFallback?: boolean;
   macViaParallels?: boolean;
   /** Hashes of bearer tokens created by the administrator for customer order links.
    * Raw tokens are never stored; several recent hashes remain valid so resending a

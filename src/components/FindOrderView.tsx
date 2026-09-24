@@ -62,6 +62,9 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
   const [paymentResults, setPaymentResults] = useState<Record<string, { options: PublicPaymentOptions; orderIds: string[]; totalPesewas: number; authorizationUrl?: string }>>({});
   const [guideOpenOrderId, setGuideOpenOrderId] = useState<string | null>(null);
   const autoOpenedGuide = useRef<string | null>(null);
+  const installationSettingsFor = (order: Order) => order.showInstallationGuideFallback !== undefined
+    ? order
+    : catalogItems.find((item) => item.itemId === order.productId || item.name === order.productName);
 
   // Copied states
   const [copiedKeys, setCopiedKeys] = useState<Record<string, boolean>>({});
@@ -140,8 +143,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
   useEffect(() => {
     if (!focusOrderId || autoOpenedGuide.current === focusOrderId) return;
     const focused = orders.find((candidate) => candidate.orderId === focusOrderId);
-    const product = catalogItems.find((item) => item.itemId === focused?.productId || item.name === focused?.productName);
-    if (focused && installationGuideForOrder(focused, product)) {
+    if (focused && installationGuideForOrder(focused, installationSettingsFor(focused))) {
       autoOpenedGuide.current = focusOrderId;
       setGuideOpenOrderId(focusOrderId);
     }
@@ -206,7 +208,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
       setActionSuccessMessage((prev) => ({ ...prev, [order.orderId]: data.message }));
       // Refresh order in list
       if (data.order) {
-        setOrders((prev) => prev.map((o) => (o.orderId === order.orderId ? data.order : o)));
+        setOrders((prev) => prev.map((o) => (o.orderId === order.orderId ? { ...o, ...data.order } : o)));
       }
     } catch (err: any) {
       setActionErrorMessage((prev) => ({ ...prev, [order.orderId]: err.message }));
@@ -285,6 +287,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
           {orders.length > 0 ? (
             <><div className="rounded-2xl bg-[#edf5f3] p-5"><h2 className="text-xl font-black text-[#014040]">{STORE_COPY.findOrder.resultsGreeting(orders[0].customerName)}</h2><p className="mt-1 text-sm text-slate-600">{sharedOrderId ? 'This secure link opens the selected order. You can still search with your submitted phone number above whenever you need to.' : 'Here are all the orders linked to this phone number.'}</p></div>{orders.map((order) => {
               const catalogueItem = catalogItems.find((item) => item.itemId === order.productId || item.name === order.productName);
+              const installationProduct = installationSettingsFor(order);
               const inputType = order.customerInputType || 'Lock Code';
               const isHardwareId = inputType === 'Hardware ID';
               const machineTypeForProgress = isHardwareId
@@ -385,7 +388,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
                     />
                   </div>
 
-                  {installationGuideForOrder(order, catalogueItem) && <div className="space-y-2"><button type="button" onClick={() => setGuideOpenOrderId(order.orderId)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(110deg,#014040_0%,#014040_35%,#00d082_100%)] px-5 py-3 text-sm font-black text-white shadow-sm transition-[filter,transform] hover:brightness-110 active:scale-[0.99]"><BookOpen className="h-4 w-4 shrink-0" />{catalogueItem?.installationButtonLabel?.trim() || DEFAULT_INSTALLATION_BUTTON_LABEL}</button><p className="text-center text-xs leading-5 text-slate-600 sm:hidden">We recommend following these steps on the computer where the software is being installed.</p></div>}
+                  {installationGuideForOrder(order, installationProduct) && <div className="space-y-2"><button type="button" onClick={() => setGuideOpenOrderId(order.orderId)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(110deg,#014040_0%,#014040_35%,#00d082_100%)] px-5 py-3 text-sm font-black text-white shadow-sm transition-[filter,transform] hover:brightness-110 active:scale-[0.99]"><BookOpen className="h-4 w-4 shrink-0" />{installationProduct?.installationButtonLabel?.trim() || DEFAULT_INSTALLATION_BUTTON_LABEL}</button><p className="text-center text-xs leading-5 text-slate-600 sm:hidden">We recommend following these steps on the computer where the software is being installed.</p></div>}
 
                   {!isTurnitin && order.paymentStatus === 'paid' && order.fulfilmentStatus !== 'ready' && order.showDeliveryNotice !== false && <FulfilmentTimeNotice kind={/account/i.test(order.fulfilmentType || '') ? 'account' : 'licence'} />}
 
@@ -402,7 +405,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
                         </div>
                       </div>
                       {!paymentResults[order.orderId] && <button type="button" onClick={() => void handlePay(order)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#014040] px-4 py-3 text-sm font-black text-white"><CreditCard className="h-4 w-4" />{paymentOptions?.mode === 'momo' ? STORE_COPY.payment.viewMomo : 'Proceed to pay'}</button>}
-                      {paymentResults[order.orderId] && <div className="space-y-3"><PaymentMethodPanel options={paymentResults[order.orderId].options} orderIds={paymentResults[order.orderId].orderIds} totalPesewas={paymentResults[order.orderId].totalPesewas} authorizationUrl={paymentResults[order.orderId].authorizationUrl} /><OrderPaymentWatcher orderId={order.orderId} onResolved={(updated) => { setOrders((previous) => previous.map((candidate) => candidate.orderId === updated.orderId ? updated : candidate)); setPaymentResults((previous) => { const next = { ...previous }; delete next[order.orderId]; return next; }); }} /></div>}
+                      {paymentResults[order.orderId] && <div className="space-y-3"><PaymentMethodPanel options={paymentResults[order.orderId].options} orderIds={paymentResults[order.orderId].orderIds} totalPesewas={paymentResults[order.orderId].totalPesewas} authorizationUrl={paymentResults[order.orderId].authorizationUrl} /><OrderPaymentWatcher orderId={order.orderId} onResolved={(updated) => { setOrders((previous) => previous.map((candidate) => candidate.orderId === updated.orderId ? { ...candidate, ...updated } : candidate)); setPaymentResults((previous) => { const next = { ...previous }; delete next[order.orderId]; return next; }); }} /></div>}
                     </div>
                   )}
 
@@ -587,7 +590,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
                                 <Download className="w-3.5 h-3.5 text-[#014040]" />
                                 <span>Download Software</span>
                               </a>}
-                              {order.guideUrl && catalogueItem?.showInstallationGuideFallback === true && <a
+                              {order.guideUrl && installationProduct?.showInstallationGuideFallback === true && <a
                                 href={order.guideUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -636,9 +639,9 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
       )}
       {guideOpenOrderId && orders.find((order) => order.orderId === guideOpenOrderId) && <InstallationGuide
         order={orders.find((order) => order.orderId === guideOpenOrderId)!}
-        product={catalogItems.find((item) => item.itemId === orders.find((order) => order.orderId === guideOpenOrderId)?.productId || item.name === orders.find((order) => order.orderId === guideOpenOrderId)?.productName)}
+        product={installationSettingsFor(orders.find((order) => order.orderId === guideOpenOrderId)!)}
         onClose={() => setGuideOpenOrderId(null)}
-        onOrderUpdated={(updated) => setOrders((previous) => previous.map((candidate) => candidate.orderId === updated.orderId ? updated : candidate))}
+        onOrderUpdated={(updated) => setOrders((previous) => previous.map((candidate) => candidate.orderId === updated.orderId ? { ...candidate, ...updated } : candidate))}
         onRefresh={() => refreshGuideOrder(orders.find((order) => order.orderId === guideOpenOrderId)!)}
       />}
     </div>

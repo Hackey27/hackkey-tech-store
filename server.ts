@@ -40,7 +40,7 @@ import {
   validateUpload
 } from './server/storage';
 import { createAdminRouter } from './server/adminRoutes';
-import { publicOrder } from './server/publicOrder';
+import { publicOrder, publicOrderWithCurrentGuide } from './server/publicOrder';
 import { turnitinDocumentUploadPolicy } from './server/documentUploadPolicy';
 import { renderProductSocialPreview } from './server/socialPreview';
 import { getPublicPaymentOptions, paymentModeUsesPaystack } from './server/paymentSettings';
@@ -257,7 +257,8 @@ async function startServer() {
 
     try {
       const orders = await lookupOrdersByPhone(phone);
-      res.json({ orders: orders.map(publicOrder), count: orders.length });
+      const productCache = new Map();
+      res.json({ orders: await Promise.all(orders.map((order) => publicOrderWithCurrentGuide(order, productCache))), count: orders.length });
     } catch (err) {
       failed(res, err, 'Failed to look up orders');
     }
@@ -277,7 +278,7 @@ async function startServer() {
     try {
       const order = await getOrderByAccessToken(orderId, token);
       if (!order) return res.status(404).json({ error: 'This order link is invalid or no longer available.' });
-      res.json({ order: publicOrder(order) });
+      res.json({ order: await publicOrderWithCurrentGuide(order) });
     } catch (err) {
       failed(res, err, 'Failed to open the order link');
     }
@@ -295,7 +296,7 @@ async function startServer() {
       if (!result.success) {
         return res.status(400).json({ error: result.message });
       }
-      res.json({ ...result, order: result.order ? publicOrder(result.order) : undefined });
+      res.json({ ...result, order: result.order ? await publicOrderWithCurrentGuide(result.order) : undefined });
     } catch (err) {
       failed(res, err, 'Failed to save customer input');
     }
