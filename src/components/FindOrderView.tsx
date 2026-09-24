@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Phone,
   CheckCircle2,
@@ -27,6 +27,8 @@ import { whatsAppDocumentLink } from '../utils/whatsapp';
 import { FulfilmentTimeNotice } from './FulfilmentTimeNotice';
 import { PaymentMethodPanel } from './PaymentMethodPanel';
 import { OrderPaymentWatcher } from './OrderPaymentWatcher';
+import { InstallationGuide } from './InstallationGuide';
+import { installationGuideForOrder } from '../data/installationGuides';
 
 /** The stored statuses are kebab-case; these are what the customer reads. */
 const FULFILMENT_LABELS: Record<string, string> = {
@@ -58,6 +60,8 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
   const [actionSuccessMessage, setActionSuccessMessage] = useState<Record<string, string>>({});
   const [actionErrorMessage, setActionErrorMessage] = useState<Record<string, string>>({});
   const [paymentResults, setPaymentResults] = useState<Record<string, { options: PublicPaymentOptions; orderIds: string[]; totalPesewas: number; authorizationUrl?: string }>>({});
+  const [guideOpenOrderId, setGuideOpenOrderId] = useState<string | null>(null);
+  const autoOpenedGuide = useRef<string | null>(null);
 
   // Copied states
   const [copiedKeys, setCopiedKeys] = useState<Record<string, boolean>>({});
@@ -132,6 +136,29 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
     if (!focusOrderId || !orders.length) return;
     window.setTimeout(() => document.getElementById(`order-${focusOrderId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   }, [focusOrderId, orders]);
+
+  useEffect(() => {
+    if (!focusOrderId || autoOpenedGuide.current === focusOrderId) return;
+    const focused = orders.find((candidate) => candidate.orderId === focusOrderId);
+    if (focused && installationGuideForOrder(focused)) {
+      autoOpenedGuide.current = focusOrderId;
+      setGuideOpenOrderId(focusOrderId);
+    }
+  }, [focusOrderId, orders]);
+
+  const refreshGuideOrder = async (order: Order): Promise<Order> => {
+    const url = sharedOrderId === order.orderId && sharedAccessToken
+      ? `/api/orders/${encodeURIComponent(order.orderId)}/access?token=${encodeURIComponent(sharedAccessToken)}`
+      : `/api/orders/lookup?phone=${encodeURIComponent(phoneNumber || order.phone)}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Could not refresh this order.');
+    const updated = sharedOrderId === order.orderId && sharedAccessToken
+      ? data.order as Order
+      : (data.orders as Order[]).find((candidate) => candidate.orderId === order.orderId);
+    if (!updated) throw new Error('This order was not found. Search with the phone number submitted at checkout.');
+    return updated;
+  };
 
   const handlePay = async (order: Order) => {
     setActionErrorMessage((old) => ({ ...old, [order.orderId]: '' }));
@@ -356,6 +383,8 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
                       currentStep={currentStep}
                     />
                   </div>
+
+                  {installationGuideForOrder(order) && <button type="button" onClick={() => setGuideOpenOrderId(order.orderId)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#014040] px-5 py-3 text-sm font-black text-white hover:bg-[#025656]"><BookOpen className="h-4 w-4" />Open installation steps</button>}
 
                   {!isTurnitin && order.paymentStatus === 'paid' && order.fulfilmentStatus !== 'ready' && order.showDeliveryNotice !== false && <FulfilmentTimeNotice kind={/account/i.test(order.fulfilmentType || '') ? 'account' : 'licence'} />}
 
@@ -604,6 +633,12 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
           )}
         </div>
       )}
+      {guideOpenOrderId && orders.find((order) => order.orderId === guideOpenOrderId) && <InstallationGuide
+        order={orders.find((order) => order.orderId === guideOpenOrderId)!}
+        onClose={() => setGuideOpenOrderId(null)}
+        onOrderUpdated={(updated) => setOrders((previous) => previous.map((candidate) => candidate.orderId === updated.orderId ? updated : candidate))}
+        onRefresh={() => refreshGuideOrder(orders.find((order) => order.orderId === guideOpenOrderId)!)}
+      />}
     </div>
   );
 };

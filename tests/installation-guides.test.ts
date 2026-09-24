@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import type { Order } from '../src/types';
+import { installationGuideForOrder } from '../src/data/installationGuides';
+
+const order = (patch: Partial<Order> = {}): Order => ({
+  orderId: 'HKT-GUIDE-1',
+  cartId: 'CART-1',
+  orderDate: '2026-09-24T00:00:00.000Z',
+  lastUpdated: '2026-09-24T00:00:00.000Z',
+  customerName: 'Customer',
+  phone: '0550000000',
+  email: 'buyer@example.com',
+  productId: 'PLS',
+  productName: 'SmartPLS',
+  variantId: 'PLS-4118-MAC',
+  versionOrPlan: '4.1.1.8',
+  deliveryOs: 'macOS',
+  amountPesewas: 20000,
+  paymentStatus: 'paid',
+  fulfilmentStatus: 'ready',
+  ...patch
+});
+
+test('installation steps are available only after payment and match the selected OS', () => {
+  assert.equal(installationGuideForOrder(order({ paymentStatus: 'pending' })), null);
+  assert.equal(installationGuideForOrder(order({ deliveryOs: 'Mac via Parallels', macViaParallels: true })), null);
+  assert.equal(installationGuideForOrder(order())?.id, 'smartpls-mac');
+  assert.equal(installationGuideForOrder(order({ deliveryOs: 'Windows' }))?.id, 'smartpls-windows');
+  assert.equal(installationGuideForOrder(order({ productId: 'NV', productName: 'NVivo 15' }))?.id, 'nvivo-mac');
+});
+
+test('SmartPLS macOS download command follows the purchased version', () => {
+  assert.equal(installationGuideForOrder(order({ versionOrPlan: '4.1.1.6' }))?.command, 'curl smartpls.app/4116 | bash');
+  assert.equal(installationGuideForOrder(order({ versionOrPlan: '4.1.1.8' }))?.command, 'curl smartpls.app | bash');
+});
