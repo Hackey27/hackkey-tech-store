@@ -28,7 +28,7 @@ This phase is strictly **READ-ONLY**:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    React + TypeScript UI                    │
-│  (Maven Pro Font, Dark Green #014040, Bright Green #05ef28) │
+│   (Archivo + Maven Pro, Dark Green #014040, Bright #05ef28) │
 │   Components: Navbar, CategoryCard, ProductCard             │
 └──────────────────────────────┬──────────────────────────────┘
                                │ HTTP GET (/api/catalog)
@@ -74,7 +74,7 @@ This phase is strictly **READ-ONLY**:
 - **Accent Bright Green**: `#05ef28`
 - **Contrast White**: `#ffffff`
 - **Dark Canvas Background**: `#0b1414` / `#0e1c1c`
-- **Typography**: Google Font **Maven Pro** (`font-sans`)
+- **Typography**: Google Font **Maven Pro** for titles (`font-heading`); **Archivo** for prices and other details (`font-sans`)
 
 ---
 
