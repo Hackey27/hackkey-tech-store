@@ -139,6 +139,28 @@ const spssMac: InstallationGuideDefinition = {
   ]
 };
 
+const amosWindows: InstallationGuideDefinition = {
+  id: 'amos-windows',
+  title: 'Install and activate AMOS on Windows',
+  steps: [
+    { title: 'Download AMOS', body: 'Download the installer for your order. If you already have it, continue.', kind: 'download' },
+    { title: 'Open the installer', body: 'Double-click the downloaded AMOS file. User Account Control should appear after about 30 seconds.' },
+    { title: 'Allow installation', body: 'Click Yes in User Account Control.' },
+    { title: 'Accept and install', body: 'Click Next in InstallShield, accept the licence agreement, click Next, then click Install.' },
+    { title: 'Finish installation', body: 'Wait for installation to finish. Uncheck Start IBM SPSS Amos, then click Finish.' },
+    { title: 'Open License Authorization Wizard', body: 'Open the Windows Start menu and search LAW. Open IBM SPSS Amos License Authorization Wizard.',
+      images: [{ src: asset('amos-windows', 'image5.png'), alt: 'Search for the AMOS License Authorization Wizard', markers: [mark(24, 25, 'Open this app')] }] },
+    { title: 'Continue in the wizard', body: 'Click Next in the License Status window.' },
+    { title: 'Copy your Lock Code', body: 'Choose Authorized user license. Highlight the Lock Code for this machine and copy it with Ctrl+C.',
+      images: [{ src: asset('amos-windows', 'image2.png'), alt: 'AMOS License Wizard showing the machine Lock Code', markers: [mark(35, 55, 'Copy Lock Code')] }] },
+    { title: 'Submit your Lock Code', body: 'Paste the Lock Code here. This updates the same order you can access from Find My Order. Check it carefully before submitting.', kind: 'customer-input' },
+    { title: 'Wait for your licence', body: 'When we add your licence, it will appear in this order. We will also notify you by email or WhatsApp. Use Check for licence to refresh.', kind: 'licence' },
+    { title: 'Enter the licence in AMOS', body: 'Return to License Authorization Wizard, click Next, paste the licence into Enter Code, click Add, then click Next twice.',
+      images: [{ src: asset('amos-windows', 'image4.png'), alt: 'AMOS licence entry screen', markers: [mark(34, 41, 'Paste licence'), mark(69, 43, 'Click Add'), mark(85, 97, 'Click Next')] }] },
+    { title: 'Finish activation', body: 'Confirm the licence expiry screen and click Finish. Open AMOS and click Allow if Windows asks for network access.' }
+  ]
+};
+
 export function installationGuideForOrder(order: Order): InstallationGuideDefinition | null {
   if (order.paymentStatus !== 'paid' || order.macViaParallels) return null;
   const identity = `${order.productId || ''} ${order.productName}`.toLowerCase();
@@ -146,5 +168,6 @@ export function installationGuideForOrder(order: Order): InstallationGuideDefini
   if (/smart\s?pls|\bpls\b/.test(identity)) return mac ? smartPlsMac(order) : smartPlsWindows;
   if (/nvivo|\bnv\b/.test(identity)) return mac ? nvivoMac : nvivoWindows;
   if (/spss/.test(identity) && !/amos/.test(identity)) return mac ? spssMac : spssWindows;
+  if (/amos/.test(identity) && !mac) return amosWindows;
   return null;
 }

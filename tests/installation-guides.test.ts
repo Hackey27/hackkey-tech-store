@@ -44,3 +44,11 @@ test('SPSS guides include one shared-order Lock Code submission step', () => {
     assert.ok(guide.steps.findIndex((step) => step.kind === 'licence') > guide.steps.findIndex((step) => step.kind === 'customer-input'));
   }
 });
+
+test('AMOS uses the Windows Lock Code workflow and does not show a Mac guide', () => {
+  const amos = order({ productId: 'AMOS', productName: 'AMOS', deliveryOs: 'Windows' });
+  const guide = installationGuideForOrder(amos);
+  assert.equal(guide?.id, 'amos-windows');
+  assert.equal(guide?.steps.filter((step) => step.kind === 'customer-input').length, 1);
+  assert.equal(installationGuideForOrder({ ...amos, deliveryOs: 'macOS' }), null);
+});
