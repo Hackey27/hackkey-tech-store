@@ -18,13 +18,13 @@ export const FloatingWhatsApp: React.FC = () => {
       rel="noopener noreferrer"
       aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}
       title={STORE_COPY.brand.whatsAppCta}
-      className="group fixed bottom-24 right-4 md:bottom-6 md:right-6 z-[45] flex flex-row-reverse items-center gap-3"
+      className="group fixed bottom-24 right-4 md:bottom-6 md:right-6 z-[45] flex h-14 w-14 items-center justify-center"
     >
       <span className="relative flex h-14 w-14 items-center justify-center">
         {/* Expanding halo */}
         <span
           aria-hidden="true"
-          className="hk-whatsapp-ring absolute inline-flex h-14 w-14 rounded-full bg-[#25D366]/45"
+          className="hk-whatsapp-ring pointer-events-none absolute inline-flex h-14 w-14 rounded-full bg-[#25D366]/45"
         />
 
         {/* Button face */}
@@ -34,7 +34,7 @@ export const FloatingWhatsApp: React.FC = () => {
       </span>
 
       {/* Label reveals on pointer devices only */}
-      <span className="hidden md:inline-flex items-center rounded-full bg-[#014040] px-3.5 py-2 text-xs font-bold text-white shadow-md opacity-0 translate-x-1.5 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0 pointer-events-none">
+      <span className="pointer-events-none absolute right-16 hidden whitespace-nowrap rounded-full bg-[#014040] px-3.5 py-2 text-xs font-bold text-white shadow-md opacity-0 translate-x-1.5 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0 md:inline-flex">
         {STORE_COPY.brand.whatsAppCta}
       </span>
     </a>

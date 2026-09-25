@@ -314,9 +314,9 @@ export const STORE_COPY = {
     total: 'Total',
     proceedToCheckout: 'Proceed to checkout',
     flyout: {
-      closeLabel: 'Close cart preview',
+      closeLabel: 'Close cart',
       ready: 'Ready when you are',
-      lineCount: (count: number) => `${count} line${count === 1 ? '' : 's'} selected`,
+      lineCount: (count: number) => `${count} product${count === 1 ? '' : 's'} selected`,
       emptyDescription: 'Browse the catalogue and add an item to get started.',
       browseProducts: 'Browse products',
       quantity: (quantity: number) => `Qty ${quantity}`,

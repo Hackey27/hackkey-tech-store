@@ -26,7 +26,7 @@ const finite = (value: unknown, fallback = 0) => {
 function cleanPromotion(input: Partial<PromotionRule> | undefined): PromotionRule {
   return {
     active: input?.active === true,
-    percent: Math.min(100, Math.max(0, finite(input?.percent))),
+    percent: Math.trunc(Math.min(100, Math.max(0, finite(input?.percent)))),
     label: String(input?.label || '').trim().slice(0, 120),
     targetIds: Array.isArray(input?.targetIds) ? [...new Set(input.targetIds.map(String).filter(Boolean))] : [],
     ...(input?.endsAt ? { endsAt: String(input.endsAt) } : {})
@@ -37,13 +37,13 @@ export function normalisePricingConfig(input: Partial<PricingConfig> | undefined
   const silent = input?.silentAdjustment;
   const fixedAdjustmentsGhs = Object.fromEntries(
     Object.entries(silent?.fixedAdjustmentsGhs || {})
-      .map(([targetId, amount]) => [String(targetId), Math.max(-1_000_000, Math.min(1_000_000, finite(amount)))])
+      .map(([targetId, amount]) => [String(targetId), Math.trunc(Math.max(-1_000_000, Math.min(1_000_000, finite(amount))))])
       .filter(([targetId, amount]) => Boolean(targetId) && amount !== 0)
   );
   return {
     silentAdjustment: {
       active: silent?.active === true,
-      percent: Math.max(-99, Math.min(1000, finite(silent?.percent))),
+      percent: Math.trunc(Math.max(-99, Math.min(1000, finite(silent?.percent)))),
       targetIds: Array.isArray(silent?.targetIds) ? [...new Set(silent.targetIds.map(String).filter(Boolean))] : [],
       fixedAdjustmentsGhs
     },

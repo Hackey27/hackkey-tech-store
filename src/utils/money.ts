@@ -149,7 +149,9 @@ export function applyPricingRules(
     return { listPesewas, payablePesewas: listPesewas };
   }
 
-  const payablePesewas = Math.max(1, Math.round(listPesewas * (1 - promo.percent / 100)));
+  // Promotions display and charge whole cedis, rounded to the nearest cedi.
+  // Keep the underlying arithmetic in pesewas so every checkout path agrees.
+  const payablePesewas = Math.max(1, Math.round(listPesewas * (1 - promo.percent / 100) / 100) * 100);
   return {
     listPesewas,
     payablePesewas,

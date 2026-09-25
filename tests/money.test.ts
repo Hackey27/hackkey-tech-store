@@ -19,6 +19,7 @@ import { PricingConfig, ServiceOption } from '../src/types';
 import { TURNITIN_SERVICE } from '../server/seed/turnitin';
 import { STORE_COPY } from '../src/config/storeCopy';
 import { isTurnitinAiCheck } from '../src/utils/turnitin';
+import { normalisePricingConfig } from '../server/pricingConfig';
 
 const PLAG_AI: ServiceOption = {
   optionId: 'PLAG_AI',
@@ -193,11 +194,37 @@ test('an item-specific promotion targets the service by SERVICE:<id>', () => {
   };
   const { totalPesewas } = priceServiceLine(PLAG_AI, 2);
   const applied = applyPricingRules(totalPesewas, serviceTargetIds('TURNITIN', 'PLAG_AI'), config);
-  assert.equal(applied.payablePesewas, 8550, '10% off GHS 95.00 is GHS 85.50');
+  assert.equal(applied.payablePesewas, 8600, '10% off GHS 95.00 rounds GHS 85.50 to GHS 86');
   assert.equal(applied.promoLabel, 'Launch offer');
-  // Still whole pesewas, and the half-cedi survives rather than being rounded
-  // away to a whole cedi.
-  assert.ok(Number.isInteger(applied.payablePesewas));
+  assert.equal(applied.payablePesewas % 100, 0);
+});
+
+test('percentage promotions round to the nearest whole cedi', () => {
+  const config: PricingConfig = {
+    ...neutral,
+    globalPromotion: { active: true, percent: 15, label: 'Sale', targetIds: [] }
+  };
+  assert.equal(applyPricingRules(4_750, ['SMARTPLS'], config).payablePesewas, 4_000);
+  assert.equal(applyPricingRules(5_000, ['SMARTPLS'], config).payablePesewas, 4_300);
+});
+
+test('a fixed adjustment can target one software version without changing its siblings', () => {
+  const config: PricingConfig = {
+    ...neutral,
+    silentAdjustment: { active: true, percent: 0, targetIds: [], fixedAdjustmentsGhs: { 'SMARTPLS-4118-WIN': -20 } }
+  };
+  assert.equal(applyPricingRules(20_000, ['SMARTPLS', 'SMARTPLS-4118-WIN'], config).payablePesewas, 18_000);
+  assert.equal(applyPricingRules(20_000, ['SMARTPLS', 'SMARTPLS-4118-MAC'], config).payablePesewas, 20_000);
+});
+
+test('saved pricing adjustments and discount percentages are whole numbers', () => {
+  const config = normalisePricingConfig({
+    silentAdjustment: { active: true, percent: -12.5, targetIds: [], fixedAdjustmentsGhs: { V1: 4.75 } },
+    globalPromotion: { active: true, percent: 8.9, label: 'Sale', targetIds: [] }
+  });
+  assert.equal(config.silentAdjustment.percent, -12);
+  assert.equal(config.silentAdjustment.fixedAdjustmentsGhs?.V1, 4);
+  assert.equal(config.globalPromotion.percent, 8);
 });
 
 test('a promotion aimed at another service does not apply', () => {

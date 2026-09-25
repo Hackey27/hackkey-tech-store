@@ -12,6 +12,7 @@ interface HeaderProps {
   onSelectTab: (tab: 'home' | 'find-order' | 'help' | 'request' | 'cart') => void;
   cartCount?: number;
   cartItems: CartItem[];
+  onRemoveCartItem: (id: string) => void;
   isLandingTransparent?: boolean;
 }
 
@@ -22,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectTab,
   cartCount = 0,
   cartItems,
+  onRemoveCartItem,
   isLandingTransparent = false,
 }) => {
   const [cartOpen, setCartOpen] = useState(false);
@@ -188,6 +190,7 @@ export const Header: React.FC<HeaderProps> = ({
           setCartOpen(false);
           onSelectTab('home');
         }}
+        onRemoveItem={onRemoveCartItem}
       />
     </header>
   );

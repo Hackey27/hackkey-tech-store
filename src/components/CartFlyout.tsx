@@ -1,5 +1,6 @@
 import React, { RefObject, useEffect, useRef, useState } from 'react';
-import { ArrowRight, ShoppingBag, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ArrowRight, ShoppingBag, Trash2, X } from 'lucide-react';
 import { CartItem } from './CartView';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
 import { STORE_COPY } from '../config/storeCopy';
@@ -11,6 +12,7 @@ interface CartFlyoutProps {
   onClose: () => void;
   onCheckout: () => void;
   onBrowse: () => void;
+  onRemoveItem: (id: string) => void;
 }
 
 export const CartFlyout: React.FC<CartFlyoutProps> = ({
@@ -20,6 +22,7 @@ export const CartFlyout: React.FC<CartFlyoutProps> = ({
   onClose,
   onCheckout,
   onBrowse,
+  onRemoveItem,
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -87,12 +90,12 @@ export const CartFlyout: React.FC<CartFlyoutProps> = ({
     0,
   );
 
-  return (
+  return createPortal(
     <>
       <button
         type="button"
         aria-label={STORE_COPY.cart.flyout.closeLabel}
-        className={`hk-cart-backdrop fixed inset-0 z-0 cursor-default bg-black/15 transition-opacity duration-[220ms] ${
+        className={`hk-cart-backdrop fixed inset-0 z-[80] cursor-default bg-[#012f2e]/35 backdrop-blur-sm transition-opacity duration-[220ms] ${
           open ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         onClick={onClose}
@@ -104,8 +107,8 @@ export const CartFlyout: React.FC<CartFlyoutProps> = ({
         aria-modal="true"
         aria-labelledby="header-cart-flyout-title"
         aria-hidden={!open}
-        className={`hk-cart-flyout fixed right-3 top-[116px] z-10 flex max-h-[calc(100vh-132px)] w-[calc(100vw-24px)] max-w-sm origin-top-right flex-col overflow-hidden rounded-2xl border border-[#cbdcd9] bg-white shadow-2xl sm:right-5 sm:top-[68px] sm:max-h-[calc(100vh-84px)] ${
-          open ? 'translate-y-0 scale-100 opacity-100' : 'pointer-events-none -translate-y-1.5 scale-[0.98] opacity-0'
+        className={`hk-cart-flyout fixed inset-y-0 right-0 z-[81] flex h-dvh w-full max-w-md flex-col overflow-hidden border-l border-[#cbdcd9] bg-white shadow-2xl ${
+          open ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-full opacity-100'
         }`}
       >
         <div className="flex items-center justify-between border-b border-[#e2ecea] px-4 py-3.5">
@@ -158,7 +161,7 @@ export const CartFlyout: React.FC<CartFlyoutProps> = ({
                       {option && <p className="truncate text-[11px] text-slate-500">{option}</p>}
                       <p className="mt-1 text-[11px] font-semibold text-slate-600">{STORE_COPY.cart.flyout.quantity(item.quantity)}</p>
                     </div>
-                    <p className="shrink-0 text-xs font-black text-[#014040]">{formatPesewas(total)}</p>
+                    <div className="flex shrink-0 flex-col items-end gap-2"><p className="text-xs font-black text-[#014040]">{formatPesewas(total)}</p><button type="button" onClick={() => onRemoveItem(item.id)} aria-label={`Remove ${item.product.name} from cart`} className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50"><Trash2 className="h-4 w-4" /></button></div>
                   </div>
                 );
               })}
@@ -179,6 +182,7 @@ export const CartFlyout: React.FC<CartFlyoutProps> = ({
           </>
         )}
       </div>
-    </>
+    </>,
+    document.body
   );
 };
