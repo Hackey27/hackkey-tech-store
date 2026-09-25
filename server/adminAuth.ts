@@ -5,6 +5,7 @@ import { NextFunction, Request, Response } from 'express';
 export interface AdminActor {
   uid: string;
   email?: string;
+  authTime?: number;
 }
 
 export interface AdminRequest extends Request {
@@ -34,7 +35,7 @@ export function bearerToken(header?: string): string | null {
 }
 
 export function validateAdminClaims(
-  token: Pick<DecodedIdToken, 'uid' | 'email' | 'aud' | 'iss'> & { admin?: boolean },
+  token: Pick<DecodedIdToken, 'uid' | 'email' | 'aud' | 'iss'> & { admin?: boolean; auth_time?: number },
   expectedProject = projectId()
 ): AdminActor {
   const issuer = `https://securetoken.google.com/${expectedProject}`;
@@ -46,7 +47,11 @@ export function validateAdminClaims(
     error.status = 403;
     throw error;
   }
-  return { uid: token.uid, email: token.email };
+  return { uid: token.uid, email: token.email, ...(typeof token.auth_time === 'number' ? { authTime: token.auth_time } : {}) };
+}
+
+export function hasRecentAdminAuth(actor: AdminActor, nowSeconds = Date.now() / 1000): boolean {
+  return Boolean(actor.authTime && actor.authTime <= nowSeconds + 30 && nowSeconds - actor.authTime <= 300);
 }
 
 export async function verifyAdminToken(idToken: string): Promise<AdminActor> {

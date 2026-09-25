@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bearerToken, requireAdmin, validateAdminClaims } from '../server/adminAuth';
+import { bearerToken, hasRecentAdminAuth, requireAdmin, validateAdminClaims } from '../server/adminAuth';
 import { validateLicenceRows, validateServiceDefinition } from '../server/adminValidation';
 import { Order, Service, TurnitinReportDocument } from '../src/types';
 import express from 'express';
@@ -30,6 +30,14 @@ test('bearer token parsing refuses missing and malformed authorization', () => {
   assert.equal(bearerToken(), null);
   assert.equal(bearerToken('Basic abc'), null);
   assert.equal(bearerToken('Bearer token-value'), 'token-value');
+});
+
+test('assigned-value corrections require a recent verified sign-in', () => {
+  const now = 1_800_000_000;
+  assert.equal(hasRecentAdminAuth({ uid: 'admin-1', authTime: now - 60 }, now), true);
+  assert.equal(hasRecentAdminAuth({ uid: 'admin-1', authTime: now - 301 }, now), false);
+  assert.equal(hasRecentAdminAuth({ uid: 'admin-1' }, now), false);
+  assert.equal(hasRecentAdminAuth({ uid: 'admin-1', authTime: now + 60 }, now), false);
 });
 
 test('admin middleware rejects a request with no token', async () => {

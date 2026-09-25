@@ -10,6 +10,20 @@ import {
 import { searchCatalogue } from '../src/utils/catalogueSearch';
 import type { CatalogueItem } from '../src/types';
 import { renderProductSocialPreview } from '../server/socialPreview';
+import { availableCardChoices } from '../src/components/CardSoftwareChoice';
+
+test('preview cart offers every available OS/version but Buy latest only offers latest version OS choices', () => {
+  const product = {
+    kind: 'product', itemId: 'SPSS', name: 'SPSS', categoryId: 'DATA',
+    variants: [
+      { variantId: 'v31', versionOrPlan: '31', osList: ['Windows', 'macOS'], available: true, latest: true },
+      { variantId: 'v30', versionOrPlan: '30', osList: ['Windows', 'macOS'], available: true },
+      { variantId: 'v29', versionOrPlan: '29', osList: ['Windows'], available: false }
+    ]
+  } as CatalogueItem;
+  assert.deepEqual(availableCardChoices(product, 'add').map((variant) => variant.variantId), ['v31', 'v30']);
+  assert.deepEqual(availableCardChoices(product, 'buy-latest').map((variant) => variant.variantId), ['v31']);
+});
 
 test('Google Drive share links become renderable image URLs', () => {
   assert.equal(

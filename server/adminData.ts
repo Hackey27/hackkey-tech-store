@@ -1,4 +1,4 @@
-import { Firestore } from '@google-cloud/firestore';
+import { FieldValue, Firestore } from '@google-cloud/firestore';
 import {
   Announcement,
   Bundle,
@@ -310,7 +310,9 @@ export async function assignLicence(
     if (!orderSnap.exists) throw new Error('Order not found.');
     const order = orderSnap.data() as Order;
     if (order.paymentStatus !== 'paid') throw new Error('A licence can only be assigned to a paid order.');
+    if (order.deliveryCodeType === 'sales-code') throw new Error('Use Sales ID assignment and add the generated licence separately for this order.');
     if (order.licenceId) throw new Error('This order already has a licence.');
+    if (order.activationCodeOrKey) throw new Error('This order already has a licence code. Use the guarded edit in order details.');
 
     let licenceRef;
     let licence: LicencePoolEntry;
@@ -341,14 +343,14 @@ export async function assignLicence(
               .collection(COLLECTIONS.licencePool)
               .where('variantId', '==', order.variantId)
               .where('status', '==', 'available')
-              .limit(1)
           );
-      const doc = 'docs' in licenceSnap ? licenceSnap.docs[0] : licenceSnap;
+      const doc = 'docs' in licenceSnap ? licenceSnap.docs.find((entry) => (entry.data() as LicencePoolEntry).codeType !== 'sales-code') : licenceSnap;
       if (!doc?.exists) throw new Error(`No available licence for ${order.variantId}.`);
       licence = doc.data() as LicencePoolEntry;
       if (licence.status !== 'available' || licence.variantId !== order.variantId) {
         throw new Error('That licence is no longer available for this order.');
       }
+      if (licence.codeType === 'sales-code') throw new Error('A Sales ID cannot be assigned as a customer licence.');
       licenceRef = doc.ref;
     }
 
@@ -394,15 +396,17 @@ export async function assignSalesCode(
     const order = orderSnap.data() as Order;
     if (order.paymentStatus !== 'paid') throw new Error('A Sales ID can only be assigned to a paid order.');
     if (order.salesCode) throw new Error('This order already has a Sales ID.');
+    if (order.licenceId) throw new Error('This order already has a stock code assigned. Review and correct it in order details first.');
     const licenceSnap = input.licenceId
       ? await tx.get(db.collection(COLLECTIONS.licencePool).doc(input.licenceId))
-      : await tx.get(db.collection(COLLECTIONS.licencePool).where('variantId', '==', order.variantId).where('status', '==', 'available').limit(1));
-    const doc = 'docs' in licenceSnap ? licenceSnap.docs[0] : licenceSnap;
+      : await tx.get(db.collection(COLLECTIONS.licencePool).where('variantId', '==', order.variantId).where('status', '==', 'available'));
+    const doc = 'docs' in licenceSnap ? licenceSnap.docs.find((entry) => (entry.data() as LicencePoolEntry).codeType === 'sales-code') : licenceSnap;
     if (!doc?.exists) throw new Error(`No available Sales ID for ${order.variantId}.`);
     const licence = doc.data() as LicencePoolEntry;
     if (licence.status !== 'available' || licence.variantId !== order.variantId) {
       throw new Error('That Sales ID is no longer available for this order.');
     }
+    if (licence.codeType !== 'sales-code') throw new Error('A customer licence cannot be assigned as a Sales ID.');
     const customerInputType = order.customerInputType || defaultCustomerInputType(order.productId);
     const status: FulfilmentStatus = customerInputType && !order.customerInputValue
       ? 'awaiting-customer-input'
@@ -421,6 +425,86 @@ export async function assignSalesCode(
     tx.update(doc.ref, { status: 'assigned', assignedOrderId: order.orderId, dateAssigned: at });
     tx.update(orderRef, updated);
     return updated;
+  });
+}
+
+/** Corrections to already assigned values are deliberately separate from the ordinary workflow editor. */
+export async function correctAssignedOrderValue(
+  orderId: string,
+  kind: 'sales-id' | 'licence' | 'momo-reference',
+  replacement: string,
+  reason: string,
+  actor: AdminActor
+): Promise<void> {
+  const value = replacement.trim();
+  if (!reason.trim()) throw new Error('Explain why this assigned value is being changed.');
+  if (value.length > 1000) throw new Error('The replacement value is too long.');
+  const db = getFirestore();
+  const orderRef = db.collection(COLLECTIONS.orders).doc(orderId);
+  await db.runTransaction(async (tx) => {
+    const orderSnap = await tx.get(orderRef);
+    if (!orderSnap.exists) throw new Error('Order not found.');
+    const order = orderSnap.data() as Order;
+    const at = now();
+    if (kind === 'momo-reference') {
+      if (order.paymentStatus !== 'paid' || order.paymentMethod !== 'offline') throw new Error('Only a confirmed offline MoMo reference can be edited.');
+      if (!value) throw new Error('Enter the corrected MoMo transaction ID.');
+      if (value === order.offlinePaymentReference) throw new Error('The transaction ID has not changed.');
+      tx.update(orderRef, { offlinePaymentReference: value, lastUpdated: at, internalNotes: [...(order.internalNotes || []), { text: `MoMo transaction ID corrected. Reason: ${reason.trim()}`, actorUid: actor.uid, actorEmail: actor.email, createdAt: at }] });
+      return;
+    }
+    if (order.paymentStatus !== 'paid') throw new Error('Codes can only be changed on paid orders.');
+    const existing = kind === 'sales-id' ? order.salesCode : order.activationCodeOrKey;
+    if (!existing) throw new Error('No assigned value exists yet. Use the normal Add action.');
+    if (existing === value) throw new Error('The replacement is the same as the assigned value.');
+    const isSalesOrder = order.deliveryCodeType === 'sales-code' || Boolean(order.customerInputType);
+    const linkedToKind = Boolean(order.licenceId && (kind === 'sales-id' ? order.salesCode : !order.salesCode && order.activationCodeOrKey));
+    const oldPoolRef = linkedToKind ? db.collection(COLLECTIONS.licencePool).doc(order.licenceId!) : null;
+    const oldPoolSnap = oldPoolRef ? await tx.get(oldPoolRef) : null;
+    const oldPool = oldPoolSnap?.exists ? oldPoolSnap.data() as LicencePoolEntry : null;
+    if (oldPool && (oldPool.assignedOrderId !== orderId || oldPool.licenceCode !== existing)) throw new Error('The assigned stock row does not match this order; review it before editing.');
+    const needsPool = kind === 'sales-id' || !isSalesOrder;
+    const expectedType = kind === 'sales-id' ? 'sales-code' : 'licence';
+    const duplicate = value && needsPool ? await tx.get(db.collection(COLLECTIONS.licencePool).where('licenceCode', '==', value).limit(1)) : null;
+    const candidate = duplicate && !duplicate.empty ? duplicate.docs[0] : null;
+    const candidateEntry = candidate?.data() as LicencePoolEntry | undefined;
+    if (candidateEntry && (candidateEntry.status !== 'available' || candidateEntry.variantId !== order.variantId || (candidateEntry.codeType && candidateEntry.codeType !== expectedType))) {
+      throw new Error('That code is already in stock for another order, version, or code type.');
+    }
+    const newPoolRef = value && needsPool ? candidate?.ref || db.collection(COLLECTIONS.licencePool).doc(id('LIC-CORRECTED')) : null;
+    const note = `${kind === 'sales-id' ? 'Sales ID' : 'Licence'} ${value ? 'corrected' : 'removed'} after fresh admin sign-in. Reason: ${reason.trim()}`;
+    const patch: Record<string, unknown> = {
+      lastUpdated: at,
+      fulfilmentHistory: [...(order.fulfilmentHistory || []), { status: order.fulfilmentStatus, at, actorUid: actor.uid, note }]
+    };
+    if (kind === 'sales-id') patch.salesCode = value || FieldValue.delete();
+    else patch.activationCodeOrKey = value || FieldValue.delete();
+    if (linkedToKind) patch.licenceId = newPoolRef?.id || FieldValue.delete();
+    else if (newPoolRef) patch.licenceId = newPoolRef.id;
+    if (!value && kind === 'licence' && !isSalesOrder) patch.fulfilmentStatus = 'awaiting-licence';
+    if (!value && kind === 'sales-id') patch.fulfilmentStatus = order.customerInputType && !order.customerInputValue ? 'awaiting-customer-input' : 'awaiting-seller-activation';
+    if (oldPoolRef && oldPool) tx.update(oldPoolRef, { status: 'available', assignedOrderId: FieldValue.delete(), dateAssigned: FieldValue.delete() });
+    if (newPoolRef) {
+      if (candidate) tx.update(newPoolRef, { status: 'assigned', assignedOrderId: orderId, dateAssigned: at });
+      else tx.create(newPoolRef, { licenceId: newPoolRef.id, variantId: order.variantId, licenceCode: value, codeType: expectedType, status: 'assigned', assignedOrderId: orderId, dateAdded: at, dateAssigned: at, notes: 'Created during guarded order correction.' } satisfies LicencePoolEntry);
+    }
+    tx.update(orderRef, patch);
+  });
+}
+
+export async function addGeneratedActivationCode(orderId: string, code: string, actor: AdminActor): Promise<void> {
+  const value = code.trim();
+  if (!value || value.length > 1000) throw new Error('Enter a valid licence code.');
+  const db = getFirestore();
+  const ref = db.collection(COLLECTIONS.orders).doc(orderId);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new Error('Order not found.');
+    const order = snap.data() as Order;
+    if (order.paymentStatus !== 'paid' || order.deliveryCodeType !== 'sales-code') throw new Error('This action is only for paid Sales ID orders.');
+    if (order.activationCodeOrKey) throw new Error('A licence is already assigned. Use the guarded edit in order details.');
+    const at = now();
+    tx.update(ref, { activationCodeOrKey: value, lastUpdated: at, fulfilmentHistory: [...(order.fulfilmentHistory || []), { status: order.fulfilmentStatus, at, actorUid: actor.uid, note: 'Generated licence added by administrator.' }] });
   });
 }
 
@@ -506,6 +590,9 @@ export async function markFulfilled(
   if (!snap.exists) throw new Error('Order not found.');
   const order = snap.data() as Order;
   if (order.paymentStatus !== 'paid') throw new Error('The order is not paid.');
+  if (order.activationCodeOrKey && input.activationCodeOrKey?.trim() && input.activationCodeOrKey.trim() !== order.activationCodeOrKey) {
+    throw new Error('An assigned licence can only be changed through the guarded edit in order details.');
+  }
   const at = now();
   const patch: Partial<Order> = {
     fulfilmentStatus: 'ready',
@@ -558,6 +645,12 @@ export async function updateOrderWorkflow(
   if (!snap.exists) throw new Error('Order not found.');
   const order = snap.data() as Order;
   assertWorkflowPaymentTransition(order.paymentStatus, input.paymentStatus);
+  if (order.salesCode && input.salesCode !== undefined && input.salesCode.trim() !== order.salesCode) {
+    throw new Error('An assigned Sales ID must be changed through the guarded edit in order details.');
+  }
+  if (order.activationCodeOrKey && input.activationCodeOrKey?.trim() && input.activationCodeOrKey.trim() !== order.activationCodeOrKey) {
+    throw new Error('An assigned licence must be changed through the guarded edit in order details.');
+  }
   if (input.paymentStatus && !['pending', 'paid'].includes(input.paymentStatus)) throw new Error('Invalid payment status.');
   if (input.fulfilmentStatus && !fulfilmentStatuses.includes(input.fulfilmentStatus)) throw new Error('Invalid fulfilment status.');
   if (input.amountPesewas !== undefined && (!Number.isInteger(input.amountPesewas) || input.amountPesewas <= 0)) {

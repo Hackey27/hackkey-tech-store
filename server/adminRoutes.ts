@@ -1,6 +1,6 @@
 import express, { Router } from 'express';
 import { sendCustomerDelivery, sendCustomerOrderNotification, sendCustomerReceipt } from './email';
-import { AdminRequest, requireAdmin } from './adminAuth';
+import { AdminRequest, hasRecentAdminAuth, requireAdmin } from './adminAuth';
 import { writeAdminAudit } from './adminAudit';
 import {
   addInternalNote,
@@ -8,6 +8,8 @@ import {
   adminBootstrap,
   assignLicence,
   assignSalesCode,
+  addGeneratedActivationCode,
+  correctAssignedOrderValue,
   importLicences,
   markDocumentReceived,
   markFulfilled,
@@ -376,6 +378,25 @@ export function createAdminRouter(): Router {
       });
       res.json({ order });
     } catch (err) { routeError(res, err, 'Failed to assign the Sales ID.'); }
+  });
+
+  router.post('/orders/:orderId/generated-licence', async (req: AdminRequest, res) => {
+    try {
+      await addGeneratedActivationCode(String(req.params.orderId), String(req.body?.code || ''), actor(req));
+      await writeAdminAudit(actor(req), { action: 'order.add-generated-licence', targetType: 'order', targetId: String(req.params.orderId), orderId: String(req.params.orderId) });
+      res.json({ success: true });
+    } catch (err) { routeError(res, err, 'Failed to add the generated licence.'); }
+  });
+
+  router.put('/orders/:orderId/assigned-value', async (req: AdminRequest, res) => {
+    const kind = String(req.body?.kind || '');
+    if (!['sales-id', 'licence', 'momo-reference'].includes(kind)) return res.status(400).json({ error: 'Choose the assigned value to correct.' });
+    if (!hasRecentAdminAuth(actor(req))) return res.status(403).json({ error: 'Re-enter your admin password before changing an assigned value.' });
+    try {
+      await correctAssignedOrderValue(String(req.params.orderId), kind as 'sales-id' | 'licence' | 'momo-reference', String(req.body?.value || ''), String(req.body?.reason || ''), actor(req));
+      await writeAdminAudit(actor(req), { action: `order.correct-${kind}`, targetType: 'order', targetId: String(req.params.orderId), orderId: String(req.params.orderId), details: { reason: String(req.body?.reason || '').trim(), removed: !String(req.body?.value || '').trim() } });
+      res.json({ success: true });
+    } catch (err) { routeError(res, err, 'Failed to correct the assigned value.'); }
   });
 
   router.post('/orders/:orderId/mark-document-received', async (req: AdminRequest, res) => {

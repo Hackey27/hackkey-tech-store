@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Search, ShoppingBag } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import { STORE_COPY } from '../config/storeCopy';
@@ -13,6 +13,8 @@ interface HeaderProps {
   cartCount?: number;
   cartItems: CartItem[];
   onRemoveCartItem: (id: string) => void;
+  cartOpen: boolean;
+  onCartOpenChange: (open: boolean) => void;
   isLandingTransparent?: boolean;
 }
 
@@ -24,15 +26,16 @@ export const Header: React.FC<HeaderProps> = ({
   cartCount = 0,
   cartItems,
   onRemoveCartItem,
+  cartOpen,
+  onCartOpenChange,
   isLandingTransparent = false,
 }) => {
-  const [cartOpen, setCartOpen] = useState(false);
   const cartButtonRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => setCartOpen(false), [activeTab]);
+  useEffect(() => onCartOpenChange(false), [activeTab]);
 
   const openCartPage = () => {
-    setCartOpen(false);
+    onCartOpenChange(false);
     onSelectTab('cart');
   };
 
@@ -139,7 +142,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               ref={cartButtonRef}
               id="header-cart-btn"
-              onClick={() => setCartOpen((open) => !open)}
+              onClick={() => onCartOpenChange(!cartOpen)}
               aria-expanded={cartOpen}
               aria-controls="header-cart-flyout"
               aria-haspopup="dialog"
@@ -184,12 +187,9 @@ export const Header: React.FC<HeaderProps> = ({
         open={cartOpen}
         items={cartItems}
         triggerRef={cartButtonRef}
-        onClose={() => setCartOpen(false)}
+        onClose={() => onCartOpenChange(false)}
         onCheckout={openCartPage}
-        onBrowse={() => {
-          setCartOpen(false);
-          onSelectTab('home');
-        }}
+        onBrowse={() => onCartOpenChange(false)}
         onRemoveItem={onRemoveCartItem}
       />
     </header>

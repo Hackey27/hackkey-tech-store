@@ -615,12 +615,16 @@ export async function fulfilPaidOrder(
     const licenceQuery = db
       .collection(COLLECTIONS.licencePool)
       .where('variantId', '==', order.variantId)
-      .where('status', '==', 'available')
-      .limit(1);
+      .where('status', '==', 'available');
 
     const licenceSnap = await tx.get(licenceQuery);
+    const isSalesCode = variant.deliveryCodeType === 'sales-code';
+    const licenceDoc = licenceSnap.docs.find((doc) => {
+      const entry = doc.data() as LicencePoolEntry;
+      return isSalesCode ? entry.codeType === 'sales-code' : entry.codeType !== 'sales-code';
+    });
 
-    if (licenceSnap.empty) {
+    if (!licenceDoc) {
       patch.fulfilmentStatus = 'awaiting-licence';
       patch.licenceIssueNote =
         `No licence key was available in the pool for variant ${order.variantId} ` +
@@ -630,7 +634,6 @@ export async function fulfilPaidOrder(
       return { order: { ...order, ...patch } as Order, licenceIssued: false, alreadyPaid: false };
     }
 
-    const licenceDoc = licenceSnap.docs[0];
     const licence = licenceDoc.data() as LicencePoolEntry;
 
     tx.update(licenceDoc.ref, {
@@ -640,7 +643,6 @@ export async function fulfilPaidOrder(
     });
 
     patch.licenceId = licence.licenceId;
-    const isSalesCode = variant.deliveryCodeType === 'sales-code';
     if (isSalesCode) patch.salesCode = licence.licenceCode;
     else patch.activationCodeOrKey = licence.licenceCode;
     patch.fulfilmentStatus = isSalesCode

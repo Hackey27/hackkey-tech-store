@@ -32,6 +32,7 @@ import { searchCatalogue } from './utils/catalogueSearch';
 import { fulfilmentTimeState } from './utils/fulfilmentTime';
 import { cartDeliveryNotice } from './utils/cartDeliveryNotice';
 import { DeliveryWindowGate } from './components/DeliveryWindowGate';
+import { CardSoftwareChoice, CardChoiceRequest, availableCardChoices } from './components/CardSoftwareChoice';
 
 type StoreRoute =
   | { view: 'home' }
@@ -65,6 +66,8 @@ export const App: React.FC = () => {
 
   // Cart state
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [cardChoice, setCardChoice] = useState<CardChoiceRequest | null>(null);
   const [buyNowItem, setBuyNowItem] = useState<CartItem | null>(null);
   const [pendingBuyNowItem, setPendingBuyNowItem] = useState<CartItem | null>(null);
 
@@ -190,6 +193,7 @@ export const App: React.FC = () => {
         }
       ];
     });
+    setCartOpen(true);
   };
 
   const defaultSelection = (product: CatalogueItem): Omit<CartItem, 'id' | 'product'> => {
@@ -200,8 +204,23 @@ export const App: React.FC = () => {
   };
 
   const handleCardAdd = (product: CatalogueItem) => {
+    const choices = product.kind === 'product' ? availableCardChoices(product, 'add') : [];
+    const choicesByOs = choices.reduce((count, variant) => count + (variant.osList?.length || 1), 0);
+    if (choicesByOs > 1) {
+      setCardChoice({ product, mode: 'add' });
+      return;
+    }
     const choice = defaultSelection(product);
     handleAddToCart(product, choice.variant, choice.selectedOs, choice.serviceOption, choice.quantity, choice.bundleSelections);
+  };
+
+  const handleCardBuy = (product: CatalogueItem) => {
+    if (product.kind === 'product') {
+      const choices = availableCardChoices(product, 'buy-latest');
+      const systems = new Set(choices.flatMap((variant) => variant.osList?.length ? variant.osList : [variant.os || 'Windows']));
+      if (systems.size > 1) { setCardChoice({ product, mode: 'buy-latest' }); return; }
+    }
+    handleBuyNow(product);
   };
 
   const handleBuyNow = (product: CatalogueItem, variant?: Variant, selectedOs?: string, serviceOption?: ServiceOption, quantity = 1, bundleSelections?: Record<string, string>) => {
@@ -299,6 +318,7 @@ export const App: React.FC = () => {
         }}
         activeTab={route.view === 'order-access' ? 'find-order' : activeTab}
         onSelectTab={(tab) => {
+          if (tab === 'cart') { setCartOpen(true); return; }
           if (route.view !== 'home') navigate('/');
           if (tab === 'request') setRequestLaunchMode(null);
           setActiveTab(tab);
@@ -307,6 +327,8 @@ export const App: React.FC = () => {
         cartCount={totalCartCount}
         cartItems={cartItems}
         onRemoveCartItem={(id) => setCartItems((current) => current.filter((item) => item.id !== id))}
+        cartOpen={cartOpen}
+        onCartOpenChange={setCartOpen}
         isLandingTransparent={landingActive && !landingPassed}
       />
 
@@ -331,7 +353,7 @@ export const App: React.FC = () => {
               items={(catalog?.products || []).filter((item) => item.categoryId === route.categoryId)}
               onBack={() => navigateBack('/')}
               onSelectProduct={openProduct}
-              onBuyNow={handleBuyNow}
+              onBuyNow={handleCardBuy}
               onAddToCart={handleCardAdd}
               onInterestClick={(item) => navigate(`/product/${encodeURIComponent(item.itemId)}?interest=1`)}
               softwareItems={(catalog?.products || []).filter((item) => item.kind === 'product')}
@@ -506,7 +528,7 @@ export const App: React.FC = () => {
                         key={product.itemId}
                         product={product}
                         onSelect={openProduct}
-                        onBuyNowClick={handleBuyNow}
+                        onBuyNowClick={handleCardBuy}
                         onAddToCart={handleCardAdd}
                       />
                     ))}
@@ -554,6 +576,7 @@ export const App: React.FC = () => {
 
       {buyNowItem && <DirectCheckoutModal item={buyNowItem} paymentOptions={paymentOptions || undefined} onClose={() => setBuyNowItem(null)} onPaymentResolved={(order) => { setBuyNowItem(null); setNextSteps({ phone: order.phone, orderId: order.orderId }); setActiveTab('find-order'); navigate('/'); }} />}
       {pendingBuyNowItem && <DeliveryWindowGate item={pendingBuyNowItem} onCancel={() => setPendingBuyNowItem(null)} onConfirm={() => { setBuyNowItem(pendingBuyNowItem); setPendingBuyNowItem(null); }} />}
+      {cardChoice && <CardSoftwareChoice request={cardChoice} onClose={() => setCardChoice(null)} onChoose={(variant, os) => { if (cardChoice.mode === 'add') handleAddToCart(cardChoice.product, variant, os); else handleBuyNow(cardChoice.product, variant, os); }} />}
 
       {/* Mobile Fixed Bottom Navigation */}
       <BottomNav

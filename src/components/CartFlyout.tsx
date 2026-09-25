@@ -178,6 +178,7 @@ export const CartFlyout: React.FC<CartFlyoutProps> = ({
               >
                 {STORE_COPY.cart.proceedToCheckout} <ArrowRight className="h-4 w-4" />
               </button>
+              <button type="button" onClick={onBrowse} className="mt-2 w-full rounded-xl border border-[#014040] px-4 py-2.5 text-sm font-bold text-[#014040] hover:bg-[#edf5f3]">Continue shopping</button>
             </div>
           </>
         )}
