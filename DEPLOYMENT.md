@@ -83,7 +83,19 @@ Set the list on the service first, so granting a claim cannot outrun it:
 
 ```bash
 gcloud run services update "$SERVICE" --region "$REGION" \
-  --set-env-vars ADMIN_ALLOWED_EMAILS="you@example.com"
+  --update-env-vars ADMIN_ALLOWED_EMAILS="first@example.com second@example.com"
+```
+
+**`--update-env-vars`, never `--set-env-vars`.** `--set-env-vars` removes every
+variable it does not list, so using it here deletes `PAYSTACK_SECRET_KEY` and the
+service then refuses to start — an admin setting taking the whole storefront
+down. Separate the addresses with a **space**: a comma is how `gcloud` delimits
+one variable from the next, so a comma-separated value is parsed as two
+malformed variables. The boot log prints the count, which is how you check it
+arrived intact:
+
+```
+[admin] Administrator allowlist: 2 address(es).
 ```
 
 Then create the account in Firebase Authentication and grant the claim from a
@@ -190,7 +202,7 @@ never in `dist/` and never in the repo:
 printf 'sk_test_xxx' | gcloud secrets create paystack-secret-key --data-file=-
 gcloud run services update "$SERVICE" --region "$REGION" \
   --set-secrets=PAYSTACK_SECRET_KEY=paystack-secret-key:latest \
-  --set-env-vars PUBLIC_BASE_URL=https://store.hackeytech.com,SELLER_ALERT_EMAIL=you@hackeytech.com
+  --update-env-vars PUBLIC_BASE_URL=https://store.hackeytech.com,SELLER_ALERT_EMAIL=you@hackeytech.com
 ```
 
 The service **refuses to start** in production without `PAYSTACK_SECRET_KEY`.
