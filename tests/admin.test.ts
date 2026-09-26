@@ -148,6 +148,24 @@ test('a second allowed address works, so access is not single-account by acciden
   assert.throws(() => validateAdminClaims({ ...validClaims, email: 'third@example.com' }, PROJECT, list));
 });
 
+test('a refusal is logged with its reason but never tells the client which rule failed', async () => {
+  const warnings: string[] = [];
+  const realWarn = console.warn;
+  console.warn = (...args: unknown[]) => { warnings.push(args.map(String).join(' ')); };
+  const res = responseRecorder();
+  try {
+    const middleware = requireAdmin(async () =>
+      validateAdminClaims({ ...validClaims, email: 'stranger@example.com' }, PROJECT, ALLOWED));
+    await middleware({ header: () => 'Bearer stranger' } as any, res as any, () => assert.fail('must not call next'));
+  } finally {
+    console.warn = realWarn;
+  }
+  assert.equal(res.statusCode, 403);
+  // The operator can tell why; the caller cannot.
+  assert.ok(warnings.some((line) => line.includes('not an allowed administrator')), warnings.join('|'));
+  assert.deepEqual(res.body, { error: 'Administrator access required.' });
+});
+
 test('the document download route returns 401 without admin authentication', async () => {
   const app = express();
   app.use(express.json());

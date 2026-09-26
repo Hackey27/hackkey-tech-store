@@ -128,6 +128,12 @@ export function requireAdmin(
       next();
     } catch (err) {
       const status = (err as { status?: number }).status === 403 ? 403 : 401;
+      // The reason is logged but never returned. The client is told only that
+      // access was refused, because "that address is not on the list" tells an
+      // attacker which addresses are; the operator, meanwhile, needs to know
+      // exactly which rule refused them or a lockout is unexplainable. Before
+      // this, an unverified-email refusal looked identical to a wrong password.
+      console.warn(`[admin] Access refused (${status}): ${(err as Error).message}`);
       return res.status(status).json({
         error: status === 403 ? 'Administrator access required.' : 'Invalid or expired token.'
       });
