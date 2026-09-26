@@ -87,9 +87,12 @@ gcloud run services update "$SERVICE" --region "$REGION" \
 ```
 
 **`--update-env-vars`, never `--set-env-vars`.** `--set-env-vars` removes every
-variable it does not list, so using it here deletes `PAYSTACK_SECRET_KEY` and the
-service then refuses to start — an admin setting taking the whole storefront
-down. Separate the addresses with a **space**: a comma is how `gcloud` delimits
+plain variable it does not list. Secret-backed ones (`PAYSTACK_SECRET_KEY`,
+`MAIL_PROVIDER_API_KEY`) are managed separately by `--set-secrets` and survive,
+but `NODE_ENV`, `PUBLIC_BASE_URL`, `DOCUMENTS_BUCKET`, `SELLER_ALERT_EMAIL`,
+`TASK_CALLER_SERVICE_ACCOUNT` and `TASK_AUDIENCE` would all go. Losing
+`NODE_ENV=production` alone stops the server serving `dist/` — an admin setting
+taking the whole storefront down. Separate the addresses with a **space**: a comma is how `gcloud` delimits
 one variable from the next, so a comma-separated value is parsed as two
 malformed variables. The boot log prints the count, which is how you check it
 arrived intact:
