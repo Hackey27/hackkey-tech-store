@@ -22,6 +22,7 @@ import {
 } from './server/orders';
 import { findService } from './server/catalogue';
 import { applyVerifiedPayment } from './server/payments';
+import { adminAccessConfigured, allowedAdminEmails } from './server/adminAuth';
 import {
   assertPaymentConfig,
   initialiseTransaction,
@@ -88,6 +89,16 @@ async function startServer() {
   // Refuse to start in production without payment configuration, and log the
   // mode (never the key).
   assertPaymentConfig();
+  // Loud at boot, because the alternative is discovering it at the moment you
+  // need the portal. Never logs the addresses themselves.
+  if (!adminAccessConfigured()) {
+    console.error(
+      '[admin] ADMIN_ALLOWED_EMAILS is not set. The admin API is disabled until it is. ' +
+        'The storefront is unaffected.'
+    );
+  } else if (process.env.NODE_ENV === 'production') {
+    console.log(`[admin] Administrator allowlist: ${allowedAdminEmails().length} address(es).`);
+  }
 
   const app = express();
 
@@ -157,6 +168,18 @@ async function startServer() {
 
   // Every route below this mount is protected by the single Firebase custom-
   // claim middleware in createAdminRouter. There is no legacy shared token.
+  // Refused as a whole rather than per-route, so an unconfigured service cannot
+  // serve a single admin request. Deliberately not a 404: the operator needs to
+  // be able to tell "not configured" from "not deployed".
+  app.use('/api/admin', (_req: Request, res: Response, next) => {
+    if (!adminAccessConfigured()) {
+      return res.status(503).json({
+        error: 'Administrator access is not configured on this service. Set ADMIN_ALLOWED_EMAILS.'
+      });
+    }
+    next();
+  });
+
   app.use('/api/admin', (req: Request, res: Response, next) => {
     // Cloud Run appends the immediate upstream address to X-Forwarded-For.
     // Use the right-most value so a caller cannot select an arbitrary rate-

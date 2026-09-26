@@ -183,9 +183,30 @@ of reach of a browser.
 
 Every `/api/admin/*` route is protected by one Firebase Authentication
 middleware mounted on the entire subtree. Access requires a valid token for
-this Firebase project with the custom claim `admin: true`. There is no public
-registration route. State changes and sensitive key/document reveals are
-written to `admin_audit`.
+this Firebase project with the custom claim `admin: true`, **and** a verified
+email address listed in `ADMIN_ALLOWED_EMAILS`. There is no public registration
+route. State changes and sensitive key/document reveals are written to
+`admin_audit`.
+
+The claim alone is deliberately not sufficient. Anyone with Firebase console
+access can grant it, so on its own it makes "who may administer the shop" a
+property of IAM rather than something stated in one reviewable place.
+`ADMIN_ALLOWED_EMAILS` is that place — a comma- or space-separated list,
+compared case-insensitively against the token's verified email. It is not a
+defence against whoever owns the Google Cloud project; it stops an accidental
+or unnoticed grant becoming access.
+
+In production an unset `ADMIN_ALLOWED_EMAILS` **disables the whole admin API**
+with a 503 rather than falling back to claim-only access, and says so at boot.
+A variable that silently widens access is the failure nobody notices, because
+it looks exactly like a working portal. The storefront is deliberately
+unaffected: a missing admin setting must never stop customers buying.
+
+`scripts/set-admin-claim.ts` grants the claim and reports what is still
+missing — an unverified address, or one absent from the list — because granting
+one half and discovering the other at the sign-in screen is how an afternoon
+disappears. Console-created accounts start unverified; `--verify-email` marks
+an address you already control as verified.
 
 `PAYSTACK_SECRET_KEY` is server-only and never reaches `dist/`. In production
 the server **refuses to start** without it: a storefront that boots without

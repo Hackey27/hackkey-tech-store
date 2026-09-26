@@ -72,14 +72,38 @@ pipeline would race the Cloud Build trigger and deploy twice on every push.
 | `PORT` | Set by Cloud Run. Defaults to 3000 locally. |
 | `NODE_ENV` | Must be `production` in the deployed service, so the server serves `dist/` instead of starting Vite. |
 | `GOOGLE_CLOUD_PROJECT` | Firebase project used to verify admin ID tokens. Cloud Run normally supplies project identity through Application Default Credentials. |
+| `ADMIN_ALLOWED_EMAILS` | **Required in production.** Comma- or space-separated list of the email addresses allowed to administer the store. Unset, the whole admin API returns 503 and says so at boot; the storefront is unaffected. |
 
-The admin API uses Firebase Authentication email/password accounts with an
-`admin: true` custom claim. Create the account in Firebase Authentication, then
-grant the claim from a trusted machine:
+The admin API uses Firebase Authentication email/password accounts. Two things
+must both be true, and neither is sufficient alone: the account carries an
+`admin: true` custom claim, and its **verified** email address is in
+`ADMIN_ALLOWED_EMAILS` on the service.
+
+Set the list on the service first, so granting a claim cannot outrun it:
 
 ```bash
-npx tsx scripts/set-admin-claim.ts admin@example.com
+gcloud run services update "$SERVICE" --region "$REGION" \
+  --set-env-vars ADMIN_ALLOWED_EMAILS="you@example.com"
 ```
+
+Then create the account in Firebase Authentication and grant the claim from a
+trusted machine. `--verify-email` marks the address verified, which
+console-created accounts are not; use it only for an address you control:
+
+```bash
+GOOGLE_CLOUD_PROJECT=<project> ADMIN_ALLOWED_EMAILS="you@example.com" \
+  npx tsx scripts/set-admin-claim.ts you@example.com --verify-email
+```
+
+The script warns rather than fails when the address is unverified or absent from
+the list, so it always tells you what is still outstanding. Removing an
+administrator is one env-var edit — no claim to hunt down — though revoking the
+claim as well is the tidier end state.
+
+Enable multi-factor authentication for these accounts in the Firebase console
+under **Authentication → Sign-in method → Advanced → SMS multi-factor
+authentication**. The allowlist decides *who* may administer the store; MFA is
+what stops a leaked password being enough to be them.
 
 ## Firestore
 

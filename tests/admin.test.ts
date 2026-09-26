@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bearerToken, hasRecentAdminAuth, requireAdmin, validateAdminClaims } from '../server/adminAuth';
+import { adminAccessConfigured, allowedAdminEmails, bearerToken, hasRecentAdminAuth, requireAdmin, validateAdminClaims } from '../server/adminAuth';
 import { validateLicenceRows, validateServiceDefinition } from '../server/adminValidation';
 import { Order, Service, TurnitinReportDocument } from '../src/types';
 import express from 'express';
@@ -12,10 +12,12 @@ const PROJECT = 'hack-key-tech-store-staging';
 const validClaims = {
   uid: 'admin-1',
   email: 'admin@example.com',
+  email_verified: true,
   aud: PROJECT,
   iss: `https://securetoken.google.com/${PROJECT}`,
   admin: true
 };
+const ALLOWED = ['admin@example.com'];
 
 function responseRecorder() {
   return {
@@ -78,10 +80,72 @@ test('a valid project token with admin claim reaches the route', async () => {
   const res = responseRecorder();
   let nextCalled = false;
   const req = { header: () => 'Bearer valid' } as any;
-  const middleware = requireAdmin(async () => validateAdminClaims(validClaims, PROJECT));
+  const middleware = requireAdmin(async () => validateAdminClaims(validClaims, PROJECT, ALLOWED));
   await middleware(req, res as any, () => { nextCalled = true; });
   assert.equal(nextCalled, true);
   assert.deepEqual(req.adminActor, { uid: 'admin-1', email: 'admin@example.com' });
+});
+
+test('the allowlist is parsed from commas, whitespace and mixed case', () => {
+  assert.deepEqual(allowedAdminEmails('Owner@Example.com, second@example.com'), ['owner@example.com', 'second@example.com']);
+  assert.deepEqual(allowedAdminEmails('  one@example.com\n two@example.com '), ['one@example.com', 'two@example.com']);
+  assert.deepEqual(allowedAdminEmails(''), []);
+  assert.deepEqual(allowedAdminEmails(undefined), []);
+});
+
+test('an admin-claimed account that is not on the allowlist is refused', async () => {
+  const res = responseRecorder();
+  const middleware = requireAdmin(async () =>
+    validateAdminClaims({ ...validClaims, uid: 'someone-else', email: 'stranger@example.com' }, PROJECT, ALLOWED));
+  await middleware({ header: () => 'Bearer granted-in-the-console' } as any, res as any, () => assert.fail('must not call next'));
+  assert.equal(res.statusCode, 403);
+});
+
+test('the allowlist matches regardless of case and surrounding space', () => {
+  const actor = validateAdminClaims({ ...validClaims, email: '  Admin@Example.COM ' }, PROJECT, ALLOWED);
+  assert.equal(actor.uid, 'admin-1');
+});
+
+test('an unverified email is refused even when it is on the allowlist', async () => {
+  const res = responseRecorder();
+  const middleware = requireAdmin(async () =>
+    validateAdminClaims({ ...validClaims, email_verified: false }, PROJECT, ALLOWED));
+  await middleware({ header: () => 'Bearer unverified' } as any, res as any, () => assert.fail('must not call next'));
+  assert.equal(res.statusCode, 403);
+});
+
+test('a token with no email address cannot satisfy the allowlist', async () => {
+  const res = responseRecorder();
+  const middleware = requireAdmin(async () =>
+    validateAdminClaims({ ...validClaims, email: undefined }, PROJECT, ALLOWED));
+  await middleware({ header: () => 'Bearer no-email' } as any, res as any, () => assert.fail('must not call next'));
+  assert.equal(res.statusCode, 403);
+});
+
+test('an empty allowlist leaves claim-only access, which only development permits', () => {
+  // Kept deliberately: the tests and the emulator run without the variable.
+  const actor = validateAdminClaims(validClaims, PROJECT, []);
+  assert.equal(actor.uid, 'admin-1');
+
+  const previousEnv = process.env.NODE_ENV;
+  const previousList = process.env.ADMIN_ALLOWED_EMAILS;
+  try {
+    // ...but production refuses to serve the admin API at all in that state.
+    process.env.NODE_ENV = 'production';
+    delete process.env.ADMIN_ALLOWED_EMAILS;
+    assert.equal(adminAccessConfigured(), false);
+    process.env.ADMIN_ALLOWED_EMAILS = 'owner@example.com';
+    assert.equal(adminAccessConfigured(), true);
+  } finally {
+    if (previousEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousEnv;
+    if (previousList === undefined) delete process.env.ADMIN_ALLOWED_EMAILS; else process.env.ADMIN_ALLOWED_EMAILS = previousList;
+  }
+});
+
+test('a second allowed address works, so access is not single-account by accident', () => {
+  const list = ['owner@example.com', 'assistant@example.com'];
+  assert.equal(validateAdminClaims({ ...validClaims, email: 'assistant@example.com' }, PROJECT, list).uid, 'admin-1');
+  assert.throws(() => validateAdminClaims({ ...validClaims, email: 'third@example.com' }, PROJECT, list));
 });
 
 test('the document download route returns 401 without admin authentication', async () => {

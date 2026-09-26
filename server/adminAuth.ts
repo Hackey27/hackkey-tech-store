@@ -19,6 +19,36 @@ function projectId(): string {
   return process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'hack-key-tech-store-staging';
 }
 
+/**
+ * The exact email addresses allowed to administer this store.
+ *
+ * The `admin: true` custom claim alone is not enough. A claim can be granted
+ * from the Firebase console by anyone with project access, so on its own it
+ * makes "who may administer the shop" a property of IAM rather than something
+ * stated in one place and reviewable. This list is that one place, and an
+ * address that is not on it is refused however its token was minted.
+ *
+ * It is not a defence against whoever owns the Google Cloud project — they can
+ * change the list. It stops an accidental or unnoticed grant becoming access.
+ */
+export function allowedAdminEmails(value = process.env.ADMIN_ALLOWED_EMAILS): string[] {
+  return String(value || '')
+    .split(/[,\s]+/)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * Production refuses to serve the admin API until the list is set, rather than
+ * falling back to claim-only access. An unset variable that silently widens
+ * access is the failure nobody notices: it looks exactly like a working portal.
+ * The storefront itself is unaffected — a missing admin setting must not stop
+ * customers buying.
+ */
+export function adminAccessConfigured(): boolean {
+  return process.env.NODE_ENV !== 'production' || allowedAdminEmails().length > 0;
+}
+
 function adminAuth() {
   const app =
     getApps()[0] ||
@@ -35,8 +65,13 @@ export function bearerToken(header?: string): string | null {
 }
 
 export function validateAdminClaims(
-  token: Pick<DecodedIdToken, 'uid' | 'email' | 'aud' | 'iss'> & { admin?: boolean; auth_time?: number },
-  expectedProject = projectId()
+  token: Pick<DecodedIdToken, 'uid' | 'email' | 'aud' | 'iss'> & {
+    admin?: boolean;
+    auth_time?: number;
+    email_verified?: boolean;
+  },
+  expectedProject = projectId(),
+  allowed = allowedAdminEmails()
 ): AdminActor {
   const issuer = `https://securetoken.google.com/${expectedProject}`;
   if (token.aud !== expectedProject || token.iss !== issuer) {
@@ -47,6 +82,27 @@ export function validateAdminClaims(
     error.status = 403;
     throw error;
   }
+
+  // An empty list means unconfigured, which only development permits: the
+  // production admin subtree is refused outright by adminAccessConfigured()
+  // rather than quietly accepting any claim-bearing account here.
+  if (allowed.length) {
+    const email = token.email?.trim().toLowerCase();
+    const forbidden = (reason: string) => {
+      const error = new Error(reason) as Error & { status?: number };
+      error.status = 403;
+      return error;
+    };
+    // A token with no email cannot be matched against the list, so it cannot
+    // be allowed by it.
+    if (!email) throw forbidden('The account has no email address.');
+    // Without this an address could be claimed by an account that never proved
+    // it owns the mailbox, which matters the moment any self-service sign-in
+    // provider is enabled.
+    if (token.email_verified !== true) throw forbidden('The administrator email address is not verified.');
+    if (!allowed.includes(email)) throw forbidden('This account is not an allowed administrator.');
+  }
+
   return { uid: token.uid, email: token.email, ...(typeof token.auth_time === 'number' ? { authTime: token.auth_time } : {}) };
 }
 
