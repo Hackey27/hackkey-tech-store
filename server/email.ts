@@ -1,5 +1,5 @@
-import { CustomerRequest, Order } from '../src/types';
-import { formatPesewas } from '../src/utils/money';
+import { CustomerRequest, Order } from '../shared/types';
+import { formatPesewas } from '../shared/money';
 import { STORE_COPY } from '../src/config/storeCopy';
 
 /**

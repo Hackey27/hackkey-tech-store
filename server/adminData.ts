@@ -14,7 +14,7 @@ import {
   CustomerRequest,
   PricingConfig,
   TurnitinReportDocument
-} from '../src/types';
+} from '../shared/types';
 import { invalidateCatalogueCache } from './catalogue';
 import { AdminActor } from './adminAuth';
 import { LicenceImportRow, validateLicenceRows, validateServiceDefinition } from './adminValidation';
@@ -23,7 +23,7 @@ import {
   defaultCustomerInputType,
   defaultDeliveryCodeType,
   effectiveActivationWebsiteUrl
-} from '../src/utils/softwareFulfilment';
+} from '../shared/softwareFulfilment';
 import { getPricingConfig, persistPricingConfig } from './pricingConfig';
 import { resolvedDeliveryNotice } from './deliveryNotice';
 import { newestOrderFirst } from '../src/utils/orderSorting';

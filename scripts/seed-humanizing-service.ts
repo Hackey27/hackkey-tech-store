@@ -1,5 +1,5 @@
 import { getFirestore } from '../server/firestore';
-import type { Service } from '../src/types';
+import type { Service } from '../shared/types';
 
 const service: Service = {
   serviceId: 'HUMANIZING',

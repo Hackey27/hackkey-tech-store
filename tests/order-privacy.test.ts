@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { publicOrder, publicOrderWithProductGuide } from '../server/publicOrder';
-import type { Order, Product } from '../src/types';
+import type { Order, Product } from '../shared/types';
 
 const order: Order = {
   orderId: 'HK-1', cartId: 'CART-1', orderDate: '2026-09-17T00:00:00Z',

@@ -2,7 +2,7 @@ import React from 'react';
 import { CreditCard, Clock, Smartphone } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 import { WhatsAppIcon } from './WhatsAppIcon';
-import { CheckoutPaymentMode } from '../types';
+import { CheckoutPaymentMode } from '../../shared/types';
 
 interface HeroProps {
   onBrowseClick?: () => void;

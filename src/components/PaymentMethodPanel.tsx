@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Check, Copy, CreditCard, MessageCircle, Smartphone } from 'lucide-react';
-import { PublicPaymentOptions } from '../types';
+import { PublicPaymentOptions } from '../../shared/types';
 import { STORE_COPY } from '../config/storeCopy';
-import { formatPesewas } from '../utils/money';
+import { formatPesewas } from '../../shared/money';
 
 interface PaymentMethodPanelProps {
   options: PublicPaymentOptions;

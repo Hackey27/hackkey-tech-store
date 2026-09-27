@@ -1,5 +1,5 @@
 import React from 'react';
-import { Category } from '../types';
+import { Category } from '../../shared/types';
 import { Boxes, ChartNoAxesCombined, ExternalLink, Laptop, Palette, Wrench } from 'lucide-react';
 
 interface CategoryCardProps {

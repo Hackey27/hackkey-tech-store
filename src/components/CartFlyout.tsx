@@ -2,7 +2,7 @@ import React, { RefObject, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowRight, ShoppingBag, Trash2, X } from 'lucide-react';
 import { CartItem } from './CartView';
-import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
+import { formatPesewas, resolveLinePricePesewas } from '../../shared/money';
 import { cartLineDetail } from '../utils/cartLineDetail';
 import { STORE_COPY } from '../config/storeCopy';
 

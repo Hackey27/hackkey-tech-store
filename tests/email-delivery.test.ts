@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { sendSellerOrderSubmittedAlert } from '../server/email';
-import { Order } from '../src/types';
+import { Order } from '../shared/types';
 
 const order: Order = {
   orderId: 'HKT-EMAIL-1',

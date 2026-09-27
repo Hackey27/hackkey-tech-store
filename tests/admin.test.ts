@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { adminAccessConfigured, allowedAdminEmails, bearerToken, hasRecentAdminAuth, requireAdmin, validateAdminClaims } from '../server/adminAuth';
 import { validateLicenceRows, validateServiceDefinition } from '../server/adminValidation';
-import { Order, Service, TurnitinReportDocument } from '../src/types';
+import { Order, Service, TurnitinReportDocument } from '../shared/types';
 import express from 'express';
 import { createAdminRouter } from '../server/adminRoutes';
 import { announcementStorageKey, shouldShowAnnouncement } from '../src/components/AnnouncementModal';

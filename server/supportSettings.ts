@@ -1,4 +1,4 @@
-import { SupportSettings, SupportTool } from '../src/types';
+import { SupportSettings, SupportTool } from '../shared/types';
 import { AdminActor } from './adminAuth';
 import { buildAdminAuditEntry } from './adminAudit';
 import { COLLECTIONS, getFirestore, toIsoString } from './firestore';

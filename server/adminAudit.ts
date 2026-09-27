@@ -1,4 +1,4 @@
-import { AdminAuditEntry } from '../src/types';
+import { AdminAuditEntry } from '../shared/types';
 import { AdminActor } from './adminAuth';
 import { COLLECTIONS, getFirestore } from './firestore';
 

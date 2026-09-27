@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, Layers3, Search, Send, X } from 'lucide-react';
-import type { CatalogueItem } from '../types';
+import type { CatalogueItem } from '../../shared/types';
 import { bundleOperatingSystems, bundleVariantsForOs, selectableBundleVariants } from '../utils/customBundle';
 import { useBackDismiss } from '../utils/useBackDismiss';
 

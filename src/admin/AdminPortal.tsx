@@ -32,9 +32,9 @@ import {
   X
 } from 'lucide-react';
 import { ADMIN_COPY } from '../config/storeCopy';
-import { Announcement, Bundle, Category, CustomerNotificationPurpose, CustomerRequest, InstallationGuideConfig, InstallationGuideImageConfig, InstallationGuideStepConfig, Laptop as LaptopType, Order, PricingConfig, Product, Service, ServiceField, ServiceFieldType, ServiceOption, SupportTool, Variant } from '../types';
-import { applyPricingRules, formatPesewas } from '../utils/money';
-import { defaultCustomerInputType, defaultDeliveryCodeType, effectiveActivationWebsiteUrl } from '../utils/softwareFulfilment';
+import { Announcement, Bundle, Category, CustomerNotificationPurpose, CustomerRequest, InstallationGuideConfig, InstallationGuideImageConfig, InstallationGuideStepConfig, Laptop as LaptopType, Order, PricingConfig, Product, Service, ServiceField, ServiceFieldType, ServiceOption, SupportTool, Variant } from '../../shared/types';
+import { applyPricingRules, formatPesewas } from '../../shared/money';
+import { defaultCustomerInputType, defaultDeliveryCodeType, effectiveActivationWebsiteUrl } from '../../shared/softwareFulfilment';
 import { AnnouncementModal } from '../components/AnnouncementModal';
 import { ProductImage, renderableProductImageUrl } from '../components/ProductImage';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';

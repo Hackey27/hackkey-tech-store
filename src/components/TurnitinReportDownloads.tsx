@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Download, FileCheck2 } from 'lucide-react';
-import { Order } from '../types';
+import { Order } from '../../shared/types';
 
 export function TurnitinReportDownloads({ order, phone }: { order: Order; phone: string }) {
   const [busy, setBusy] = useState('');

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getStepsForMachineCodeType } from '../src/components/OrderProgressBar';
 import { turnitinOrderStep } from '../src/utils/orderProgress';
-import { Order } from '../src/types';
+import { Order } from '../shared/types';
 
 const turnitinOrder: Order = {
   orderId: 'HK-123456',

@@ -1,6 +1,6 @@
-import { Variant, Product } from '../types';
+import { Variant, Product } from './types';
 
-// Money arithmetic and formatting live in src/utils/money.ts, in integer
+// Money arithmetic and formatting live in shared/money.ts, in integer
 // pesewas. This module resolves operating systems and sellability only.
 
 /**

@@ -227,7 +227,7 @@ export interface ServiceField {
  *
  *  `bulkPriceGhs` REPLACES `unitPriceGhs` for every unit once the quantity
  *  reaches `bulkFromQty` — it is not a tier applied only to the units above
- *  the threshold. See priceServiceLine in src/utils/money.ts. */
+ *  the threshold. See priceServiceLine in shared/money.ts. */
 export interface ServiceOption {
   optionId: string;
   name: string;

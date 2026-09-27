@@ -16,10 +16,10 @@ import {
 } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
 import { WhatsAppIcon } from './WhatsAppIcon';
-import { CatalogueItem, Order, PublicPaymentOptions } from '../types';
+import { CatalogueItem, Order, PublicPaymentOptions } from '../../shared/types';
 import { ProductImage } from './ProductImage';
 import { STORE_COPY } from '../config/storeCopy';
-import { cedisToPesewas, formatPesewas } from '../utils/money';
+import { cedisToPesewas, formatPesewas } from '../../shared/money';
 import { TurnitinDocumentUpload } from './TurnitinDocumentUpload';
 import { isTurnitinOrder, turnitinOrderStep } from '../utils/orderProgress';
 import { TurnitinReportDownloads } from './TurnitinReportDownloads';

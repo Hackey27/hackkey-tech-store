@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, AlertCircle, Check, CreditCard, Monitor, Phone, Share2, ShoppingCart } from 'lucide-react';
-import { CatalogueItem, MachineCodeType, ServiceOption, Variant } from '../types';
+import { CatalogueItem, MachineCodeType, ServiceOption, Variant } from '../../shared/types';
 import { STORE_COPY } from '../config/storeCopy';
-import { formatPesewas, priceServiceLine, resolveLinePricePesewas } from '../utils/money';
+import { formatPesewas, priceServiceLine, resolveLinePricePesewas } from '../../shared/money';
 import { ServicePurchasePanel } from './ServicePurchasePanel';
 import { ProductGallery } from './ProductGallery';
 import { ProductImage, renderableProductImageUrl } from './ProductImage';

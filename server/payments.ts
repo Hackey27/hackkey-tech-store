@@ -1,5 +1,5 @@
-import { Order } from '../src/types';
-import { formatPesewas } from '../src/utils/money';
+import { Order } from '../shared/types';
+import { formatPesewas } from '../shared/money';
 import { COLLECTIONS, getFirestore } from './firestore';
 import { verifyTransaction } from './paystack';
 import { fulfilPaidOrder, FulfilmentOutcome } from './orders';

@@ -11,7 +11,7 @@ import {
   Product,
   RequestKind,
   Variant
-} from '../src/types';
+} from '../shared/types';
 import { COLLECTIONS, getFirestore } from './firestore';
 import { findBundle, findLaptop, findService, findVariant } from './catalogue';
 import {
@@ -20,7 +20,7 @@ import {
   cedisToPesewas,
   priceServiceLine,
   serviceTargetIds
-} from '../src/utils/money';
+} from '../shared/money';
 import { getPricingConfig } from './pricingConfig';
 import { fulfilmentNoticeKind } from './deliveryNotice';
 import { sendSellerRequestAlert } from './email';

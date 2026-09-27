@@ -1,4 +1,4 @@
-import { Announcement, Bundle, CatalogueItemKind, Category, CustomerRequest, LandingSettings, Laptop, LicencePoolEntry, Order, PaymentSettings, PricingConfig, Product, Service, SupportSettings } from '../types';
+import { Announcement, Bundle, CatalogueItemKind, Category, CustomerRequest, LandingSettings, Laptop, LicencePoolEntry, Order, PaymentSettings, PricingConfig, Product, Service, SupportSettings } from '../../shared/types';
 
 export interface AdminMediaItem {
   kind: CatalogueItemKind | 'category';

@@ -14,8 +14,8 @@ import {
   pesewasToCedis,
   priceServiceLine,
   serviceTargetIds
-} from '../src/utils/money';
-import { PricingConfig, ServiceOption } from '../src/types';
+} from '../shared/money';
+import { PricingConfig, ServiceOption } from '../shared/types';
 import { TURNITIN_SERVICE } from '../server/seed/turnitin';
 import { STORE_COPY } from '../src/config/storeCopy';
 import { isTurnitinAiCheck } from '../src/utils/turnitin';

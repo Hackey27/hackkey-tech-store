@@ -1,4 +1,4 @@
-import { CustomerInputType, Variant } from '../types';
+import { CustomerInputType, Variant } from './types';
 
 function normalizedProductId(productId?: string): string {
   return String(productId || '').trim().toUpperCase();

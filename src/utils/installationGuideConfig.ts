@@ -1,4 +1,4 @@
-import type { InstallationGuideConfig, InstallationGuideStepConfig, Product } from '../types';
+import type { InstallationGuideConfig, InstallationGuideStepConfig, Product } from '../../shared/types';
 
 const STEP_KINDS = new Set(['download', 'command', 'licence', 'customer-input']);
 

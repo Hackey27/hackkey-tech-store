@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, Check, ChevronDown, CreditCard, Minus, Plus, ShoppingCart } from 'lucide-react';
-import { CatalogueItem, ServiceOption } from '../types';
+import { CatalogueItem, ServiceOption } from '../../shared/types';
 import { STORE_COPY } from '../config/storeCopy';
-import { formatPesewas, priceServiceLine } from '../utils/money';
+import { formatPesewas, priceServiceLine } from '../../shared/money';
 import { isTurnitinAiCheck } from '../utils/turnitin';
 
 interface ServicePurchasePanelProps {

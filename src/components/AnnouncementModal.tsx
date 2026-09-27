@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { Announcement } from '../types';
+import { Announcement } from '../../shared/types';
 import { STORE_COPY } from '../config/storeCopy';
 
 interface AnnouncementModalProps {

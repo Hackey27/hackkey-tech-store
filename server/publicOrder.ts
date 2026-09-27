@@ -1,4 +1,4 @@
-import { Order, Product } from '../src/types';
+import { Order, Product } from '../shared/types';
 import { COLLECTIONS, getFirestore } from './firestore';
 
 /** The phone lookup is public. Seller notes, private storage paths and sales

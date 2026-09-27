@@ -8,7 +8,7 @@ import {
   validateCatalogueImage
 } from '../server/storage';
 import { searchCatalogue } from '../src/utils/catalogueSearch';
-import type { CatalogueItem } from '../src/types';
+import type { CatalogueItem } from '../shared/types';
 import { renderProductSocialPreview } from '../server/socialPreview';
 import { availableCardChoices } from '../src/components/CardSoftwareChoice';
 

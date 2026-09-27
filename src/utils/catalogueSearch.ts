@@ -1,4 +1,4 @@
-import type { CatalogueItem } from '../types';
+import type { CatalogueItem } from '../../shared/types';
 
 function searchableText(item: CatalogueItem): string {
   const laptop = item.laptop;

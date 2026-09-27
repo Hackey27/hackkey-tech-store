@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { turnitinDocumentUploadPolicy } from '../server/documentUploadPolicy';
-import { Order } from '../src/types';
+import { Order } from '../shared/types';
 
 const paidTurnitin: Order = {
   orderId: 'HK-123456', cartId: 'CART-1', orderDate: '', lastUpdated: '', customerName: 'Ama',

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { resolveBundleItems } from '../server/orders';
-import type { BundleItem } from '../src/types';
+import type { BundleItem } from '../shared/types';
 
 const rows: BundleItem[] = [
   { itemId: 'fixed', productId: 'PLS', variantId: 'WINPLS01', sortOrder: 1 },

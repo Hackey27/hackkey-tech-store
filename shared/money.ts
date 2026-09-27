@@ -13,7 +13,7 @@
  * every value the storefront can produce.
  */
 
-import { PricingConfig, PromotionRule, ServiceOption } from '../types';
+import { PricingConfig, PromotionRule, ServiceOption } from './types';
 
 /** Cedis (possibly fractional, from Firestore) to whole pesewas. */
 export function cedisToPesewas(cedis: number): number {

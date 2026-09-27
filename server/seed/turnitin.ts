@@ -1,4 +1,4 @@
-import { Service } from '../../src/types';
+import { Service } from '../../shared/types';
 
 /**
  * Turnitin, as a seeded `services` document.

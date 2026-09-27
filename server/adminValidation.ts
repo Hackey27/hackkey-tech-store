@@ -1,4 +1,4 @@
-import { Service } from '../src/types';
+import { Service } from '../shared/types';
 
 export interface LicenceImportRow {
   row: number;

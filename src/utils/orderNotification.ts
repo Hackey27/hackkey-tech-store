@@ -1,5 +1,5 @@
-import { CustomerNotificationPurpose, Order } from '../types';
-import { formatPesewas } from './money';
+import { CustomerNotificationPurpose, Order } from '../../shared/types';
+import { formatPesewas } from '../../shared/money';
 
 export interface OrderNotificationContent {
   subject: string;

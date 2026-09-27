@@ -1,4 +1,4 @@
-import { Order } from '../src/types';
+import { Order } from '../shared/types';
 import { normalisePhone } from './orders';
 
 export interface DocumentUploadPolicyResult {

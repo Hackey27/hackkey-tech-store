@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { CatalogueItem, Variant } from '../src/types';
+import type { CatalogueItem, Variant } from '../shared/types';
 import { bundleOperatingSystems, bundleVariantsForOs, resolveCustomBundleChoices } from '../src/utils/customBundle';
 
 const variant = (id: string, version: string, os: string, available = true): Variant => ({

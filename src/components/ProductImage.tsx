@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CatalogueItemKind } from '../types';
+import { CatalogueItemKind } from '../../shared/types';
 
 type ProductImageSize = 'sm' | 'md' | 'lg';
 

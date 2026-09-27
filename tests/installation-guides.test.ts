@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Order, Product } from '../src/types';
+import type { Order, Product } from '../shared/types';
 import { defaultInstallationGuideForProduct, installationGuideForOrder } from '../src/data/installationGuides';
 import { cleanProductInstallationSettings } from '../src/utils/installationGuideConfig';
 import { guideMarkerPosition, guideScreenshotUrl } from '../src/utils/guideImages';

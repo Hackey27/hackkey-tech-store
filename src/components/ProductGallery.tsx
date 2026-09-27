@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, RotateCcw, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
-import type { CatalogueItemKind } from '../types';
+import type { CatalogueItemKind } from '../../shared/types';
 import { renderableProductImageUrl } from './ProductImage';
 
 interface ProductGalleryProps {

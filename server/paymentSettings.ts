@@ -1,4 +1,4 @@
-import { CheckoutPaymentMode, MomoPaymentDetails, PaymentSettings, PublicPaymentOptions } from '../src/types';
+import { CheckoutPaymentMode, MomoPaymentDetails, PaymentSettings, PublicPaymentOptions } from '../shared/types';
 import { AdminActor } from './adminAuth';
 import { buildAdminAuditEntry } from './adminAudit';
 import { COLLECTIONS, getFirestore, toIsoString } from './firestore';

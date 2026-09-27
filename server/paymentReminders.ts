@@ -1,4 +1,4 @@
-import { Order } from '../src/types';
+import { Order } from '../shared/types';
 import { AdminActor } from './adminAuth';
 import { sendSellerPaymentReminder } from './email';
 import { COLLECTIONS, getFirestore } from './firestore';

@@ -14,8 +14,8 @@ import {
   formatPesewas,
   priceServiceLine,
   resolveLinePricePesewas
-} from '../src/utils/money';
-import { ServiceOption } from '../src/types';
+} from '../shared/money';
+import { ServiceOption } from '../shared/types';
 import { TURNITIN_SERVICE } from '../server/seed/turnitin';
 
 // ---------------------------------------------------------------------------

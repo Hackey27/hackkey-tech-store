@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CatalogueItem } from '../types';
+import { CatalogueItem } from '../../shared/types';
 import { CheckCircle, CreditCard, Info, MessageSquareQuote, ShoppingCart } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
-import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
+import { formatPesewas, resolveLinePricePesewas } from '../../shared/money';
 import { ProductImage, renderableProductImageUrl } from './ProductImage';
 import { PromotionCountdown } from './PromotionCountdown';
 

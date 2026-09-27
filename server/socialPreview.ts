@@ -1,4 +1,4 @@
-import type { CatalogueItem } from '../src/types';
+import type { CatalogueItem } from '../shared/types';
 
 function escapeHtml(value: string): string {
   return value

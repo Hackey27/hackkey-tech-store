@@ -1,4 +1,4 @@
-import { PricingConfig, PromotionRule } from '../src/types';
+import { PricingConfig, PromotionRule } from '../shared/types';
 import { COLLECTIONS, getFirestore } from './firestore';
 
 /**

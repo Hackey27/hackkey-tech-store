@@ -17,7 +17,7 @@ import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { PaymentReturnView } from './components/PaymentReturnView';
 import { AnnouncementModal, shouldShowAnnouncement } from './components/AnnouncementModal';
 import { STORE_COPY } from './config/storeCopy';
-import { CatalogResponse, CatalogueItem, PublicPaymentOptions, ServiceOption, Variant } from './types';
+import { CatalogResponse, CatalogueItem, PublicPaymentOptions, ServiceOption, Variant } from '../shared/types';
 import {
   ArrowLeft,
   AlertCircle,

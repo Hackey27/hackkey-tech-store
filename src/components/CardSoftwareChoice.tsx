@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { CatalogueItem, Variant } from '../types';
-import { formatPesewas } from '../utils/money';
+import { CatalogueItem, Variant } from '../../shared/types';
+import { formatPesewas } from '../../shared/money';
 import { useBackDismiss } from '../utils/useBackDismiss';
 
 export interface CardChoiceRequest {

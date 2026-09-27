@@ -1,8 +1,8 @@
 import React from 'react';
 import { Search, X } from 'lucide-react';
-import type { CatalogueItem } from '../types';
+import type { CatalogueItem } from '../../shared/types';
 import { ProductImage, renderableProductImageUrl } from './ProductImage';
-import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
+import { formatPesewas, resolveLinePricePesewas } from '../../shared/money';
 
 interface SearchResultsOverlayProps {
   query: string;

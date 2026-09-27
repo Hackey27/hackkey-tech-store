@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildOrderNotification, notificationPurposeForOrder, validateNotificationPurpose } from '../src/utils/orderNotification';
-import { Order } from '../src/types';
+import { Order } from '../shared/types';
 
 const order = (patch: Partial<Order> = {}): Order => ({
   orderId: 'HKT-TEST', cartId: 'CART-1', orderDate: '2026-09-23T10:00:00.000Z', lastUpdated: '2026-09-23T10:00:00.000Z',

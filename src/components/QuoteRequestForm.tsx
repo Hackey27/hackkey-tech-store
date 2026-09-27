@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Send } from 'lucide-react';
-import type { CatalogueItem, ServiceField } from '../types';
+import type { CatalogueItem, ServiceField } from '../../shared/types';
 
 function Input({ field, value, onChange }: { field: ServiceField; value: string; onChange: (value: string) => void }) {
   const common = { required: field.required, value, onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => onChange(event.target.value), className: 'mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm', placeholder: field.placeholder };

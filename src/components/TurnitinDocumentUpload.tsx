@@ -1,6 +1,6 @@
 import React, { DragEvent, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, FileText, RefreshCw, UploadCloud } from 'lucide-react';
-import { Order } from '../types';
+import { Order } from '../../shared/types';
 import { FulfilmentTimeNotice } from './FulfilmentTimeNotice';
 import { documentContentType } from '../utils/documentFiles';
 import { whatsAppDocumentLink } from '../utils/whatsapp';

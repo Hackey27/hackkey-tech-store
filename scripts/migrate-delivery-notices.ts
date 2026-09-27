@@ -1,6 +1,6 @@
 /** One-time, idempotent migration of the previous storefront's enabled notices. */
 import { Firestore } from '@google-cloud/firestore';
-import { Product, Service } from '../src/types';
+import { Product, Service } from '../shared/types';
 
 const dryRun = process.argv.includes('--dry-run');
 const projectId = process.env.GOOGLE_CLOUD_PROJECT;

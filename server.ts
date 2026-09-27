@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import { readFile } from 'node:fs/promises';
 import path from 'path';
-import { HealthResponse } from './src/types';
+import { HealthResponse } from './shared/types';
 import { getCatalogue } from './server/catalogue';
 import {
   attachDocument,

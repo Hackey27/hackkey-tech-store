@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { Order } from '../types';
+import { Order } from '../../shared/types';
 
 export function OrderPaymentWatcher({ orderId, onResolved }: { orderId?: string; onResolved: (order: Order) => void }) {
   const [checking, setChecking] = useState(false);

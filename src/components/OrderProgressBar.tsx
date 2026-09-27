@@ -1,5 +1,5 @@
 import React from 'react';
-import { MachineCodeType } from '../types';
+import { MachineCodeType } from '../../shared/types';
 import { Check } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 

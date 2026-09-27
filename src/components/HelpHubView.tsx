@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 import { WhatsAppIcon } from './WhatsAppIcon';
-import type { SupportTool } from '../types';
+import type { SupportTool } from '../../shared/types';
 
 /**
  * What to show before the seller has configured anything, and if the request

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle, Clock, RefreshCw, AlertCircle } from 'lucide-react';
-import { Order } from '../types';
-import { formatPesewas } from '../utils/money';
+import { Order } from '../../shared/types';
+import { formatPesewas } from '../../shared/money';
 import { STORE_COPY } from '../config/storeCopy';
 import { TurnitinDocumentUpload } from './TurnitinDocumentUpload';
 import { OrderProgressBar } from './OrderProgressBar';

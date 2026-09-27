@@ -12,7 +12,7 @@ import {
   PricingConfig,
   Service,
   Variant
-} from '../src/types';
+} from '../shared/types';
 import { COLLECTIONS, getFirestore, toIsoString } from './firestore';
 import { getPricingConfig } from './pricingConfig';
 import { getPublicPaymentOptions } from './paymentSettings';
@@ -21,17 +21,17 @@ import {
   cedisToPesewas,
   pesewasToCedis,
   serviceTargetIds
-} from '../src/utils/money';
+} from '../shared/money';
 import {
   isProductSellable,
   isVariantSellable,
   resolveVariantOperatingSystem
-} from '../src/utils/pricingEngine';
+} from '../shared/pricingEngine';
 import {
   defaultCustomerInputType,
   defaultDeliveryCodeType,
   effectiveActivationWebsiteUrl
-} from '../src/utils/softwareFulfilment';
+} from '../shared/softwareFulfilment';
 import { resolvedDeliveryNotice } from './deliveryNotice';
 
 /** The catalogue changes rarely and every page load reads it. */

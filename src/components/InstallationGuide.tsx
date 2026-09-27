@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowLeft, ArrowRight, BookOpen, Check, Copy, Download, RefreshCw, X } from 'lucide-react';
-import type { CatalogueItem, Order } from '../types';
+import type { CatalogueItem, Order } from '../../shared/types';
 import { installationGuideForOrder } from '../data/installationGuides';
 import { guideScreenshotUrl } from '../utils/guideImages';
 import { guideProgressKey, initialGuidePosition, shouldClearGuideProgress } from '../utils/guideProgress';

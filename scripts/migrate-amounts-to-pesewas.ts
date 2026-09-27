@@ -15,7 +15,7 @@
  */
 
 import { Firestore, WriteBatch } from '@google-cloud/firestore';
-import { cedisToPesewas } from '../src/utils/money';
+import { cedisToPesewas } from '../shared/money';
 
 const BATCH_LIMIT = 450;
 

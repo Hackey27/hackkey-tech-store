@@ -1,10 +1,10 @@
 import React from 'react';
-import { CatalogueItem, Variant, ServiceOption } from '../types';
+import { CatalogueItem, Variant, ServiceOption } from '../../shared/types';
 import { ShoppingBag, Trash2, ChevronRight } from 'lucide-react';
 import { OrderProgressBar } from './OrderProgressBar';
 import { STORE_COPY } from '../config/storeCopy';
 import { ProductImage } from './ProductImage';
-import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
+import { formatPesewas, resolveLinePricePesewas } from '../../shared/money';
 import { cartLineDetail } from '../utils/cartLineDetail';
 
 export interface CartItem {

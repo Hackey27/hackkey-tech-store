@@ -42,7 +42,7 @@ import {
   Service,
   ServiceField,
   Variant
-} from '../src/types';
+} from '../shared/types';
 import { SEED_SERVICES } from '../server/seed/turnitin';
 
 // ---------------------------------------------------------------------------

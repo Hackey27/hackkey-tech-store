@@ -1,5 +1,5 @@
-import type { CatalogueItem, Variant } from '../types';
-import { isVariantSellable, resolveVariantOperatingSystem } from './pricingEngine';
+import type { CatalogueItem, Variant } from '../../shared/types';
+import { isVariantSellable, resolveVariantOperatingSystem } from '../../shared/pricingEngine';
 
 export interface CustomBundleChoice {
   itemId: string;

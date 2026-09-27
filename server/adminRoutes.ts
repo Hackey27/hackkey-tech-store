@@ -34,7 +34,7 @@ import { savePaymentSettings } from './paymentSettings';
 import { saveSupportSettings } from './supportSettings';
 import { setPaymentLater } from './paymentReminders';
 import { buildOrderNotification, validateNotificationPurpose } from '../src/utils/orderNotification';
-import { CustomerNotificationPurpose, Order } from '../src/types';
+import { CustomerNotificationPurpose, Order } from '../shared/types';
 import { COLLECTIONS, getFirestore } from './firestore';
 import {
   catalogueImageObjectPath,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Activity, Shield, RefreshCw } from 'lucide-react';
-import { HealthResponse } from '../types';
+import { HealthResponse } from '../../shared/types';
 
 interface NavbarProps {
   searchQuery: string;

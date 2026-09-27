@@ -1,4 +1,4 @@
-import { Order } from '../types';
+import { Order } from '../../shared/types';
 
 export function isTurnitinOrder(order: Pick<Order, 'productId' | 'variantId'>): boolean {
   return order.productId === 'TURNITIN' || order.variantId === 'TURNITIN';

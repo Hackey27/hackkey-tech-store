@@ -1,6 +1,6 @@
 import { Storage } from '@google-cloud/storage';
 import crypto from 'crypto';
-import { ServiceField } from '../src/types';
+import { ServiceField } from '../shared/types';
 
 /**
  * Customer document uploads.

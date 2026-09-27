@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { CreditCard, X } from 'lucide-react';
 import type { CartItem } from './CartView';
-import type { Order, PublicPaymentOptions } from '../types';
+import type { Order, PublicPaymentOptions } from '../../shared/types';
 import { cartItemToCheckoutItem } from '../utils/checkout';
 import { cartLineDetail } from '../utils/cartLineDetail';
-import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
+import { formatPesewas, resolveLinePricePesewas } from '../../shared/money';
 import { FulfilmentTimeNotice } from './FulfilmentTimeNotice';
 import { cartDeliveryNotice } from '../utils/cartDeliveryNotice';
 import { useBackDismiss } from '../utils/useBackDismiss';

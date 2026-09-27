@@ -4,7 +4,7 @@ import {
   defaultCustomerInputType,
   defaultDeliveryCodeType,
   effectiveActivationWebsiteUrl
-} from '../src/utils/softwareFulfilment';
+} from '../shared/softwareFulfilment';
 
 test('software families use the correct customer activation detail', () => {
   assert.equal(defaultCustomerInputType('SPSS'), 'Lock Code');

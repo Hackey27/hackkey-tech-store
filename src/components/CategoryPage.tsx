@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowLeft, PackageOpen } from 'lucide-react';
-import { CatalogueItem, Category } from '../types';
+import { CatalogueItem, Category } from '../../shared/types';
 import { STORE_COPY } from '../config/storeCopy';
 import { ProductCard } from './ProductCard';
 import { CustomBundleRequest } from './CustomBundleRequest';

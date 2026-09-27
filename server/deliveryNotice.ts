@@ -1,4 +1,4 @@
-import { Variant } from '../src/types';
+import { Variant } from '../shared/types';
 
 /**
  * Compatibility defaults for the one-time migration from the former store.

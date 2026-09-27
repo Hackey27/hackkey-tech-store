@@ -1,4 +1,4 @@
-import type { CatalogueItem, InstallationGuideConfig, InstallationGuideStepConfig, Order, Product } from '../types';
+import type { CatalogueItem, InstallationGuideConfig, InstallationGuideStepConfig, Order, Product } from '../../shared/types';
 
 export interface GuideStep extends InstallationGuideStepConfig {}
 

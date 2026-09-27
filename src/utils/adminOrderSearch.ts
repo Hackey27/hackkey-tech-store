@@ -1,4 +1,4 @@
-import { Order } from '../types';
+import { Order } from '../../shared/types';
 
 function submittedNameValues(order: Pick<Order, 'customerName' | 'serviceAnswers'>): string[] {
   const answerNames = Object.entries(order.serviceAnswers || {})

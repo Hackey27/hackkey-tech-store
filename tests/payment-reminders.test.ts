@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ghanaDate, paymentReminderIsDue, validReminderDate } from '../server/paymentReminders';
-import { Order } from '../src/types';
+import { Order } from '../shared/types';
 
 const order = (patch: Partial<Order> = {}): Order => ({
   orderId: 'HKT-REMINDER', cartId: 'CART-1', orderDate: '2026-09-20T10:00:00.000Z', lastUpdated: '2026-09-20T10:00:00.000Z',

@@ -1,4 +1,4 @@
-import { CustomerRequest, Order } from '../src/types';
+import { CustomerRequest, Order } from '../shared/types';
 import { sendSellerOrderSubmittedAlert, sendSellerRequestAlert } from './email';
 import { COLLECTIONS, getFirestore } from './firestore';
 import { getOrdersByCartId, recordOrderSubmissionAlert } from './orders';
