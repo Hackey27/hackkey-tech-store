@@ -69,7 +69,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     <article
       id={`product-card-${product.itemId}`}
       role="button" tabIndex={0} onClick={() => onSelect(product)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onSelect(product); } }}
-      className="group flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-[#d8e7e4] bg-white text-slate-900 transition-all duration-200 hover:border-[#014040]/70 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#014040]"
+      className="group flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-[#d8e7e4] bg-white text-slate-900 transition-[border-color,box-shadow] duration-200 hover:border-[#014040]/70 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#014040]"
     >
       <div className="p-5 sm:p-6">
         {/* Laptops use their product banner as the browsing preview. */}

@@ -34,7 +34,7 @@ export const FloatingWhatsApp: React.FC = () => {
       </span>
 
       {/* Label reveals on pointer devices only */}
-      <span className="pointer-events-none absolute right-16 hidden whitespace-nowrap rounded-full bg-[#014040] px-3.5 py-2 text-xs font-bold text-white shadow-md opacity-0 translate-x-1.5 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0 md:inline-flex">
+      <span className="pointer-events-none absolute right-16 hidden whitespace-nowrap rounded-full bg-[#014040] px-3.5 py-2 text-xs font-bold text-white shadow-md opacity-0 translate-x-1.5 transition-[opacity,transform] duration-200 group-hover:opacity-100 group-hover:translate-x-0 md:inline-flex">
         {STORE_COPY.brand.whatsAppCta}
       </span>
     </a>

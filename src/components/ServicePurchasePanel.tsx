@@ -55,7 +55,7 @@ export const ServicePurchasePanel: React.FC<ServicePurchasePanelProps> = ({ item
               <button
                 key={option.optionId}
                 onClick={() => { setSelected(option); onOptionChange?.(option); }}
-                className={`w-full p-3.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between text-left ${
+                className={`w-full p-3.5 rounded-xl border-2 hk-pressable cursor-pointer flex items-center justify-between text-left ${
                   isSelected
                     ? 'bg-[#f0f9f7] border-[#014040] shadow-xs'
                     : 'bg-white border-slate-200 hover:border-slate-300'

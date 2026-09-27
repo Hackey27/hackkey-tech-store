@@ -62,7 +62,7 @@ export const OrderProgressBar: React.FC<OrderProgressBarProps> = ({
 
         {/* Active filled line (Bright Green #05ef28) */}
         <div
-          className="absolute top-4 left-4 h-1 bg-[#05ef28] -translate-y-1/2 rounded-full transition-all duration-300 ease-out"
+          className="absolute top-4 left-4 h-1 bg-[#05ef28] -translate-y-1/2 rounded-full transition-[width] duration-300 ease-out"
           style={{ width: `calc(${progressPercent}% * (1 - 32px / 100%))` }}
         />
 
@@ -85,7 +85,7 @@ export const OrderProgressBar: React.FC<OrderProgressBarProps> = ({
               >
                 {/* Step Circle */}
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-200 border-2 ${
+                  className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-[background-color,border-color,color,box-shadow] duration-200 border-2 ${
                     isCompleted
                       ? 'bg-[#014040] border-[#014040] text-[#05ef28] shadow-xs'
                       : isCurrent

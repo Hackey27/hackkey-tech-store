@@ -195,7 +195,7 @@ export const RequestView: React.FC<{ initialMode?: RequestMode | null }> = ({ in
               type="button"
               id="btn-choose-request-software"
               onClick={() => openModal('software')}
-              className="px-5 py-2.5 rounded-xl bg-white text-[#014040] font-black text-xs hover:bg-[#edf5f3] transition-all shadow-xs flex items-center gap-2 cursor-pointer"
+              className="px-5 py-2.5 rounded-xl bg-white text-[#014040] font-black text-xs hover:bg-[#edf5f3] hk-pressable shadow-xs flex items-center gap-2 cursor-pointer"
             >
               <Layers className="w-4 h-4" />
               <span>{STORE_COPY.requestPage.modeSoftware}</span>
@@ -205,7 +205,7 @@ export const RequestView: React.FC<{ initialMode?: RequestMode | null }> = ({ in
               type="button"
               id="btn-choose-request-laptop"
               onClick={() => openModal('laptop')}
-              className="px-5 py-2.5 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-xs transition-all shadow-xs flex items-center gap-2 cursor-pointer"
+              className="px-5 py-2.5 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-xs hk-pressable shadow-xs flex items-center gap-2 cursor-pointer"
             >
               <Laptop className="w-4 h-4" />
               <span>{STORE_COPY.requestPage.modeLaptop}</span>
@@ -369,7 +369,7 @@ export const RequestView: React.FC<{ initialMode?: RequestMode | null }> = ({ in
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="w-full py-3.5 px-4 bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-sm rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                      className="w-full py-3.5 px-4 bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-sm rounded-xl hk-pressable shadow-xs cursor-pointer disabled:opacity-50"
                     >
                       {isSubmitting ? 'Submitting...' : STORE_COPY.requestPage.software.submitBtn}
                     </button>
@@ -634,7 +634,7 @@ export const RequestView: React.FC<{ initialMode?: RequestMode | null }> = ({ in
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="w-full py-3.5 px-4 bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-sm rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                      className="w-full py-3.5 px-4 bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-sm rounded-xl hk-pressable shadow-xs cursor-pointer disabled:opacity-50"
                     >
                       {isSubmitting ? 'Submitting...' : STORE_COPY.requestPage.laptop.submitBtn}
                     </button>

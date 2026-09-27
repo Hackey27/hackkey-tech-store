@@ -49,7 +49,7 @@ export const HelpHubView: React.FC = () => {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}
-                className="flex items-center justify-between p-3.5 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-sm transition-all shadow-xs"
+                className="flex items-center justify-between p-3.5 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-sm hk-pressable shadow-xs"
               >
                 <div className="flex items-center gap-2.5">
                   <WhatsAppIcon className="w-5 h-5" />
@@ -105,7 +105,7 @@ export const HelpHubView: React.FC = () => {
                 href={windowsTeamViewerUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between p-3.5 rounded-xl bg-[#014040] hover:bg-[#025656] text-white transition-all group"
+                className="flex items-center justify-between p-3.5 rounded-xl bg-[#014040] hover:bg-[#025656] text-white hk-pressable group"
               >
                 <div className="flex items-center gap-3">
                   <Monitor className="w-5 h-5 text-[#05ef28]" />
@@ -125,7 +125,7 @@ export const HelpHubView: React.FC = () => {
                 href={macTeamViewerUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between p-3.5 rounded-xl bg-[#014040] hover:bg-[#025656] text-white transition-all group"
+                className="flex items-center justify-between p-3.5 rounded-xl bg-[#014040] hover:bg-[#025656] text-white hk-pressable group"
               >
                 <div className="flex items-center gap-3">
                   <Laptop className="w-5 h-5 text-[#05ef28]" />

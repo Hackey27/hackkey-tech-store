@@ -260,7 +260,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               placeholder={STORE_COPY.findOrder.phonePlaceholder}
-              className="w-full px-4 py-3 bg-[#f8fbfa] border border-[#cbdcd9] rounded-xl text-base font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#014040] focus:ring-2 focus:ring-[#05ef28]/40 transition-all"
+              className="w-full px-4 py-3 bg-[#f8fbfa] border border-[#cbdcd9] rounded-xl text-base font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#014040] focus:ring-2 focus:ring-[#05ef28]/40 transition-[border-color,box-shadow] duration-150"
               required
             />
           </div>
@@ -268,7 +268,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
           <button
             type="submit"
             disabled={isSearching}
-            className="w-full py-3.5 px-4 bg-[#05ef28] hover:bg-[#04d824] active:scale-98 text-[#014040] font-black text-sm rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            className="w-full py-3.5 px-4 bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-sm rounded-xl hk-pressable shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
             {isSearching ? STORE_COPY.findOrder.searching : STORE_COPY.findOrder.submitButton}
           </button>
@@ -389,7 +389,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
                     />
                   </div>
 
-                  {installationGuideForOrder(order, installationProduct) && <div className="space-y-2"><button type="button" onClick={() => setGuideOpenOrderId(order.orderId)} className="hk-activation-gradient inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-black text-white shadow-sm transition-[filter,transform] hover:brightness-110 active:scale-[0.99]"><BookOpen className="h-4 w-4 shrink-0" />{installationProduct?.installationButtonLabel?.trim() || DEFAULT_INSTALLATION_BUTTON_LABEL}</button><p className="text-center text-xs leading-5 text-slate-600 sm:hidden">We recommend following these steps on the computer where the software is being installed.</p></div>}
+                  {installationGuideForOrder(order, installationProduct) && <div className="space-y-2"><button type="button" onClick={() => setGuideOpenOrderId(order.orderId)} className="hk-activation-gradient inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-black text-white shadow-sm hk-pressable hover:brightness-110"><BookOpen className="h-4 w-4 shrink-0" />{installationProduct?.installationButtonLabel?.trim() || DEFAULT_INSTALLATION_BUTTON_LABEL}</button><p className="text-center text-xs leading-5 text-slate-600 sm:hidden">We recommend following these steps on the computer where the software is being installed.</p></div>}
 
                   {!isTurnitin && order.paymentStatus === 'paid' && order.fulfilmentStatus !== 'ready' && order.showDeliveryNotice !== false && <FulfilmentTimeNotice kind={/account/i.test(order.fulfilmentType || '') ? 'account' : 'licence'} />}
 
@@ -469,7 +469,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
                           <button
                             type="submit"
                             disabled={isSubmittingInput[order.orderId]}
-                            className="w-full py-3.5 px-4 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-xs sm:text-sm shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                            className="w-full py-3.5 px-4 rounded-xl bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-xs sm:text-sm shadow-xs hk-pressable cursor-pointer disabled:opacity-50"
                           >
                             {isSubmittingInput[order.orderId]
                               ? 'Submitting...'

@@ -64,7 +64,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder="Filter sample items, statistical tools, or services..."
-                className="w-full pl-9 pr-8 py-1.5 bg-black/30 border border-[#05ef28]/40 rounded-lg text-xs text-white placeholder-slate-300 focus:outline-none focus:border-[#05ef28] focus:ring-1 focus:ring-[#05ef28] transition-all"
+                className="w-full pl-9 pr-8 py-1.5 bg-black/30 border border-[#05ef28]/40 rounded-lg text-xs text-white placeholder-slate-300 focus:outline-none focus:border-[#05ef28] focus:ring-1 focus:ring-[#05ef28] transition-[border-color,box-shadow] duration-150"
               />
               {searchQuery && (
                 <button

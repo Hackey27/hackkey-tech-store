@@ -38,7 +38,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
       id={`category-card-${catId}`}
       onClick={() => onSelect(catId)}
       style={category.imageUrl ? { backgroundImage: `linear-gradient(rgb(1 64 64 / 80%), rgb(1 64 64 / 80%)), url("${category.imageUrl}")` } : undefined}
-      className={`group relative min-h-36 cursor-pointer select-none rounded-2xl border bg-cover bg-center p-5 text-left transition-all duration-200 sm:p-6 ${
+      className={`group relative min-h-36 cursor-pointer select-none rounded-2xl border bg-cover bg-center p-5 text-left transition-[background-color,border-color,box-shadow] duration-200 sm:p-6 ${
         isSelected
           ? 'bg-[#014040] text-white border-[#014040] shadow-md ring-2 ring-[#05ef28]'
           : category.imageUrl ? 'text-white border-[#014040] hover:shadow-md' : 'bg-white text-slate-800 border-[#d8e7e4] hover:border-[#014040] hover:shadow-xs hover:bg-[#fbfdfc]'

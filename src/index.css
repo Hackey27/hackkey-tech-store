@@ -239,10 +239,24 @@
   to { opacity: 1; }
 }
 
-/* Press feedback. The point is to confirm the interface heard the tap, so it is
-   fast enough to land inside the same gesture. */
+/* Press feedback, and the one press scale this store uses. The transform is
+   fast enough to land inside the same gesture that triggered it.
+ *
+ * The property list is explicit rather than `all` on purpose: `all` also
+ * animates width, height, margin and padding, so a hover that nudges layout
+ * silently becomes a layout animation on every frame. Everything named here is
+ * paint or composite only.
+ *
+ * It covers the hover properties too, because a second `transition-*` class on
+ * the same element would replace this whole declaration rather than add to it. */
 .hk-pressable {
-  transition: transform 140ms var(--hk-ease-out), background-color 140ms ease;
+  transition:
+    transform 140ms var(--hk-ease-out),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    filter 150ms ease;
 }
 
 .hk-pressable:active {

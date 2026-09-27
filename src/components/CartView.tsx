@@ -75,7 +75,7 @@ export const CartView: React.FC<CartViewProps> = ({
           <div>
             <button
               onClick={onContinueShopping}
-              className="px-6 py-3 rounded-xl bg-[#014040] hover:bg-[#025656] text-white font-bold text-xs sm:text-sm transition-all cursor-pointer"
+              className="px-6 py-3 rounded-xl bg-[#014040] hover:bg-[#025656] text-white font-bold text-xs sm:text-sm hk-pressable cursor-pointer"
             >
               {STORE_COPY.cart.browseSoftwareBtn}
             </button>
@@ -162,7 +162,7 @@ export const CartView: React.FC<CartViewProps> = ({
             <button
               type="button"
               onClick={onCheckout}
-              className="w-full py-3.5 px-4 bg-[#05ef28] hover:bg-[#04d824] active:scale-98 text-[#014040] font-black text-sm rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3.5 px-4 bg-[#05ef28] hover:bg-[#04d824] text-[#014040] font-black text-sm rounded-xl hk-pressable shadow-xs flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>{STORE_COPY.cart.proceedToCheckout}</span>
               <ChevronRight className="w-4 h-4 stroke-[3]" />
