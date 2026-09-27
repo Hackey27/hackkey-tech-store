@@ -586,6 +586,9 @@ export const App: React.FC = () => {
       <CurvedNav
         activeTab={route.view === 'order-access' ? 'find-order' : activeTab}
         onSelectTab={(tab) => {
+          // The cart is a flyout rather than a page, same as the header's cart
+          // button. Setting it as the active tab would show an empty page.
+          if (tab === 'cart') { setCartOpen(true); return; }
           if (route.view !== 'home') navigate('/');
           if (tab === 'request') setRequestLaunchMode(null);
           setActiveTab(tab);

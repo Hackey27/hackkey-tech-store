@@ -319,6 +319,22 @@
     0 4px 8px -4px rgb(1 64 64 / 0.3);
 }
 
+/* The white bar itself. The notch is a hole punched through it with a mask
+   rather than a shape painted in the page colour, so whatever sits behind the
+   bar shows through and the bar no longer has to know what colour the page is.
+   The mask ellipse's position is written to this element's own style each frame;
+   it is deliberately not a custom property on the bar's parent, which would
+   restyle every button on every frame of the slide.
+ *
+ * drop-shadow follows the masked silhouette, which is the only way to get a
+ * hairline that runs along the scoop as well as the bar's edge — a border or an
+ * inset shadow would be cut away with the notch. */
+.hk-nav-surface {
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+  filter: drop-shadow(0 0 0.5px rgb(1 64 64 / 0.22));
+}
+
 /* The active tab's own flat icon gets out of the way of the bubble. It leaves
    to 0.5 rather than 0 so that coming back is not an entrance from nothing. */
 .hk-nav-icon {
@@ -330,8 +346,23 @@
   transform: scale(0.5);
 }
 
+/* Out of the way while reading down the page, back on the way up. A transition
+   rather than a keyframe because scroll direction can reverse mid-slide, and a
+   transition retargets from where it is instead of restarting. */
+.hk-nav-dock {
+  transition: transform 240ms var(--hk-ease-out);
+}
+
+.hk-nav-dock[data-docked='false'] {
+  transform: translateY(calc(100% + 12px));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hk-nav-icon { transition: none; }
+  /* The bar stays put: hiding it is pure movement, and reduced motion asks for
+     gentler, not snapped. The hook is disabled too, so this is belt and braces. */
+  .hk-nav-dock { transition: none; }
+  .hk-nav-dock[data-docked='false'] { transform: none; }
 }
 
 /* Custom scrollbars */
