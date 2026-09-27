@@ -19,6 +19,9 @@ import { TurnitinReportDownloads } from './TurnitinReportDownloads';
  */
 export const PaymentReturnView: React.FC<{ onDone: (order?: Order) => void }> = ({ onDone }) => {
   const [order, setOrder] = useState<Order | null>(null);
+  // Every line the one payment covered, so a multi-item cart is not reported
+  // back as whichever line happened to be primary.
+  const [cart, setCart] = useState<{ cartId?: string; lines: Order[]; totalPesewas: number } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
@@ -36,6 +39,7 @@ export const PaymentReturnView: React.FC<{ onDone: (order?: Order) => void }> = 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'We could not confirm this payment.');
       setOrder(data.order);
+      setCart(data.cart || null);
       setConfirmed(Boolean(data.confirmed));
     } catch (err: any) {
       setError(err.message);
@@ -103,15 +107,22 @@ export const PaymentReturnView: React.FC<{ onDone: (order?: Order) => void }> = 
 
             <div className="p-4 rounded-xl bg-[#f7faf9] border border-[#d8e7e4] space-y-1">
               <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500">
-                Order reference
+                {cart?.cartId ? STORE_COPY.cart.cartReference : 'Order reference'}
               </div>
-              <div className="text-lg font-black text-[#014040]">{order.orderId}</div>
-              <div className="text-sm text-slate-700 pt-1">
-                {order.productName} — {order.versionOrPlan}
-                {order.quantity && order.quantity > 1 ? ` ×${order.quantity}` : ''}
-              </div>
-              <div className="text-sm font-bold text-[#014040]">
-                {formatPesewas(order.amountPesewas)}
+              <div className="text-lg font-black text-[#014040]">{cart?.cartId || order.orderId}</div>
+              {(cart?.lines?.length ? cart.lines : [order]).map((line) => (
+                <div key={line.orderId} className="text-sm text-slate-700 pt-1 flex justify-between gap-3">
+                  <span>
+                    {line.productName} — {line.versionOrPlan}
+                    {line.deliveryOs ? ` · ${line.deliveryOs}` : ''}
+                    {line.quantity && line.quantity > 1 ? ` ×${line.quantity}` : ''}
+                  </span>
+                  <span className="shrink-0 font-semibold">{formatPesewas(line.amountPesewas)}</span>
+                </div>
+              ))}
+              <div className="text-sm font-bold text-[#014040] pt-1 border-t border-[#d8e7e4] flex justify-between">
+                <span>{STORE_COPY.cart.total}</span>
+                <span>{formatPesewas(cart?.totalPesewas ?? order.amountPesewas)}</span>
               </div>
             </div>
 

@@ -60,7 +60,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
   const [isSubmittingInput, setIsSubmittingInput] = useState<Record<string, boolean>>({});
   const [actionSuccessMessage, setActionSuccessMessage] = useState<Record<string, string>>({});
   const [actionErrorMessage, setActionErrorMessage] = useState<Record<string, string>>({});
-  const [paymentResults, setPaymentResults] = useState<Record<string, { options: PublicPaymentOptions; orderIds: string[]; totalPesewas: number; authorizationUrl?: string }>>({});
+  const [paymentResults, setPaymentResults] = useState<Record<string, { options: PublicPaymentOptions; orderIds: string[]; cartId?: string; totalPesewas: number; authorizationUrl?: string }>>({});
   const [guideOpenOrderId, setGuideOpenOrderId] = useState<string | null>(null);
   const autoOpenedGuide = useRef<string | null>(null);
   const installationSettingsFor = (order: Order) => order.showInstallationGuideFallback !== undefined
@@ -175,7 +175,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
         return;
       }
       if (!data.paymentOptions) throw new Error(STORE_COPY.payment.unavailable);
-      setPaymentResults((old) => ({ ...old, [order.orderId]: { options: data.paymentOptions, orderIds: data.orderIds || [order.orderId], totalPesewas: data.totalPesewas, authorizationUrl: data.authorizationUrl } }));
+      setPaymentResults((old) => ({ ...old, [order.orderId]: { options: data.paymentOptions, orderIds: data.orderIds || [order.orderId], cartId: data.cartId, totalPesewas: data.totalPesewas, authorizationUrl: data.authorizationUrl } }));
     } catch (caught) {
       setActionErrorMessage((old) => ({ ...old, [order.orderId]: caught instanceof Error ? caught.message : 'Unable to start payment.' }));
     }
@@ -406,7 +406,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
                         </div>
                       </div>
                       {!paymentResults[order.orderId] && <button type="button" onClick={() => void handlePay(order)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#014040] px-4 py-3 text-sm font-black text-white"><CreditCard className="h-4 w-4" />{paymentOptions?.mode === 'momo' ? STORE_COPY.payment.viewMomo : 'Proceed to pay'}</button>}
-                      {paymentResults[order.orderId] && <div className="space-y-3"><PaymentMethodPanel options={paymentResults[order.orderId].options} orderIds={paymentResults[order.orderId].orderIds} totalPesewas={paymentResults[order.orderId].totalPesewas} authorizationUrl={paymentResults[order.orderId].authorizationUrl} /><OrderPaymentWatcher orderId={order.orderId} onResolved={(updated) => { setOrders((previous) => previous.map((candidate) => candidate.orderId === updated.orderId ? { ...candidate, ...updated } : candidate)); setPaymentResults((previous) => { const next = { ...previous }; delete next[order.orderId]; return next; }); }} /></div>}
+                      {paymentResults[order.orderId] && <div className="space-y-3"><PaymentMethodPanel options={paymentResults[order.orderId].options} orderIds={paymentResults[order.orderId].orderIds} reference={paymentResults[order.orderId].cartId} totalPesewas={paymentResults[order.orderId].totalPesewas} authorizationUrl={paymentResults[order.orderId].authorizationUrl} /><OrderPaymentWatcher orderId={order.orderId} onResolved={(updated) => { setOrders((previous) => previous.map((candidate) => candidate.orderId === updated.orderId ? { ...candidate, ...updated } : candidate)); setPaymentResults((previous) => { const next = { ...previous }; delete next[order.orderId]; return next; }); }} /></div>}
                     </div>
                   )}
 

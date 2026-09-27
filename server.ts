@@ -344,12 +344,12 @@ async function startServer() {
       const paymentOptions = await getPublicPaymentOptions();
       await recordCheckoutMode(cart, paymentOptions.mode);
       if (!paymentModeUsesPaystack(paymentOptions.mode)) {
-        return res.json({ success: true, orderIds: cart.map((row) => row.orderId), totalPesewas, paymentOptions });
+        return res.json({ success: true, orderIds: cart.map((row) => row.orderId), cartId: order.cartId, totalPesewas, paymentOptions });
       }
       const reference = `${order.orderId}-R${Date.now()}`;
       const init = await initialiseTransaction({ email: order.email, amountPesewas: totalPesewas, reference, orderId: order.orderId });
       await recordPaystackReference(cart, init.reference);
-      res.json({ authorizationUrl: init.authorizationUrl, reference: init.reference, orderIds: cart.map((row) => row.orderId), totalPesewas, paymentOptions });
+      res.json({ authorizationUrl: init.authorizationUrl, reference: init.reference, orderIds: cart.map((row) => row.orderId), cartId: order.cartId, totalPesewas, paymentOptions });
     } catch (err) { failed(res, err, 'Failed to start payment', 400); }
   });
 
@@ -454,9 +454,20 @@ async function startServer() {
         return res.status(404).json({ error: 'We could not find that order.', reference });
       }
 
+      // One checkout is one payment, so a multi-line cart must be shown as the
+      // cart it was. Returning only the primary row told a customer who paid
+      // for six licences that they had paid for one, at one line's price.
+      const cartOrders = order.cartId ? await getOrdersByCartId(order.cartId) : [order];
+      const lines = (cartOrders.length ? cartOrders : [order]).map(publicOrder);
+
       res.json({
         reference,
         order: publicOrder(order),
+        cart: {
+          cartId: order.cartId,
+          lines,
+          totalPesewas: lines.reduce((sum, line) => sum + (line.amountPesewas || 0), 0)
+        },
         // Not "payment failed": the webhook frequently lands first, and a
         // customer told their successful payment failed will pay twice.
         confirmed: order.paymentStatus === 'paid',
