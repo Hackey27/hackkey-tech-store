@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ArrowRight, ShoppingBag, Trash2, X } from 'lucide-react';
 import { CartItem } from './CartView';
 import { formatPesewas, resolveLinePricePesewas } from '../utils/money';
+import { cartLineDetail } from '../utils/cartLineDetail';
 import { STORE_COPY } from '../config/storeCopy';
 
 interface CartFlyoutProps {
@@ -153,7 +154,7 @@ export const CartFlyout: React.FC<CartFlyoutProps> = ({
                   serviceOption: item.serviceOption,
                   quantity: item.quantity,
                 }).totalPesewas;
-                const option = item.serviceOption?.name || item.variant?.versionOrPlan || item.selectedOs;
+                const option = cartLineDetail(item);
                 return (
                   <div key={item.id} className="flex items-start justify-between gap-4 py-3.5">
                     <div className="min-w-0">
