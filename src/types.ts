@@ -456,6 +456,28 @@ export interface PaymentSettings extends PublicPaymentOptions {
   updatedBy?: string;
 }
 
+/**
+ * One remote-support program the seller asks a customer to install, such as
+ * AnyDesk or TeamViewer. Label and link are both seller-owned because the
+ * download URLs move and the seller should not need a deploy to follow them.
+ */
+export interface SupportTool {
+  /** Stable id, so reordering or renaming a tool does not create a new one. */
+  toolId: string;
+  label: string;
+  url: string;
+  /** Optional one-line instruction shown under the link. */
+  note?: string;
+  /** Hidden from customers while false, without losing the link. */
+  active: boolean;
+}
+
+export interface SupportSettings {
+  tools: SupportTool[];
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
 export interface TurnitinReportDocument {
   reportId: string;
   label: string;

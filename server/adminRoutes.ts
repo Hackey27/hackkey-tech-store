@@ -31,6 +31,7 @@ import {
 import { createOrderAccessToken, getOrder } from './orders';
 import { applyOfflinePayment } from './payments';
 import { savePaymentSettings } from './paymentSettings';
+import { saveSupportSettings } from './supportSettings';
 import { setPaymentLater } from './paymentReminders';
 import { buildOrderNotification, validateNotificationPurpose } from '../src/utils/orderNotification';
 import { CustomerNotificationPurpose, Order } from '../src/types';
@@ -116,6 +117,15 @@ export function createAdminRouter(): Router {
       res.json({ payments: newValue });
     } catch (err) {
       routeError(res, err, 'Failed to save payment settings.');
+    }
+  });
+
+  router.put('/support', async (req: AdminRequest, res) => {
+    try {
+      const { newValue } = await saveSupportSettings(req.body, actor(req));
+      res.json({ support: newValue });
+    } catch (err) {
+      routeError(res, err, 'Failed to save support tools.');
     }
   });
 

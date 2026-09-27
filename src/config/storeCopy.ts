@@ -423,7 +423,28 @@ export const ADMIN_COPY = {
     ordering: 'Catalogue order',
     pricing: 'Pricing & promotions',
     payments: 'Payments',
+    support: 'Support tools',
   },
+  support: {
+    title: 'Remote support tools',
+    subtitle:
+      'The programs you ask a customer to install so you can take over their screen. You own the labels and the links here, because vendors move their downloads and renaming one should not need a release.',
+    save: 'Save support tools',
+    saved: 'Support tools saved.',
+    add: 'Add a tool',
+    empty: 'No support tools yet. Add the first one, such as AnyDesk or TeamViewer.',
+    label: 'Name shown to the customer',
+    url: 'Download or session link',
+    note: 'Instruction (optional)',
+    active: 'Offer this to customers',
+    remove: 'Remove',
+    urlHint: 'Must start with https:// — anything else is refused.',
+    limit: (max: number) => `Up to ${max} tools.`,
+    lastSaved: (when: string, who: string) => `Last changed ${when} by ${who}`,
+    neverSaved: 'Not configured yet',
+    confirmRemove: (label: string) => `Remove ${label} from the support tools customers see?`
+  },
+
   payments: {
     title: 'Payment methods',
     subtitle: 'Choose what new checkouts offer. Changes are applied by the server and may take up to about 30 seconds to reach another running instance.',

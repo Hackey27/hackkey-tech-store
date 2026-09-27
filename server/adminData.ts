@@ -28,6 +28,7 @@ import { getPricingConfig, persistPricingConfig } from './pricingConfig';
 import { resolvedDeliveryNotice } from './deliveryNotice';
 import { newestOrderFirst } from '../src/utils/orderSorting';
 import { getPaymentSettings } from './paymentSettings';
+import { getSupportSettings } from './supportSettings';
 import { cleanProductInstallationSettings } from '../src/utils/installationGuideConfig';
 
 const now = () => new Date().toISOString();
@@ -72,7 +73,7 @@ export async function listVariantSummaries(): Promise<VariantSummary[]> {
 
 export async function adminBootstrap() {
   const db = getFirestore();
-  const [ordersSnap, requestsSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, bundlesSnap, laptopsSnap, categoriesSnap, landingSnap, variants, pricing, payments] = await Promise.all([
+  const [ordersSnap, requestsSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, bundlesSnap, laptopsSnap, categoriesSnap, landingSnap, variants, pricing, payments, support] = await Promise.all([
     db.collection(COLLECTIONS.orders).get(),
     db.collection(COLLECTIONS.requests).get(),
     db.collection(COLLECTIONS.licencePool).get(),
@@ -85,7 +86,8 @@ export async function adminBootstrap() {
     db.collection(COLLECTIONS.storeSettings).doc('landing').get(),
     listVariantSummaries(),
     getPricingConfig(),
-    getPaymentSettings()
+    getPaymentSettings(),
+    getSupportSettings()
   ]);
 
   const orders = ordersSnap.docs
@@ -136,7 +138,7 @@ export async function adminBootstrap() {
     ...categories.map((item) => ({ kind: 'category' as const, itemId: item.categoryId, name: item.name, imagePath: item.imagePath, iconImagePath: item.iconImagePath, sortOrder: item.sortOrder }))
   ].sort((a, b) => a.name.localeCompare(b.name));
 
-  return { orders, requests, licences, services, announcements, products, bundles, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {}, pricing, payments };
+  return { orders, requests, licences, services, announcements, products, bundles, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {}, pricing, payments, support };
 }
 
 export async function savePricingConfiguration(input: Partial<PricingConfig>): Promise<PricingConfig> {

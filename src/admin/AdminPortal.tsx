@@ -17,6 +17,7 @@ import {
   FileText,
   KeyRound,
   ImagePlus,
+  LifeBuoy,
   LogOut,
   Mail,
   Plus,
@@ -31,7 +32,7 @@ import {
   X
 } from 'lucide-react';
 import { ADMIN_COPY } from '../config/storeCopy';
-import { Announcement, Bundle, Category, CustomerNotificationPurpose, CustomerRequest, InstallationGuideConfig, InstallationGuideImageConfig, InstallationGuideStepConfig, Laptop as LaptopType, Order, PricingConfig, Product, Service, ServiceField, ServiceFieldType, ServiceOption, Variant } from '../types';
+import { Announcement, Bundle, Category, CustomerNotificationPurpose, CustomerRequest, InstallationGuideConfig, InstallationGuideImageConfig, InstallationGuideStepConfig, Laptop as LaptopType, Order, PricingConfig, Product, Service, ServiceField, ServiceFieldType, ServiceOption, SupportTool, Variant } from '../types';
 import { applyPricingRules, formatPesewas } from '../utils/money';
 import { defaultCustomerInputType, defaultDeliveryCodeType, effectiveActivationWebsiteUrl } from '../utils/softwareFulfilment';
 import { AnnouncementModal } from '../components/AnnouncementModal';
@@ -49,7 +50,7 @@ import { notificationActionLabel, notificationPurposeForOrder } from '../utils/o
 import { DEFAULT_INSTALLATION_BUTTON_LABEL, defaultInstallationGuideForProduct } from '../data/installationGuides';
 import { guideMarkerPosition, guideScreenshotUrl } from '../utils/guideImages';
 
-type Section = 'orders' | 'requests' | 'categories' | 'services' | 'announcements' | 'landing' | 'pricing' | 'payments';
+type Section = 'orders' | 'requests' | 'categories' | 'services' | 'announcements' | 'landing' | 'pricing' | 'payments' | 'support';
 
 const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#014040] focus:ring-2 focus:ring-[#014040]/10';
 const labelClass = 'space-y-1 text-xs font-bold text-slate-700';
@@ -892,6 +893,97 @@ function PaymentsSection({ data, user, reload }: { data: AdminData; user: User; 
   </div>;
 }
 
+const MAX_SUPPORT_TOOLS = 8;
+
+function SupportToolsSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
+  const [tools, setTools] = useState<SupportTool[]>(() => structuredClone(data.support.tools));
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const setTool = (index: number, patch: Partial<SupportTool>) =>
+    setTools((old) => old.map((tool, position) => (position === index ? { ...tool, ...patch } : tool)));
+
+  const addTool = () =>
+    setTools((old) => [...old, { toolId: '', label: '', url: '', active: true }]);
+
+  const removeTool = (index: number) => {
+    const tool = tools[index];
+    // Only worth confirming for a row that customers can actually see.
+    if (tool.label && tool.active && !window.confirm(ADMIN_COPY.support.confirmRemove(tool.label))) return;
+    setTools((old) => old.filter((_, position) => position !== index));
+  };
+
+  const save = async () => {
+    setBusy(true); setMessage('');
+    try {
+      // Blank rows are dropped rather than rejected: adding a row and changing
+      // your mind should not be an error message.
+      const payload = tools.filter((tool) => tool.label.trim() || tool.url.trim());
+      await adminRequest(user, '/support', { method: 'PUT', body: JSON.stringify({ tools: payload }) });
+      setMessage(ADMIN_COPY.support.saved);
+      await reload();
+    } catch (error) { setMessage(messageOf(error)); }
+    finally { setBusy(false); }
+  };
+
+  return <div className="space-y-6">
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2 className="text-2xl font-black text-[#014040]">{ADMIN_COPY.support.title}</h2>
+        <p className="mt-1 max-w-3xl text-sm text-slate-600">{ADMIN_COPY.support.subtitle}</p>
+      </div>
+      <button type="button" className={primaryButton} disabled={busy} onClick={() => void save()}>
+        <Save className="h-4 w-4" />{busy ? ADMIN_COPY.saving : ADMIN_COPY.support.save}
+      </button>
+    </div>
+
+    <section className="space-y-4 rounded-2xl border bg-white p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-slate-500">
+          {data.support.updatedAt
+            ? ADMIN_COPY.support.lastSaved(new Date(data.support.updatedAt).toLocaleString(), data.support.updatedBy || 'administrator')
+            : ADMIN_COPY.support.neverSaved}
+        </p>
+        <p className="text-xs font-bold text-slate-500">{ADMIN_COPY.support.limit(MAX_SUPPORT_TOOLS)}</p>
+      </div>
+
+      {tools.length === 0 && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">{ADMIN_COPY.support.empty}</p>}
+
+      <div className="space-y-4">
+        {tools.map((tool, index) => <div key={tool.toolId || `new-${index}`} className="rounded-xl border border-slate-200 p-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className={labelClass}>{ADMIN_COPY.support.label}
+              <input className={inputClass} value={tool.label} onChange={(event) => setTool(index, { label: event.target.value })} />
+            </label>
+            <label className={labelClass}>{ADMIN_COPY.support.url}
+              <input className={inputClass} type="url" inputMode="url" placeholder="https://" value={tool.url} onChange={(event) => setTool(index, { url: event.target.value })} />
+              <span className="mt-1 block text-[10px] font-medium text-slate-500">{ADMIN_COPY.support.urlHint}</span>
+            </label>
+            <label className={`${labelClass} md:col-span-2`}>{ADMIN_COPY.support.note}
+              <input className={inputClass} value={tool.note || ''} onChange={(event) => setTool(index, { note: event.target.value })} />
+            </label>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-sm font-bold">
+              <input type="checkbox" checked={tool.active} onChange={(event) => setTool(index, { active: event.target.checked })} />
+              {ADMIN_COPY.support.active}
+            </label>
+            <button type="button" className={secondaryButton} onClick={() => removeTool(index)}>
+              <Trash2 className="h-3.5 w-3.5" />{ADMIN_COPY.support.remove}
+            </button>
+          </div>
+        </div>)}
+      </div>
+
+      <button type="button" className={secondaryButton} disabled={tools.length >= MAX_SUPPORT_TOOLS} onClick={addTool}>
+        <Plus className="h-4 w-4" />{ADMIN_COPY.support.add}
+      </button>
+    </section>
+
+    {message && <p role="status" className={`rounded-xl p-3 text-sm font-bold ${/saved/i.test(message) ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800'}`}>{message}</p>}
+  </div>;
+}
+
 function PricingPromotionsSection({ data, user, reload }: { data: AdminData; user: User; reload: () => Promise<void> }) {
   const catalogueItems = data.mediaItems.filter((item) => item.kind !== 'category');
   const [pricing, setPricing] = useState<PricingConfig>(() => structuredClone(data.pricing));
@@ -1290,7 +1382,7 @@ export default function AdminPortal() {
 
   if (checking) return <div className="min-h-screen bg-[#f7faf9] p-8 text-[#014040]">{ADMIN_COPY.loading}</div>;
   if (!user) return <SignIn />;
-  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'requests', icon: <FileText /> }, { id: 'categories', icon: <Settings2 /> }, { id: 'services', icon: <Settings2 /> }, { id: 'pricing', icon: <BadgePercent /> }, { id: 'payments', icon: <WalletCards /> }, { id: 'landing', icon: <ImagePlus /> }, { id: 'announcements', icon: <Bell /> }];
+  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'requests', icon: <FileText /> }, { id: 'categories', icon: <Settings2 /> }, { id: 'services', icon: <Settings2 /> }, { id: 'pricing', icon: <BadgePercent /> }, { id: 'payments', icon: <WalletCards /> }, { id: 'support', icon: <LifeBuoy /> }, { id: 'landing', icon: <ImagePlus /> }, { id: 'announcements', icon: <Bell /> }];
   const content = !data ? <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">{ADMIN_COPY.loading}</div>
     : section === 'orders' ? <OrdersSection data={data} user={user} reload={reload} />
     : section === 'requests' ? <RequestsSection requests={data.requests} />
@@ -1298,6 +1390,7 @@ export default function AdminPortal() {
     : section === 'services' ? <ServicesSection data={data} user={user} reload={reload} />
     : section === 'pricing' ? <PricingPromotionsSection data={data} user={user} reload={reload} />
     : section === 'payments' ? <PaymentsSection data={data} user={user} reload={reload} />
+    : section === 'support' ? <SupportToolsSection data={data} user={user} reload={reload} />
     : section === 'landing' ? <LandingBannersSection data={data} user={user} reload={reload} />
     : <AnnouncementsSection data={data} user={user} reload={reload} />;
   return <div className="min-h-screen bg-[#f7faf9] text-slate-900"><header className="border-b border-[#cbdcd9] bg-[#014040] text-white"><div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-4 sm:px-6"><div><p className="text-lg font-black">{ADMIN_COPY.brand}</p><p className="text-xs text-slate-300">{user.email}</p></div><div className="flex gap-2"><button className="rounded-xl border border-white/20 p-2 hover:bg-white/10" onClick={reload} aria-label={ADMIN_COPY.refresh}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button><button className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 text-xs font-bold hover:bg-white/10" onClick={() => signOut(adminAuth)}><LogOut className="h-4 w-4" />{ADMIN_COPY.signOut}</button></div></div></header><div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[210px_1fr]"><label className="space-y-1 text-xs font-black uppercase tracking-wider text-slate-600 lg:hidden">Admin section<select className={inputClass} value={section} onChange={(event) => setSection(event.target.value as Section)}>{nav.map((item) => <option key={item.id} value={item.id}>{ADMIN_COPY.sections[item.id]}</option>)}</select></label><nav className="hidden h-fit gap-2 rounded-2xl border border-slate-200 bg-white p-2 lg:flex lg:flex-col">{nav.map((item) => <button key={item.id} onClick={() => setSection(item.id)} className={`inline-flex min-w-fit items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black ${section === item.id ? 'bg-[#014040] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{React.cloneElement(item.icon as React.ReactElement, { className: 'h-4 w-4' })}{ADMIN_COPY.sections[item.id]}</button>)}</nav><main className="min-w-0">{error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-sm font-bold text-rose-800">{error}</p>}{content}</main></div></div>;
