@@ -7,6 +7,12 @@ import { formatPesewas } from '../utils/money';
 interface PaymentMethodPanelProps {
   options: PublicPaymentOptions;
   orderIds: string[];
+  /**
+   * The single reference the customer quotes — the cart id when one checkout
+   * created several orders. Without it a six-line cart asks the customer to
+   * read six codes into WhatsApp, and the seller to match all six by hand.
+   */
+  reference?: string;
   totalPesewas: number;
   authorizationUrl?: string;
 }
@@ -18,9 +24,9 @@ function whatsappRecipient(value: string): string {
   return digits;
 }
 
-export function PaymentMethodPanel({ options, orderIds, totalPesewas, authorizationUrl }: PaymentMethodPanelProps) {
+export function PaymentMethodPanel({ options, orderIds, reference, totalPesewas, authorizationUrl }: PaymentMethodPanelProps) {
   const [copied, setCopied] = useState('');
-  const refs = orderIds.join(', ');
+  const refs = reference || orderIds.join(', ');
   const copy = async (key: string, value: string) => {
     try {
       await navigator.clipboard.writeText(value);

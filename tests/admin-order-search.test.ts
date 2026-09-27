@@ -25,3 +25,15 @@ test('admin order search keeps matching existing identifiers', () => {
   assert.equal(adminOrderMatchesSearch(order, 'ama@example'), true);
   assert.equal(adminOrderMatchesSearch(order, 'Urgent order'), false);
 });
+
+test('a seller can find an order by the cart reference the customer was shown', () => {
+  const line = { ...order, cartId: 'HK-CART-77XY' };
+  assert.equal(adminOrderMatchesSearch(line, 'HK-CART-77XY'), true);
+  assert.equal(adminOrderMatchesSearch(line, 'hk-cart-77xy'), true);
+  assert.equal(adminOrderMatchesSearch(line, 'HK-CART-0000'), false);
+});
+
+test('an order with no cart id still searches cleanly', () => {
+  assert.equal(adminOrderMatchesSearch(order, 'ama'), true);
+  assert.equal(adminOrderMatchesSearch(order, 'undefined'), false);
+});

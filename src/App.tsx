@@ -10,7 +10,7 @@ import { HelpHubView } from './components/HelpHubView';
 import { RequestView } from './components/RequestView';
 import { ProductDetailView } from './components/ProductDetailView';
 import { CartView, CartItem } from './components/CartView';
-import { DirectCheckoutModal } from './components/DirectCheckoutModal';
+import { CheckoutModal } from './components/CheckoutModal';
 import { BrandLogo } from './components/BrandLogo';
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { PaymentReturnView } from './components/PaymentReturnView';
@@ -69,6 +69,9 @@ export const App: React.FC = () => {
   const [cartOpen, setCartOpen] = useState(false);
   const [cardChoice, setCardChoice] = useState<CardChoiceRequest | null>(null);
   const [buyNowItem, setBuyNowItem] = useState<CartItem | null>(null);
+  // A snapshot, not a live reference: submitting empties the cart, and the
+  // modal must keep rendering the MoMo details and cart reference afterwards.
+  const [cartCheckoutItems, setCartCheckoutItems] = useState<CartItem[] | null>(null);
   const [pendingBuyNowItem, setPendingBuyNowItem] = useState<CartItem | null>(null);
 
   // "Featured software" filter toggle:
@@ -561,8 +564,7 @@ export const App: React.FC = () => {
             onRemoveItem={(id) => setCartItems(cartItems.filter((item) => item.id !== id))}
             onClearCart={() => setCartItems([])}
             onContinueShopping={() => setActiveTab('home')}
-            onNavigateToFindOrder={(phone, orderId) => { if (phone && orderId) setNextSteps({ phone, orderId }); setActiveTab('find-order'); }}
-            paymentOptions={paymentOptions || undefined}
+            onCheckout={() => setCartCheckoutItems(cartItems)}
           />
         )}
       </main>
@@ -574,7 +576,8 @@ export const App: React.FC = () => {
         <AnnouncementModal announcement={catalog.announcement} onClose={() => setAnnouncementOpen(false)} />
       )}
 
-      {buyNowItem && <DirectCheckoutModal item={buyNowItem} paymentOptions={paymentOptions || undefined} onClose={() => setBuyNowItem(null)} onPaymentResolved={(order) => { setBuyNowItem(null); setNextSteps({ phone: order.phone, orderId: order.orderId }); setActiveTab('find-order'); navigate('/'); }} />}
+      {buyNowItem && <CheckoutModal items={[buyNowItem]} mode="buy-now" paymentOptions={paymentOptions || undefined} onClose={() => setBuyNowItem(null)} onPaymentResolved={(order) => { setBuyNowItem(null); setNextSteps({ phone: order.phone, orderId: order.orderId }); setActiveTab('find-order'); navigate('/'); }} />}
+      {cartCheckoutItems?.length ? <CheckoutModal items={cartCheckoutItems} mode="cart" paymentOptions={paymentOptions || undefined} onClose={() => setCartCheckoutItems(null)} onSubmitted={() => setCartItems([])} onPaymentResolved={(order) => { setCartCheckoutItems(null); setNextSteps({ phone: order.phone, orderId: order.orderId }); setActiveTab('find-order'); navigate('/'); }} /> : null}
       {pendingBuyNowItem && <DeliveryWindowGate item={pendingBuyNowItem} onCancel={() => setPendingBuyNowItem(null)} onConfirm={() => { setBuyNowItem(pendingBuyNowItem); setPendingBuyNowItem(null); }} />}
       {cardChoice && <CardSoftwareChoice request={cardChoice} onClose={() => setCardChoice(null)} onChoose={(variant, os) => { if (cardChoice.mode === 'add') handleAddToCart(cardChoice.product, variant, os); else handleBuyNow(cardChoice.product, variant, os); }} />}
 

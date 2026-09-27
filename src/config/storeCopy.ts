@@ -324,6 +324,13 @@ export const STORE_COPY = {
 
     checkoutTitle: 'Your details',
     checkoutSubtitle: 'You will use this phone number to retrieve your licences later.',
+    checkoutEyebrow: 'Checkout',
+    checkoutLead: (count: number) =>
+      `Enter your details to pay for ${count === 1 ? 'this item' : `all ${count} items`} in one payment.`,
+    // One cart is one payment, so the customer is given the one reference that
+    // covers it. Quoting a list of per-item order ids to support is how a
+    // customer ends up reading six codes down a phone line.
+    cartReference: 'Cart reference',
     firstName: 'First name',
     lastName: 'Last name',
     phone: 'Phone number',
