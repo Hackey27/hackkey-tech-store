@@ -26,6 +26,7 @@ export const STORE_COPY = {
     help: 'Help',
     request: 'Request',
     cart: 'Cart',
+    ariaLabel: 'Main navigation',
   },
 
   // Hero section

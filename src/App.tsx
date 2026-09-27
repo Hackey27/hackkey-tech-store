@@ -4,7 +4,7 @@ import { Hero } from './components/Hero';
 import { CategoryCard } from './components/CategoryCard';
 import { CategoryPage } from './components/CategoryPage';
 import { ProductCard } from './components/ProductCard';
-import { BottomNav } from './components/BottomNav';
+import { CurvedNav } from './components/CurvedNav';
 import { FindOrderView } from './components/FindOrderView';
 import { HelpHubView } from './components/HelpHubView';
 import { RequestView } from './components/RequestView';
@@ -583,7 +583,7 @@ export const App: React.FC = () => {
       {cardChoice && <CardSoftwareChoice request={cardChoice} onClose={() => setCardChoice(null)} onChoose={(variant, os) => { if (cardChoice.mode === 'add') handleAddToCart(cardChoice.product, variant, os); else handleBuyNow(cardChoice.product, variant, os); }} />}
 
       {/* Mobile Fixed Bottom Navigation */}
-      <BottomNav
+      <CurvedNav
         activeTab={route.view === 'order-access' ? 'find-order' : activeTab}
         onSelectTab={(tab) => {
           if (route.view !== 'home') navigate('/');

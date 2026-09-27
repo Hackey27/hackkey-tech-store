@@ -21,12 +21,21 @@
      the app rather than just the motion written against these. */
   --hk-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --hk-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* The page background, as one value. The curved nav paints its notch with
+     this so the scoop reads as a hole cut in the bar rather than a grey shape
+     laid on top; if the two are ever set separately they drift and the seam
+     shows. Deliberately here and not in @theme: Tailwind only emits a theme
+     token that a generated utility references, and an SVG fill attribute is
+     not a utility, so the variable would be tree-shaken and the notch would
+     render unfilled. */
+  --hk-surface-page: #f7faf9;
 }
 
 @layer base {
   body {
     font-family: var(--font-sans);
-    background-color: #f7faf9;
+    background-color: var(--hk-surface-page);
     color: #0f2828;
   }
 
@@ -294,6 +303,35 @@
 @media (prefers-reduced-motion: reduce) {
   .hk-price-change,
   .hk-purchase-actions-enter { animation: none; }
+}
+
+/* Curved bottom navigation ------------------------------------------------ */
+
+/* A tonal ramp of the dark green alone. Gradienting between the two brand
+   greens would cross roughly 50 degrees of hue and go muddy at the midpoint,
+   so the bright green appears on this surface only as the icon. */
+.hk-nav-bubble {
+  background-image: linear-gradient(135deg, #026e4a 0%, #014040 55%, #012e2e 100%);
+  /* Tinted with the brand dark rather than neutral black: a grey shadow under a
+     saturated green bubble reads as dirt. */
+  box-shadow:
+    0 10px 20px -6px rgb(1 64 64 / 0.45),
+    0 4px 8px -4px rgb(1 64 64 / 0.3);
+}
+
+/* The active tab's own flat icon gets out of the way of the bubble. It leaves
+   to 0.5 rather than 0 so that coming back is not an entrance from nothing. */
+.hk-nav-icon {
+  transition: opacity 140ms var(--hk-ease-out), transform 140ms var(--hk-ease-out);
+}
+
+.hk-nav-icon[data-hidden='true'] {
+  opacity: 0;
+  transform: scale(0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hk-nav-icon { transition: none; }
 }
 
 /* Custom scrollbars */
