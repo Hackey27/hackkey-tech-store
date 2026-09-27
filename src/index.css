@@ -305,6 +305,38 @@
   .hk-purchase-actions-enter { animation: none; }
 }
 
+/* Scroll reveal ------------------------------------------------------------
+ *
+ * Everything is scoped to .hk-reveal-ready, which useScrollReveal puts on
+ * <html> only once it has an observer watching. Without the script — or with
+ * reduced motion, where the hook opts out — nothing here applies and every
+ * block is simply visible. Content must never depend on JavaScript to be
+ * readable.
+ *
+ * Opacity and transform only, and the rise is 10px: enough to read as arriving
+ * from somewhere, not enough to notice as movement. */
+.hk-reveal-ready [data-reveal],
+.hk-reveal-ready main section {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 360ms var(--hk-ease-out), transform 360ms var(--hk-ease-out);
+}
+
+.hk-reveal-ready [data-reveal][data-revealed='true'],
+.hk-reveal-ready main section[data-revealed='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hk-reveal-ready [data-reveal],
+  .hk-reveal-ready main section {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
 /* Curved bottom navigation ------------------------------------------------ */
 
 /* A tonal ramp of the dark green alone. Gradienting between the two brand

@@ -5,6 +5,7 @@ import { CategoryCard } from './components/CategoryCard';
 import { CategoryPage } from './components/CategoryPage';
 import { ProductCard } from './components/ProductCard';
 import { CurvedNav } from './components/CurvedNav';
+import { useScrollReveal } from './utils/useScrollReveal';
 import { FindOrderView } from './components/FindOrderView';
 import { HelpHubView } from './components/HelpHubView';
 import { RequestView } from './components/RequestView';
@@ -72,6 +73,8 @@ export const App: React.FC = () => {
   // A snapshot, not a live reference: submitting empties the cart, and the
   // modal must keep rendering the MoMo details and cart reference afterwards.
   const [cartCheckoutItems, setCartCheckoutItems] = useState<CartItem[] | null>(null);
+  // Fades content blocks in as they come into view, once each.
+  useScrollReveal();
   const [pendingBuyNowItem, setPendingBuyNowItem] = useState<CartItem | null>(null);
 
   // "Featured software" filter toggle:
