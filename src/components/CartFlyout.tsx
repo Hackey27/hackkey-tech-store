@@ -96,7 +96,7 @@ export const CartFlyout: React.FC<CartFlyoutProps> = ({
       <button
         type="button"
         aria-label={STORE_COPY.cart.flyout.closeLabel}
-        className={`hk-cart-backdrop fixed inset-0 z-[80] cursor-default bg-[#012f2e]/35 backdrop-blur-sm transition-opacity duration-[220ms] ${
+        className={`hk-cart-backdrop fixed inset-0 z-[80] cursor-default bg-[#012f2e]/35 backdrop-blur-sm transition-opacity duration-[220ms] ease-[cubic-bezier(0.23,1,0.32,1)] ${
           open ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         onClick={onClose}
@@ -175,7 +175,7 @@ export const CartFlyout: React.FC<CartFlyoutProps> = ({
               <button
                 type="button"
                 onClick={onCheckout}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-4 py-3 text-sm font-black text-[#014040] transition-colors hover:bg-[#04d824]"
+                className="hk-pressable flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-4 py-3 text-sm font-black text-[#014040] hover:bg-[#04d824]"
               >
                 {STORE_COPY.cart.proceedToCheckout} <ArrowRight className="h-4 w-4" />
               </button>

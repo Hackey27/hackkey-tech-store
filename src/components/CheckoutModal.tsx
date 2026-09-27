@@ -100,8 +100,8 @@ export function CheckoutModal({ items, mode, paymentOptions, onClose, onPaymentR
     ? STORE_COPY.cart.checkoutLead(items.length)
     : 'Enter your details to continue directly to secure payment. This item will not be added to your cart.';
 
-  return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#001f1f]/75 p-4" role="dialog" aria-modal="true" aria-label={eyebrow}>
-    <form onSubmit={submit} className="relative max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
+  return <div className="hk-overlay-enter fixed inset-0 z-[90] flex items-center justify-center bg-[#001f1f]/75 p-4" role="dialog" aria-modal="true" aria-label={eyebrow}>
+    <form onSubmit={submit} className="hk-modal-enter relative max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
       <button type="button" onClick={closeForm} className="absolute right-4 top-4 rounded-full p-2 text-slate-500 hover:bg-slate-100" aria-label="Close"><X className="h-5 w-5" /></button>
       {paymentResult ? <div className="pr-8">{paymentResolved ? <><p className="text-xs font-black uppercase tracking-wider text-[#047857]">Order updated</p><h2 className="mt-1 text-2xl font-black text-[#014040]">{paymentResolved.paymentStatus === 'paid' ? STORE_COPY.payment.confirmedTitle : STORE_COPY.payment.deferredTitle}</h2><p className="mt-2 text-sm text-slate-600">{paymentResolved.paymentStatus === 'paid' ? STORE_COPY.payment.confirmedDescription : STORE_COPY.payment.deferredDescription}</p><button type="button" className="mt-5 w-full rounded-xl bg-[#014040] px-5 py-3 text-sm font-black text-white" onClick={() => onPaymentResolved?.(paymentResolved)}>{STORE_COPY.payment.seeNextSteps}</button></> : <><p className="text-xs font-black uppercase tracking-wider text-[#047857]">{STORE_COPY.payment.paymentPending}</p><h2 className="mt-1 text-2xl font-black text-[#014040]">{STORE_COPY.payment.awaitingConfirmation}</h2><p className="mt-2 text-sm text-slate-600">{STORE_COPY.payment.paymentPendingDescription}</p>
         {paymentResult.cartId && <div className="mt-4 rounded-xl bg-[#edf5f3] p-3"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{STORE_COPY.cart.cartReference}</p><p className="mt-0.5 break-all font-mono text-sm font-black text-[#014040]">{paymentResult.cartId}</p></div>}
@@ -124,7 +124,7 @@ export function CheckoutModal({ items, mode, paymentOptions, onClose, onPaymentR
       </div>
       <p className="mt-3 text-[11px] text-slate-500">{STORE_COPY.cart.checkoutSubtitle}</p>
       {error && <p className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700">{error}</p>}
-      <button disabled={busy} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-5 py-3.5 text-sm font-black text-[#014040] disabled:opacity-50"><CreditCard className="h-4 w-4" />{busy ? 'Starting payment…' : `${paymentOptions?.mode === 'momo' ? STORE_COPY.payment.momoOnlyButton : paymentOptions?.mode === 'both' ? STORE_COPY.payment.bothButton : STORE_COPY.cart.submitAndPay} — ${formatPesewas(total)}`}</button>
+      <button disabled={busy} className="hk-pressable mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-5 py-3.5 text-sm font-black text-[#014040] disabled:opacity-50"><CreditCard className="h-4 w-4" />{busy ? 'Starting payment…' : `${paymentOptions?.mode === 'momo' ? STORE_COPY.payment.momoOnlyButton : paymentOptions?.mode === 'both' ? STORE_COPY.payment.bothButton : STORE_COPY.cart.submitAndPay} — ${formatPesewas(total)}`}</button>
       </>}
     </form>
   </div>;
