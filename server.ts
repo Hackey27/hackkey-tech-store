@@ -45,6 +45,7 @@ import { publicOrder, publicOrderWithCurrentGuide } from './server/publicOrder';
 import { turnitinDocumentUploadPolicy } from './server/documentUploadPolicy';
 import { renderProductSocialPreview } from './server/socialPreview';
 import { getPublicPaymentOptions, paymentModeUsesPaystack } from './server/paymentSettings';
+import { getSupportSettings, publicSupportTools } from './server/supportSettings';
 import { sendSellerOrderSubmittedAlert } from './server/email';
 import { sendDuePaymentReminders } from './server/paymentReminders';
 import { requireTaskCaller } from './server/taskAuth';
@@ -218,6 +219,17 @@ async function startServer() {
       res.json(await getCatalogue(categoryFilter, searchQuery));
     } catch (err) {
       failed(res, err, 'Failed to retrieve catalogue from Firestore');
+    }
+  });
+
+  // Only the tools the seller has switched on. An inactive one is kept in the
+  // settings document but must never reach a customer.
+  app.get('/api/support-tools', async (_req: Request, res: Response) => {
+    try {
+      res.setHeader('Cache-Control', 'public, max-age=60');
+      res.json({ tools: publicSupportTools(await getSupportSettings()) });
+    } catch (err) {
+      failed(res, err, 'Failed to retrieve support tools');
     }
   });
 

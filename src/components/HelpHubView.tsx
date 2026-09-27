@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Phone,
   Mail,
@@ -9,10 +9,39 @@ import {
 } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 import { WhatsAppIcon } from './WhatsAppIcon';
+import type { SupportTool } from '../types';
+
+/**
+ * What to show before the seller has configured anything, and if the request
+ * for the configured list fails. Remote support is the page a customer opens
+ * when they are already stuck, so it must never be empty.
+ */
+const FALLBACK_TOOLS: SupportTool[] = [
+  { toolId: 'teamviewer-windows', label: 'Windows', url: 'https://download.teamviewer.com/download/TeamViewerQS.exe', active: true },
+  { toolId: 'teamviewer-mac', label: 'Mac', url: 'https://download.teamviewer.com/download/TeamViewerQS.dmg', active: true }
+];
+
+/** Mac keeps the laptop glyph; everything else reads as a screen session. */
+const toolIcon = (tool: SupportTool) => (/\bmac(os)?\b/i.test(tool.label) ? Laptop : Monitor);
 
 export const HelpHubView: React.FC = () => {
-  const windowsTeamViewerUrl = 'https://download.teamviewer.com/download/TeamViewerQS.exe';
-  const macTeamViewerUrl = 'https://download.teamviewer.com/download/TeamViewerQS.dmg';
+  const [tools, setTools] = useState<SupportTool[]>(FALLBACK_TOOLS);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch('/api/support-tools');
+        if (!response.ok) return;
+        const data = await response.json();
+        // An empty configured list means "not set up yet", not "show nothing".
+        if (!cancelled && Array.isArray(data.tools) && data.tools.length) setTools(data.tools);
+      } catch {
+        // Keep the fallback. A failed lookup must not empty the page.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-8">
@@ -99,45 +128,33 @@ export const HelpHubView: React.FC = () => {
             </p>
 
             <div className="mt-5 space-y-3">
-              {/* Windows TeamViewer */}
-              <a
-                id="remote-support-windows-btn"
-                href={windowsTeamViewerUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between p-3.5 rounded-xl bg-[#014040] hover:bg-[#025656] text-white hk-pressable group"
-              >
-                <div className="flex items-center gap-3">
-                  <Monitor className="w-5 h-5 text-[#05ef28]" />
-                  <span className="text-xs sm:text-sm font-bold">
-                    Windows
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 text-[#05ef28] text-xs font-bold shrink-0">
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download</span>
-                </div>
-              </a>
-
-              {/* Mac TeamViewer */}
-              <a
-                id="remote-support-mac-btn"
-                href={macTeamViewerUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between p-3.5 rounded-xl bg-[#014040] hover:bg-[#025656] text-white hk-pressable group"
-              >
-                <div className="flex items-center gap-3">
-                  <Laptop className="w-5 h-5 text-[#05ef28]" />
-                  <span className="text-xs sm:text-sm font-bold">
-                    Mac
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 text-[#05ef28] text-xs font-bold shrink-0">
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download</span>
-                </div>
-              </a>
+              {/* Set in the admin portal under Support tools. The seller owns
+                  these because vendors move their downloads. */}
+              {tools.map((tool) => {
+                const Icon = toolIcon(tool);
+                return (
+                  <a
+                    key={tool.toolId}
+                    id={`remote-support-${tool.toolId}-btn`}
+                    href={tool.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-3.5 rounded-xl bg-[#014040] hover:bg-[#025656] text-white hk-pressable group"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Icon className="w-5 h-5 shrink-0 text-[#05ef28]" />
+                      <span className="min-w-0">
+                        <span className="block truncate text-xs sm:text-sm font-bold">{tool.label}</span>
+                        {tool.note && <span className="mt-0.5 block truncate text-[11px] font-medium text-white/70">{tool.note}</span>}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 text-[#05ef28] text-xs font-bold shrink-0">
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download</span>
+                    </div>
+                  </a>
+                );
+              })}
             </div>
           </div>
 
