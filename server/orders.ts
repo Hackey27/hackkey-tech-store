@@ -36,8 +36,31 @@ export function normalisePhone(phone: string): string {
   return digits;
 }
 
-function newId(prefix: string): string {
-  return `${prefix}-${Math.floor(100000 + Math.random() * 900000)}`;
+/**
+ * Crockford-style alphabet: no I, L, O or U, so a reference read down a phone
+ * line or copied off a screenshot cannot be mistyped into somebody else's.
+ */
+const ID_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+/**
+ * A short identifier a customer can quote.
+ *
+ * Both uses are collision-critical. The cart id groups a checkout, and
+ * `applyVerifiedPayment` marks **every order sharing it** paid against one
+ * total — so a repeat would pay, and fulfil, a stranger's order. The request id
+ * is a Firestore document id, where a repeat overwrites the earlier request
+ * outright.
+ *
+ * Six `Math.random()` digits gave 900,000 values: by the birthday bound that is
+ * a coin flip at roughly 1,100 carts, which this store will reach. This is
+ * crypto-random over 32^8 instead, and 256 is a whole multiple of 32 so the
+ * modulo stays uniform.
+ */
+export function newId(prefix: string): string {
+  const bytes = randomBytes(8);
+  let code = '';
+  for (let i = 0; i < bytes.length; i += 1) code += ID_ALPHABET[bytes[i] % ID_ALPHABET.length];
+  return `${prefix}-${code}`;
 }
 
 function compactOrderCode(value: string, fallback: string, length: number, fromEnd = false): string {
