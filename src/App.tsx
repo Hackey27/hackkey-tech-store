@@ -332,6 +332,7 @@ export const App: React.FC = () => {
         onRemoveCartItem={(id) => setCartItems((current) => current.filter((item) => item.id !== id))}
         cartOpen={cartOpen}
         onCartOpenChange={setCartOpen}
+        onCheckout={() => setCartCheckoutItems(cartItems)}
         isLandingTransparent={landingActive && !landingPassed}
       />
 

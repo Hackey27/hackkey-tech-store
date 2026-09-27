@@ -15,6 +15,15 @@ interface HeaderProps {
   onRemoveCartItem: (id: string) => void;
   cartOpen: boolean;
   onCartOpenChange: (open: boolean) => void;
+  /**
+   * Opens the checkout form for everything in the cart.
+   *
+   * The flyout previously pointed "Proceed to checkout" at the cart page, but
+   * selecting the cart tab opens this flyout rather than that page, so the
+   * button closed and reopened the flyout and the customer never reached a
+   * form at all.
+   */
+  onCheckout: () => void;
   isLandingTransparent?: boolean;
 }
 
@@ -28,15 +37,16 @@ export const Header: React.FC<HeaderProps> = ({
   onRemoveCartItem,
   cartOpen,
   onCartOpenChange,
+  onCheckout,
   isLandingTransparent = false,
 }) => {
   const cartButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => onCartOpenChange(false), [activeTab]);
 
-  const openCartPage = () => {
+  const startCheckout = () => {
     onCartOpenChange(false);
-    onSelectTab('cart');
+    onCheckout();
   };
 
   return (
@@ -188,7 +198,7 @@ export const Header: React.FC<HeaderProps> = ({
         items={cartItems}
         triggerRef={cartButtonRef}
         onClose={() => onCartOpenChange(false)}
-        onCheckout={openCartPage}
+        onCheckout={startCheckout}
         onBrowse={() => onCartOpenChange(false)}
         onRemoveItem={onRemoveCartItem}
       />
