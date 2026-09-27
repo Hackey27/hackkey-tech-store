@@ -4,6 +4,7 @@ import { BrandLogo } from './BrandLogo';
 import { STORE_COPY } from '../config/storeCopy';
 import { CartItem } from './CartView';
 import { CartFlyout } from './CartFlyout';
+import { WhatsAppIcon } from './WhatsAppIcon';
 
 interface HeaderProps {
   searchQuery: string;
@@ -148,7 +149,23 @@ export const Header: React.FC<HeaderProps> = ({
               {STORE_COPY.navigation.request}
             </button>
 
-            {/* Cart Button (Always accessible in top header) */}
+            {/* Support, on phones only. The cart moved to the bottom
+                navigation, so this corner is free for the thing people reach
+                for when something has gone wrong. */}
+            <a
+              id="header-whatsapp-btn"
+              href={STORE_COPY.brand.whatsAppUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}
+              title={STORE_COPY.brand.whatsAppCta}
+              className="hk-pressable relative flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 p-2.5 text-xs font-semibold text-white shadow-xs hover:bg-white/20 md:hidden"
+            >
+              <WhatsAppIcon className="h-4 w-4 text-[#25D366]" />
+            </a>
+
+            {/* Cart Button. Desktop only: there is no bottom navigation above
+                md, so this stays the way in. */}
             <button
               ref={cartButtonRef}
               id="header-cart-btn"
@@ -156,7 +173,7 @@ export const Header: React.FC<HeaderProps> = ({
               aria-expanded={cartOpen}
               aria-controls="header-cart-flyout"
               aria-haspopup="dialog"
-              className="relative p-2.5 sm:px-3.5 sm:py-2 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 transition-colors shadow-xs cursor-pointer"
+              className="relative hidden p-2.5 sm:px-3.5 sm:py-2 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm md:flex items-center gap-2 transition-colors shadow-xs cursor-pointer"
               title={STORE_COPY.navigation.cart}
             >
               <ShoppingBag className="w-4 h-4 text-[#05ef28]" />

@@ -5,9 +5,12 @@ import { WhatsAppIcon } from './WhatsAppIcon';
 /**
  * Persistent WhatsApp shortcut pinned to the lower-right corner.
  *
- * Sits above the mobile bottom navigation on small screens and drops to the
- * corner on desktop. The pulse is deliberately gentle and is disabled entirely
- * for visitors who prefer reduced motion.
+ * Desktop only. On a phone the header carries the WhatsApp button instead —
+ * the corner belongs to the bottom navigation, and two WhatsApp entry points
+ * on one small screen is one too many.
+ *
+ * The pulse is deliberately gentle and is disabled entirely for visitors who
+ * prefer reduced motion.
  */
 export const FloatingWhatsApp: React.FC = () => {
   return (
@@ -18,7 +21,7 @@ export const FloatingWhatsApp: React.FC = () => {
       rel="noopener noreferrer"
       aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}
       title={STORE_COPY.brand.whatsAppCta}
-      className="group fixed bottom-24 right-4 md:bottom-6 md:right-6 z-[45] flex h-14 w-14 items-center justify-center"
+      className="group fixed bottom-6 right-6 z-[45] hidden h-14 w-14 items-center justify-center md:flex"
     >
       <span className="relative flex h-14 w-14 items-center justify-center">
         {/* Expanding halo */}
