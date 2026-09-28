@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, PackagePlus } from 'lucide-react';
 import { PreorderDelivery, PreorderProduct } from '../../../shared/types';
 import {
@@ -9,6 +9,7 @@ import {
 import { formatPesewas } from '../../../shared/money';
 import { STORE_COPY } from '../../config/storeCopy';
 import { PreorderCartAddition } from '../../utils/usePreorderCart';
+import { ImageLightbox } from '../ImageLightbox';
 
 interface PreorderProductViewProps {
   product: PreorderProduct;
@@ -25,6 +26,107 @@ const DELIVERY_NOTES: Record<PreorderDelivery, string> = {
   express: STORE_COPY.preorder.delivery.expressNote,
   'two-months': STORE_COPY.preorder.delivery.twoMonthsNote,
 };
+
+/** How far into the image the magnifier goes. Enough to read a label or a
+ *  stitch, short of the point where a phone-sized photo turns to mush. */
+const HOVER_ZOOM = 2.4;
+
+function clampPercent(value: number): number {
+  return Math.min(100, Math.max(0, value));
+}
+
+/** True only where hovering is a real thing. A touch screen reports a hover
+ *  once on tap and then leaves the magnifier stuck on. */
+function useFinePointer(): boolean {
+  const query = '(hover: hover) and (pointer: fine)';
+  const [fine, setFine] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(query).matches
+  );
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const onChange = () => setFine(media.matches);
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+  return fine;
+}
+
+/**
+ * The selected variant's image, magnified under the pointer.
+ *
+ * The whole image scales up inside its own frame with the transform origin
+ * pinned to wherever the pointer is, so the part being pointed at is the part
+ * that grows. A separate lens panel would have to sit somewhere, and on this
+ * layout the only room for it is on top of the selectors the customer is in
+ * the middle of using.
+ *
+ * There is no transition while the pointer is moving — easing toward a target
+ * that changes every frame reads as lag rather than smoothness. The ease is
+ * kept for the way back out, when the pointer leaves and there is a single
+ * destination to travel to.
+ */
+function ZoomableImage({
+  src,
+  alt,
+  onOpen,
+  onError,
+}: {
+  src: string;
+  alt: string;
+  onOpen: () => void;
+  onError: () => void;
+}) {
+  const fine = useFinePointer();
+  const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+
+  const track = (event: React.MouseEvent) => {
+    if (!fine || !frameRef.current) return;
+    const box = frameRef.current.getBoundingClientRect();
+    setOrigin({
+      x: clampPercent(((event.clientX - box.left) / box.width) * 100),
+      y: clampPercent(((event.clientY - box.top) / box.height) * 100),
+    });
+  };
+
+  return (
+    <div
+      ref={frameRef}
+      onMouseMove={track}
+      onMouseLeave={() => setOrigin(null)}
+      className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-[#d8e7e4] bg-[#edf5f3]"
+    >
+      <img
+        key={src}
+        data-testid="preorder-product-image"
+        data-image-src={src}
+        data-zoomed={origin ? 'true' : 'false'}
+        src={src}
+        alt={alt}
+        onError={onError}
+        draggable={false}
+        className={`h-full w-full select-none object-cover ${
+          origin ? '' : 'transition-transform duration-200 ease-out motion-reduce:transition-none'
+        }`}
+        style={origin ? { transform: `scale(${HOVER_ZOOM})`, transformOrigin: `${origin.x}% ${origin.y}%` } : undefined}
+      />
+      {/* The click target is the frame, so the magnifier and the tap-to-open
+          never fight over the same pixels. */}
+      <button
+        type="button"
+        data-testid="preorder-image-open"
+        onClick={onOpen}
+        aria-label={STORE_COPY.preorder.openImage}
+        className="absolute inset-0 cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-[#014040]"
+      />
+      {fine && !origin && (
+        <span className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-[#014040]/75 px-2.5 py-1 text-[10px] font-bold text-white">
+          {STORE_COPY.preorder.hoverToZoom}
+        </span>
+      )}
+    </div>
+  );
+}
 
 /**
  * The pre-order product page.
@@ -65,6 +167,17 @@ export const PreorderProductView: React.FC<PreorderProductViewProps> = ({
 
   const [imageFailed, setImageFailed] = useState(false);
   useEffect(() => setImageFailed(false), [resolved.imagePath]);
+
+  /* What the viewer pages through: the variant's own image first, then the
+     gallery. Deduped, because an assignment usually points at a gallery image
+     and the same picture twice in a row reads as a stuck swipe. */
+  const [openAt, setOpenAt] = useState<number | null>(null);
+  const lightboxImages = useMemo(() => {
+    const ordered = [resolved.imagePath, ...product.galleryImagePaths].filter(
+      (path): path is string => Boolean(path)
+    );
+    return [...new Set(ordered)];
+  }, [resolved.imagePath, product.galleryImagePaths]);
 
   /** Tapping the chosen option again clears it, which is the only way back to
    *  "any colour" once a partial combination has been narrowed. */
@@ -108,41 +221,54 @@ export const PreorderProductView: React.FC<PreorderProductViewProps> = ({
         {/* Image. Swaps as the selection narrows, via the resolver's
             most-specific image assignment. */}
         <div>
-          <div className="overflow-hidden rounded-2xl border border-[#d8e7e4] bg-[#edf5f3]">
-            <div className="aspect-[4/3] w-full">
-              {resolved.imagePath && !imageFailed ? (
-                <img
-                  key={resolved.imagePath}
-                  data-testid="preorder-product-image"
-                  data-image-src={resolved.imagePath}
-                  src={resolved.imagePath}
-                  alt={product.name}
-                  onError={() => setImageFailed(true)}
-                  className="hk-price-change h-full w-full object-cover"
-                />
-              ) : (
-                <div
-                  data-testid="preorder-product-image"
-                  className="flex h-full items-center justify-center px-6 text-center text-xl font-black text-[#014040]/40"
-                >
-                  {product.name}
-                </div>
-              )}
+          {resolved.imagePath && !imageFailed ? (
+            <ZoomableImage
+              src={resolved.imagePath}
+              alt={product.name}
+              onOpen={() => setOpenAt(Math.max(0, lightboxImages.indexOf(resolved.imagePath!)))}
+              onError={() => setImageFailed(true)}
+            />
+          ) : (
+            <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl border border-[#d8e7e4] bg-[#edf5f3]">
+              <div
+                data-testid="preorder-product-image"
+                className="flex h-full items-center justify-center px-6 text-center text-xl font-black text-[#014040]/40"
+              >
+                {product.name}
+              </div>
             </div>
-          </div>
+          )}
 
-          {product.galleryImagePaths.length > 1 && (
+          {/* The pre-order grid, not the catalogue's horizontal rail — but
+              tapping one opens the same viewer the laptop gallery uses. */}
+          {product.galleryImagePaths.length > 0 && (
             <div className="mt-3 grid grid-cols-4 gap-2">
               {product.galleryImagePaths.slice(0, 8).map((path) => (
-                <div
+                <button
                   key={path}
-                  className="aspect-square overflow-hidden rounded-xl border border-[#d8e7e4] bg-[#edf5f3]"
+                  type="button"
+                  data-testid="preorder-gallery-thumb"
+                  onClick={() => setOpenAt(Math.max(0, lightboxImages.indexOf(path)))}
+                  aria-label={STORE_COPY.preorder.openImage}
+                  className="hk-pressable aspect-square cursor-zoom-in overflow-hidden rounded-xl border border-[#d8e7e4] bg-[#edf5f3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#014040]"
                 >
-                  <img src={path} alt="" loading="lazy" className="h-full w-full object-cover" />
-                </div>
+                  <img
+                    src={path}
+                    alt=""
+                    loading="lazy"
+                    className="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.04] motion-reduce:transition-none motion-reduce:hover:scale-100"
+                  />
+                </button>
               ))}
             </div>
           )}
+
+          <ImageLightbox
+            images={lightboxImages}
+            openAt={openAt}
+            onClose={() => setOpenAt(null)}
+            alt={(index) => `${product.name} image ${index + 1}`}
+          />
         </div>
 
         {/* Choices and price. */}

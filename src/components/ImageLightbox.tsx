@@ -1,0 +1,440 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, RotateCcw, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { STORE_COPY } from '../config/storeCopy';
+
+interface ImageLightboxProps {
+  /** Already-renderable URLs. The caller owns filtering and error handling. */
+  images: string[];
+  /** The index to open at, or null when closed. */
+  openAt: number | null;
+  onClose: () => void;
+  alt: (index: number) => string;
+}
+
+interface ViewportTransform {
+  zoom: number;
+  x: number;
+  y: number;
+}
+
+const SWIPE_THRESHOLD = 55;
+const SWIPE_DURATION_MS = 280;
+const TRACKPAD_SWIPE_THRESHOLD = 42;
+const TRACKPAD_VISUAL_MULTIPLIER = 1.45;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 4;
+
+function wrappedIndex(index: number, length: number): number {
+  return (index + length) % length;
+}
+
+function pointerDistance(points: Array<{ x: number; y: number }>): number {
+  return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+/**
+ * The full-screen image viewer.
+ *
+ * Lifted out of ProductGallery so the pre-order product page can open images
+ * the same way rather than growing a second viewer. Swipe, pinch, trackpad
+ * momentum absorption, double-tap zoom and the keyboard shortcuts are fiddly
+ * enough that a second copy would drift within a release, and the two would
+ * then behave differently on the same phone.
+ *
+ * It owns only the viewing state. Which images exist, which of them are
+ * broken, and how they are laid out on the page all stay with the caller —
+ * that is what lets a horizontal rail and a four-column grid share it.
+ */
+export const ImageLightbox: React.FC<ImageLightboxProps> = ({ images, openAt, onClose, alt }) => {
+  const [active, setActive] = useState<number | null>(openAt);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [animating, setAnimating] = useState(false);
+  const [gestureActive, setGestureActive] = useState(false);
+  const [viewportTransform, setViewportTransform] = useState<ViewportTransform>({ zoom: 1, x: 0, y: 0 });
+  const lightboxRef = useRef<HTMLDivElement>(null);
+  const pointerStart = useRef<{ x: number; at: number } | null>(null);
+  const panStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const pinchStart = useRef<{ distance: number; zoom: number } | null>(null);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const dragged = useRef(false);
+  const transitionTimer = useRef<number | undefined>(undefined);
+  const wheelEndTimer = useRef<number | undefined>(undefined);
+  const wheelUnlockTimer = useRef<number | undefined>(undefined);
+  const wheelDistance = useRef(0);
+  const wheelLocked = useRef(false);
+  const gestureEndTimer = useRef<number | undefined>(undefined);
+  const singleTapTimer = useRef<number | undefined>(undefined);
+  const lastImageTap = useRef(0);
+  const animationFrame = useRef<number | undefined>(undefined);
+  const dragOffsetRef = useRef(0);
+  const animatingRef = useRef(false);
+  const transformRef = useRef<ViewportTransform>({ zoom: 1, x: 0, y: 0 });
+  const pendingTransform = useRef<ViewportTransform>({ zoom: 1, x: 0, y: 0 });
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => setActive(openAt), [openAt]);
+
+  const renderDragOffset = (value: number) => {
+    dragOffsetRef.current = value;
+    if (animationFrame.current != null) return;
+    animationFrame.current = window.requestAnimationFrame(() => {
+      setDragOffset(dragOffsetRef.current);
+      setViewportTransform({ ...pendingTransform.current });
+      animationFrame.current = undefined;
+    });
+  };
+
+  const renderTransform = (next: ViewportTransform) => {
+    transformRef.current = next;
+    pendingTransform.current = next;
+    renderDragOffset(dragOffsetRef.current);
+  };
+
+  const boundedPan = (x: number, y: number, zoom = transformRef.current.zoom) => {
+    const width = lightboxRef.current?.clientWidth || window.innerWidth;
+    const height = lightboxRef.current?.clientHeight || window.innerHeight;
+    const maxX = Math.max(0, width * (zoom - 1) / 2);
+    const maxY = Math.max(0, height * (zoom - 1) / 2);
+    return { x: clamp(x, -maxX, maxX), y: clamp(y, -maxY, maxY) };
+  };
+
+  const applyZoom = (value: number) => {
+    const zoom = clamp(value, MIN_ZOOM, MAX_ZOOM);
+    const pan = zoom === MIN_ZOOM ? { x: 0, y: 0 } : boundedPan(transformRef.current.x, transformRef.current.y, zoom);
+    renderTransform({ zoom, ...pan });
+  };
+
+  const resetViewport = () => {
+    const reset = { zoom: 1, x: 0, y: 0 };
+    transformRef.current = reset;
+    pendingTransform.current = reset;
+    setViewportTransform(reset);
+  };
+
+  useEffect(() => {
+    if (active == null) return;
+    if (!images.length) setActive(null);
+    else if (active >= images.length) setActive(images.length - 1);
+  }, [active, images.length]);
+
+  useEffect(() => {
+    if (active == null) return;
+    resetViewport();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [active]);
+
+  const finishTransition = (direction: number) => {
+    window.clearTimeout(transitionTimer.current);
+    transitionTimer.current = window.setTimeout(() => {
+      if (direction) setActive((current) => current == null ? current : wrappedIndex(current + direction, images.length));
+      animatingRef.current = false;
+      dragOffsetRef.current = 0;
+      setAnimating(false);
+      setDragOffset(0);
+    }, SWIPE_DURATION_MS);
+  };
+
+  const slide = (direction: number) => {
+    if (active == null || images.length < 2 || animatingRef.current) return;
+    const width = lightboxRef.current?.clientWidth || window.innerWidth;
+    animatingRef.current = true;
+    setAnimating(true);
+    renderDragOffset(direction > 0 ? -width : width);
+    finishTransition(direction);
+  };
+
+  const settleSwipe = () => {
+    if (animatingRef.current) return;
+    const distance = dragOffsetRef.current;
+    const direction = Math.abs(distance) >= SWIPE_THRESHOLD ? (distance < 0 ? 1 : -1) : 0;
+    animatingRef.current = true;
+    setAnimating(true);
+    if (direction) {
+      const width = lightboxRef.current?.clientWidth || window.innerWidth;
+      renderDragOffset(direction > 0 ? -width : width);
+    } else renderDragOffset(0);
+    finishTransition(direction);
+  };
+
+  const close = () => {
+    window.clearTimeout(transitionTimer.current);
+    window.clearTimeout(wheelEndTimer.current);
+    window.clearTimeout(wheelUnlockTimer.current);
+    window.clearTimeout(gestureEndTimer.current);
+    window.clearTimeout(singleTapTimer.current);
+    lastImageTap.current = 0;
+    pointerStart.current = null;
+    panStart.current = null;
+    pinchStart.current = null;
+    pointers.current.clear();
+    animatingRef.current = false;
+    dragOffsetRef.current = 0;
+    wheelDistance.current = 0;
+    wheelLocked.current = false;
+    setAnimating(false);
+    setGestureActive(false);
+    setDragOffset(0);
+    resetViewport();
+    setActive(null);
+    onCloseRef.current();
+  };
+
+  const handleImageTap = (event: React.MouseEvent<HTMLImageElement>) => {
+    event.stopPropagation();
+    if (dragged.current) {
+      dragged.current = false;
+      lastImageTap.current = 0;
+      window.clearTimeout(singleTapTimer.current);
+      return;
+    }
+
+    const now = performance.now();
+    if (now - lastImageTap.current <= 340) {
+      window.clearTimeout(singleTapTimer.current);
+      lastImageTap.current = 0;
+      if (transformRef.current.zoom > MIN_ZOOM) resetViewport();
+      else applyZoom(1.5);
+      return;
+    }
+
+    lastImageTap.current = now;
+    window.clearTimeout(singleTapTimer.current);
+    singleTapTimer.current = window.setTimeout(() => {
+      lastImageTap.current = 0;
+      close();
+    }, 340);
+  };
+
+  useEffect(() => {
+    if (active == null) return;
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+      if (event.key === 'ArrowRight' && transformRef.current.zoom === MIN_ZOOM) slide(1);
+      if (event.key === 'ArrowLeft' && transformRef.current.zoom === MIN_ZOOM) slide(-1);
+      if (event.key === '+' || event.key === '=') applyZoom(transformRef.current.zoom + 0.25);
+      if (event.key === '-') applyZoom(transformRef.current.zoom - 0.25);
+      if (event.key === '0') resetViewport();
+    };
+    document.addEventListener('keydown', keydown);
+    return () => document.removeEventListener('keydown', keydown);
+  }, [active, images.length]);
+
+  useEffect(() => {
+    if (active == null || !lightboxRef.current) return;
+    const element = lightboxRef.current;
+    const endGestureSoon = () => {
+      window.clearTimeout(gestureEndTimer.current);
+      gestureEndTimer.current = window.setTimeout(() => setGestureActive(false), 100);
+    };
+    const unlockTrackpadAfterMomentum = () => {
+      window.clearTimeout(wheelUnlockTimer.current);
+      const tryUnlock = () => {
+        if (animatingRef.current) {
+          wheelUnlockTimer.current = window.setTimeout(tryUnlock, 80);
+          return;
+        }
+        wheelLocked.current = false;
+        wheelDistance.current = 0;
+        endGestureSoon();
+      };
+      wheelUnlockTimer.current = window.setTimeout(tryUnlock, 180);
+    };
+    const finishTrackpadGesture = (direction: number) => {
+      if (wheelLocked.current) return;
+      wheelLocked.current = true;
+      wheelDistance.current = 0;
+      animatingRef.current = true;
+      setAnimating(true);
+      if (direction) {
+        const width = lightboxRef.current?.clientWidth || window.innerWidth;
+        renderDragOffset(direction > 0 ? -width : width);
+      } else renderDragOffset(0);
+      finishTransition(direction);
+      unlockTrackpadAfterMomentum();
+    };
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey) {
+        event.preventDefault();
+        setGestureActive(true);
+        applyZoom(transformRef.current.zoom * Math.exp(-event.deltaY * 0.012));
+        endGestureSoon();
+        return;
+      }
+
+      if (transformRef.current.zoom > MIN_ZOOM) {
+        event.preventDefault();
+        setGestureActive(true);
+        const pan = boundedPan(transformRef.current.x - event.deltaX, transformRef.current.y - event.deltaY);
+        renderTransform({ ...transformRef.current, ...pan });
+        endGestureSoon();
+        return;
+      }
+
+      const horizontalGesture = Math.abs(event.deltaX) >= Math.abs(event.deltaY) * 0.7;
+      if (images.length < 2 || !horizontalGesture) return;
+      event.preventDefault();
+      dragged.current = true;
+      setGestureActive(true);
+
+      // Trackpads keep emitting momentum events after the fingers have lifted.
+      // Absorb that tail so one physical swipe can advance only one image.
+      if (wheelLocked.current || animatingRef.current) {
+        wheelLocked.current = true;
+        unlockTrackpadAfterMomentum();
+        return;
+      }
+
+      const width = lightboxRef.current?.clientWidth || window.innerWidth;
+      wheelDistance.current += event.deltaX;
+      const visualLimit = Math.min(width * 0.46, 360);
+      renderDragOffset(clamp(-wheelDistance.current * TRACKPAD_VISUAL_MULTIPLIER, -visualLimit, visualLimit));
+      window.clearTimeout(wheelEndTimer.current);
+      if (Math.abs(wheelDistance.current) >= TRACKPAD_SWIPE_THRESHOLD) {
+        finishTrackpadGesture(wheelDistance.current > 0 ? 1 : -1);
+        return;
+      }
+      wheelEndTimer.current = window.setTimeout(() => finishTrackpadGesture(0), 75);
+    };
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
+  }, [active, images.length]);
+
+  useEffect(() => () => {
+    window.clearTimeout(transitionTimer.current);
+    window.clearTimeout(wheelEndTimer.current);
+    window.clearTimeout(wheelUnlockTimer.current);
+    window.clearTimeout(gestureEndTimer.current);
+    window.clearTimeout(singleTapTimer.current);
+    if (animationFrame.current != null) window.cancelAnimationFrame(animationFrame.current);
+  }, []);
+
+  if (active == null || !images.length) return null;
+
+  const activeIndex = active;
+  const visibleIndexes = images.length === 1
+    ? [activeIndex]
+    : [wrappedIndex(activeIndex - 1, images.length), activeIndex, wrappedIndex(activeIndex + 1, images.length)];
+  const currentPosition = images.length === 1 ? 0 : 1;
+
+  return (
+    <div
+      ref={lightboxRef}
+      className="hk-gallery-lightbox fixed inset-0 z-[80] overflow-hidden overscroll-none bg-[#001f1f]/95"
+      role="dialog"
+      aria-modal="true"
+      aria-label={STORE_COPY.gallery.lightboxLabel}
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !dragged.current) close();
+        dragged.current = false;
+      }}
+      onPointerDown={(event) => {
+        if (animatingRef.current || event.button !== 0) return;
+        pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        event.currentTarget.setPointerCapture(event.pointerId);
+        dragged.current = false;
+        setGestureActive(true);
+        if (pointers.current.size >= 2) {
+          const points = [...pointers.current.values()].slice(0, 2);
+          pinchStart.current = { distance: pointerDistance(points), zoom: transformRef.current.zoom };
+          pointerStart.current = null;
+          panStart.current = null;
+          dragged.current = true;
+        } else if (transformRef.current.zoom > MIN_ZOOM) {
+          panStart.current = { x: event.clientX, y: event.clientY, panX: transformRef.current.x, panY: transformRef.current.y };
+        } else if (images.length > 1) pointerStart.current = { x: event.clientX, at: performance.now() };
+      }}
+      onPointerMove={(event) => {
+        if (!pointers.current.has(event.pointerId) || animatingRef.current) return;
+        pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (pointers.current.size >= 2 && pinchStart.current) {
+          const points = [...pointers.current.values()].slice(0, 2);
+          const distance = pointerDistance(points);
+          dragged.current = true;
+          applyZoom(pinchStart.current.zoom * distance / Math.max(1, pinchStart.current.distance));
+          return;
+        }
+        if (transformRef.current.zoom > MIN_ZOOM && panStart.current) {
+          const pan = boundedPan(panStart.current.panX + event.clientX - panStart.current.x, panStart.current.panY + event.clientY - panStart.current.y);
+          dragged.current = true;
+          renderTransform({ ...transformRef.current, ...pan });
+          return;
+        }
+        if (!pointerStart.current) return;
+        const distance = event.clientX - pointerStart.current.x;
+        dragged.current = dragged.current || Math.abs(distance) > 6;
+        const width = lightboxRef.current?.clientWidth || window.innerWidth;
+        renderDragOffset(clamp(distance, -width, width));
+      }}
+      onPointerUp={(event) => {
+        const wasPinching = pinchStart.current != null;
+        pointers.current.delete(event.pointerId);
+        if (wasPinching) {
+          if (pointers.current.size < 2) pinchStart.current = null;
+          pointerStart.current = null;
+          panStart.current = null;
+          window.clearTimeout(gestureEndTimer.current);
+          gestureEndTimer.current = window.setTimeout(() => setGestureActive(false), 80);
+          return;
+        }
+        if (transformRef.current.zoom > MIN_ZOOM) {
+          panStart.current = null;
+          window.clearTimeout(gestureEndTimer.current);
+          gestureEndTimer.current = window.setTimeout(() => setGestureActive(false), 80);
+          return;
+        }
+        if (!pointerStart.current) { setGestureActive(false); return; }
+        const distance = event.clientX - pointerStart.current.x;
+        const elapsed = Math.max(1, performance.now() - pointerStart.current.at);
+        pointerStart.current = null;
+        const fastSwipe = Math.abs(distance) / elapsed > 0.45 && Math.abs(distance) > 20;
+        const direction = Math.abs(distance) >= SWIPE_THRESHOLD || fastSwipe ? (distance < 0 ? 1 : -1) : 0;
+        animatingRef.current = true;
+        setAnimating(true);
+        if (direction) {
+          const width = lightboxRef.current?.clientWidth || window.innerWidth;
+          renderDragOffset(direction > 0 ? -width : width);
+        } else renderDragOffset(0);
+        finishTransition(direction);
+        setGestureActive(false);
+      }}
+      onPointerCancel={(event) => {
+        pointers.current.delete(event.pointerId);
+        pointerStart.current = null;
+        panStart.current = null;
+        pinchStart.current = null;
+        if (transformRef.current.zoom === MIN_ZOOM) settleSwipe();
+        setGestureActive(false);
+      }}
+      style={{ touchAction: 'none' }}
+    >
+      <div className="absolute left-1/2 top-4 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/15 bg-black/35 p-1 text-white backdrop-blur-md" onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" disabled={viewportTransform.zoom <= MIN_ZOOM} onClick={() => applyZoom(viewportTransform.zoom - 0.25)} className="rounded-full p-2 hover:bg-white/15 disabled:opacity-35" aria-label="Zoom out"><ZoomOut className="h-4 w-4" /></button>
+        <span className="min-w-12 text-center text-[11px] font-black">{Math.round(viewportTransform.zoom * 100)}%</span>
+        <button type="button" disabled={viewportTransform.zoom >= MAX_ZOOM} onClick={() => applyZoom(viewportTransform.zoom + 0.25)} className="rounded-full p-2 hover:bg-white/15 disabled:opacity-35" aria-label="Zoom in"><ZoomIn className="h-4 w-4" /></button>
+        {viewportTransform.zoom > MIN_ZOOM && <button type="button" onClick={resetViewport} className="rounded-full p-2 hover:bg-white/15" aria-label="Reset zoom"><RotateCcw className="h-4 w-4" /></button>}
+      </div>
+      <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={close} className="absolute right-4 top-4 z-30 rounded-full bg-white/10 p-3 text-white hover:bg-white/20" aria-label={STORE_COPY.gallery.close}><X className="h-5 w-5" /></button>
+      {images.length > 1 && <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); slide(-1); }} className="absolute left-3 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white hover:bg-white/20" aria-label={STORE_COPY.gallery.previous}><ChevronLeft className="h-6 w-6" /></button>}
+
+      <div className={`flex h-full w-full will-change-transform ${animating ? 'transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]' : ''}`} style={{ transform: images.length === 1 ? 'translate3d(0,0,0)' : `translate3d(calc(-100% + ${dragOffset}px),0,0)` }}>
+        {visibleIndexes.map((index, position) => {
+          const current = position === currentPosition;
+          return <div key={`${activeIndex}-${index}-${position}`} className="flex h-full w-full shrink-0 items-center justify-center overflow-hidden p-4 sm:p-10"><img src={images[index]} alt={alt(index)} width="1400" height="1050" draggable={false} className={`max-h-full max-w-full select-none rounded-2xl object-contain shadow-2xl will-change-transform ${current && !gestureActive ? 'transition-transform duration-200 ease-out' : ''}`} style={current ? { transform: `translate3d(${viewportTransform.x}px, ${viewportTransform.y}px, 0) scale(${viewportTransform.zoom})`, transformOrigin: 'center center' } : undefined} onClick={current ? handleImageTap : undefined} /></div>;
+        })}
+      </div>
+
+      {images.length > 1 && <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); slide(1); }} className="absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white hover:bg-white/20" aria-label={STORE_COPY.gallery.next}><ChevronRight className="h-6 w-6" /></button>}
+      <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 text-center text-xs font-bold text-white/80">{activeIndex + 1} / {images.length}</div>
+    </div>
+  );
+};

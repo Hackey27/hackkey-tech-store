@@ -89,6 +89,8 @@ export const STORE_COPY = {
       `Choose ${axes.map((axis) => axis.toLowerCase()).join(' and ')} to see the price`,
     unavailableOption: 'Not available with what you have chosen',
     addToCart: 'Add to pre-order',
+    openImage: 'Open this image',
+    hoverToZoom: 'Hover to zoom',
     details: 'Details',
     cart: {
       title: 'Your pre-order',
