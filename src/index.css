@@ -415,42 +415,22 @@
 
 /* Section shell (the hamburger panel down the left).
  *
- * Width, opacity and the page's own offset are scrubbed to scroll position in
- * JS, so the only job here is to ease the parts that change in steps: the jump
- * between floating and docked when the reader takes control by hand, and the
- * eased expansion when they scroll back to the top.
+ * Width and opacity are scrubbed to scroll position in JS, so the only job here
+ * is to ease the parts that change in steps: the jump when the reader takes
+ * control by hand, and the eased expansion when they scroll back to the top.
  *
  * Width is transitioned deliberately, against the usual rule about animating
  * layout properties. The panel is a fixed-position element outside the document
- * flow, so its width drives no reflow of the page beside it — that offset is a
- * padding on the content, animated separately. */
+ * flow and it overlays the page rather than displacing it, so its width drives
+ * no reflow of anything. */
 .hk-section-nav {
   transition:
     width 260ms var(--hk-ease-out),
     opacity 200ms ease;
 }
 
-.hk-section-shift {
-  transition: padding-left 260ms var(--hk-ease-out);
-}
-
-.hk-section-floating-icon {
-  transition:
-    transform 140ms var(--hk-ease-out),
-    opacity 200ms ease,
-    background-color 150ms ease;
-  opacity: 0.6;
-}
-
-.hk-section-floating-icon:hover,
-.hk-section-floating-icon:focus-visible {
-  opacity: 1;
-}
-
 /* The scrub is the whole point, so reduced motion gets the two end states and
  * no travel between them. */
 @media (prefers-reduced-motion: reduce) {
-  .hk-section-nav,
-  .hk-section-shift,
-  .hk-section-floating-icon { transition: none; }
+  .hk-section-nav { transition: none; }
 }

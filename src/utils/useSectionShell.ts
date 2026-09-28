@@ -1,20 +1,31 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useReducedMotion } from 'motion/react';
+import { useCallback, useEffect, useState } from 'react';
 
-/** Fully expanded at the top of the page, fully collapsed by here. */
+/** How far the reader has to scroll before the opening display gets out of
+ *  the way. Far enough not to trip on a stray wheel notch. */
 const COLLAPSE_THRESHOLD_PX = 120;
-/** Width of the expanded panel, and so how far it pushes the page across. */
+/** Width of the expanded panel. It overlays the page, so this displaces
+ *  nothing. */
 export const SECTION_PANEL_WIDTH_PX = 248;
+/** Width of the collapsed rail. Matched to the header hamburger's 40px button
+ *  so the rail's icons sit on the same vertical line as the hamburger. */
+export const COLLAPSED_RAIL_PX = 40;
+
+/**
+ * Where the panel is, and how it got there.
+ *
+ * `showcase` is the one automatic state: the panel is open because the page
+ * just loaded, not because anyone asked. It is the only state scrolling is
+ * allowed to close, and it happens once per page load.
+ */
+type ShellState = 'showcase' | 'open' | 'closed';
 
 export interface SectionShell {
-  /** 0 fully expanded, 1 fully collapsed. Scrubbed, so it reverses cleanly. */
-  collapse: number;
-  /** Pixels the page content is pushed right. Zero on phones and when floating. */
-  shiftPx: number;
-  /** The panel is floating over the content rather than sitting in the flow. */
-  floating: boolean;
-  /** True once the reader has opened or closed it by hand. */
-  manual: boolean;
+  expanded: boolean;
+  /** Tapping away from the panel should close it. True on phones, where it
+   *  covers the content, and whenever the reader opened it by hand. False for
+   *  the opening display on a desktop, where a backdrop would swallow the
+   *  reader's first click on the page behind it. */
+  dismissable: boolean;
   toggle: () => void;
   close: () => void;
 }
@@ -35,79 +46,54 @@ function useIsDesktop(): boolean {
 /**
  * Drives the hamburger panel.
  *
- * The collapse is scrubbed to scroll POSITION, not velocity: fully expanded at
- * scrollY 0, fully collapsed by COLLAPSE_THRESHOLD_PX. Position means the
- * panel tracks the scrollbar predictably and unwinds on the way back up.
- * Velocity-linked movement jitters on the tiny alternating deltas a touch
- * flick produces at the end of its travel.
+ * THE FULL TABS ARE SHOWN ONCE PER PAGE LOAD, THEN NEVER BY THEMSELVES AGAIN.
+ * A fresh load or a refresh opens the panel so the reader sees the sections
+ * exist; the first real scroll closes it; and from then on only the hamburger
+ * reopens it. Scrolling back to the top does not bring it back, and neither
+ * does opening a category — those are client-side navigations that never
+ * remount this hook, so the closed state simply persists.
  *
- * A hamburger click suspends the scroll link until the reader returns to the
- * top, otherwise a panel opened deliberately would snap shut on the next pixel
- * of scroll. "Returns to" means it has to leave the top first — clearing the
- * override the instant it is set at scrollY 0 would make the close button
- * appear to do nothing.
+ * It used to be scrubbed to scroll position and reversed on the way back up,
+ * which meant the panel reappeared over the catalogue every time the reader
+ * returned to the top. Showing it once and then leaving it alone is the point
+ * of this hook now, so the state is a latch rather than a position.
+ *
+ * Scrolling closes ONLY the opening display. A panel the reader opened
+ * deliberately stays open until they act on it — closing that one on the next
+ * pixel of scroll would make the hamburger feel broken. It closes when they
+ * pick a tab, tap away from it, or press the hamburger again.
+ *
+ * The panel ALWAYS overlays the page and never displaces it. It used to push
+ * the content right by its own width, so a fresh load reflowed the whole
+ * storefront sideways and then unwound it again on the first scroll.
  */
 export function useSectionShell(): SectionShell {
-  const reduceMotion = useReducedMotion();
   const desktop = useIsDesktop();
-  const [progress, setProgress] = useState(() =>
-    typeof window === 'undefined' ? 0 : Math.min(1, window.scrollY / COLLAPSE_THRESHOLD_PX)
-  );
-  const [override, setOverride] = useState<boolean | null>(null);
-  /** Has the reader left the top since the override was set? */
-  const leftTop = useRef(false);
+  const [state, setState] = useState<ShellState>('showcase');
 
   useEffect(() => {
-    let frame = 0;
-    const read = () => {
-      frame = 0;
-      const next = Math.min(1, Math.max(0, window.scrollY / COLLAPSE_THRESHOLD_PX));
-      if (next > 0) leftTop.current = true;
-      setProgress(next);
-      if (next === 0 && leftTop.current) {
-        leftTop.current = false;
-        setOverride(null);
-      }
-    };
     const onScroll = () => {
-      if (!frame) frame = window.requestAnimationFrame(read);
+      // Only the opening display yields to scroll, and only once.
+      setState((current) =>
+        current === 'showcase' && window.scrollY > COLLAPSE_THRESHOLD_PX ? 'closed' : current
+      );
     };
-    read();
+    // A reload that restores a scroll position partway down the page should
+    // not flash the panel open and then shut.
+    onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      if (frame) window.cancelAnimationFrame(frame);
-    };
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   const toggle = useCallback(() => {
-    leftTop.current = false;
-    setOverride((current) => {
-      const expandedNow = current === null
-        ? (typeof window === 'undefined' ? true : window.scrollY < COLLAPSE_THRESHOLD_PX)
-        : current;
-      return !expandedNow;
-    });
+    setState((current) => (current === 'closed' ? 'open' : 'closed'));
   }, []);
 
-  const close = useCallback(() => {
-    leftTop.current = false;
-    setOverride(false);
-  }, []);
-
-  let collapse = override === null ? progress : override ? 0 : 1;
-  // Reduced motion gets the two states and nothing in between.
-  if (reduceMotion) collapse = collapse < 0.5 ? 0 : 1;
-
-  // Floating whenever the reader has taken control, and always on phones,
-  // where there is no room to push the page sideways.
-  const floating = !desktop || override !== null;
+  const close = useCallback(() => setState('closed'), []);
 
   return {
-    collapse,
-    shiftPx: floating ? 0 : SECTION_PANEL_WIDTH_PX * (1 - collapse),
-    floating,
-    manual: override !== null,
+    expanded: state !== 'closed',
+    dismissable: state === 'open' || (!desktop && state === 'showcase'),
     toggle,
     close,
   };

@@ -88,14 +88,17 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Main Header */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
         <div className="flex items-center justify-between gap-4">
-          {/* Sections toggle, to the left of the logo. */}
+          {/* Sections toggle, to the left of the logo. Its left edge is the
+              page gutter with no negative margin, because that is the same
+              line the section panel starts on — the two read as one control
+              when they do not line up. */}
           <button
             type="button"
             onClick={onToggleSections}
             aria-expanded={sectionsExpanded}
             aria-label={sectionsExpanded ? STORE_COPY.sections.closeLabel : STORE_COPY.sections.openLabel}
             title={STORE_COPY.sections.ariaLabel}
-            className="hk-pressable -ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white hover:bg-white/20"
+            className="hk-pressable flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white hover:bg-white/20"
           >
             <span aria-hidden="true" className="flex flex-col gap-[3.5px]">
               <span className="block h-[2px] w-[18px] rounded-full bg-current" />

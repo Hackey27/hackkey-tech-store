@@ -344,6 +344,10 @@ export const App: React.FC = () => {
           if (!tab) return;
           navigate(tab.path);
           if (tab.id === 'software') setActiveTab('home');
+          // Picking a tab is the end of the panel's job. Leaving it open over
+          // the section it just opened means the reader has to dismiss it
+          // before they can look at what they asked for.
+          shell.close();
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         shell={shell}
@@ -352,7 +356,7 @@ export const App: React.FC = () => {
       {/* Clean Storefront Header */}
       <Header
         onToggleSections={shell.toggle}
-        sectionsExpanded={shell.collapse < 0.5}
+        sectionsExpanded={shell.expanded}
         searchQuery={searchQuery}
         onSearchChange={(q) => {
           setSearchQuery(q);
@@ -398,9 +402,9 @@ export const App: React.FC = () => {
       />
 
       {/* Main Content Area */}
-      {/* The panel pushes the page's content across, but never the top bar: the
-          logo and the hamburger stay in one place across every section. */}
-      <main className="hk-section-shift flex-1 pb-20 md:pb-12" style={{ paddingLeft: shell.shiftPx }}>
+      {/* The panel overlays this rather than displacing it. Nothing on the page
+          moves when it opens, closes or scrubs. */}
+      <main className="flex-1 pb-20 md:pb-12">
         {route.view === 'category' && (
           isLoading ? (
             <div className="mx-auto max-w-7xl px-4 py-16 text-center text-sm font-bold text-[#014040]">{STORE_COPY.catalog.loading}</div>
@@ -673,7 +677,7 @@ export const App: React.FC = () => {
       />
 
       {/* Storefront footer */}
-      <footer style={{ paddingLeft: shell.shiftPx }} className={`hk-section-shift ${route.view === 'home' && activeTab === 'home' ? '' : 'hidden md:block'} hk-brand-pattern hk-pattern-outline hk-footer-pattern relative border-t border-[#025656] bg-[#014040] pb-24 pt-9 text-xs text-white md:pb-8`}>
+      <footer className={`${route.view === 'home' && activeTab === 'home' ? '' : 'hidden md:block'} hk-brand-pattern hk-pattern-outline hk-footer-pattern relative border-t border-[#025656] bg-[#014040] pb-24 pt-9 text-xs text-white md:pb-8`}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 gap-8 border-b border-white/20 pb-7 md:grid-cols-3">
             <div className="space-y-3">
