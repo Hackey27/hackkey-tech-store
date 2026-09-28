@@ -672,6 +672,56 @@ export function createAdminRouter(): Router {
     } catch (err) { routeError(res, err, 'Failed to save the pre-order product.'); }
   });
 
+  /**
+   * Artwork for a pre-order product.
+   *
+   * Unlike the catalogue route this only stores the file and hands back its
+   * path; it attaches nothing. A pre-order product is edited as a whole draft
+   * and written by one PUT, so the browser puts the returned path wherever the
+   * seller was working — the preview image, the gallery, or one variant's
+   * image assignment — and it is saved with everything else. Attaching here
+   * would write the product twice and lose whatever else was being edited.
+   */
+  router.post(
+    '/preorder/products/:productId/images',
+    express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: MAX_CATALOGUE_IMAGE_BYTES }),
+    async (req: AdminRequest, res) => {
+      const productId = String(req.params.productId || '').trim();
+      const contentType = String(req.header('content-type') || '').split(';')[0].trim();
+      const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+      if (!productId) return res.status(400).json({ error: 'A pre-order product is required.' });
+      const validation = validateCatalogueImage(contentType, bytes.length);
+      if (!validation.ok) return res.status(400).json({ error: validation.error });
+      // Namespaced away from the software catalogue's own ids, which are a
+      // separate collection and could otherwise collide on a shared name.
+      const objectPath = catalogueImageObjectPath(`preorder-${productId}`, 'gallery', contentType);
+      try {
+        await saveCatalogueImage(objectPath, bytes, contentType);
+        await writeAdminAudit(actor(req), {
+          action: 'preorder.image-upload',
+          targetType: 'preorder-product',
+          targetId: productId,
+          details: { objectPath, sizeBytes: bytes.length },
+        });
+        res.json({ objectPath });
+      } catch (err) {
+        await deleteCatalogueImage(objectPath).catch(() => undefined);
+        routeError(res, err, 'Failed to upload pre-order artwork.');
+      }
+    }
+  );
+
+  /** Removes the stored file. The product still has to be saved to drop the
+   *  reference, which is why this never touches the document. */
+  router.delete('/preorder/products/:productId/images', async (req: AdminRequest, res) => {
+    const objectPath = String(req.body?.objectPath || '').trim();
+    if (!isCatalogueImagePath(objectPath)) return res.status(400).json({ error: 'A valid image is required.' });
+    try {
+      await deleteCatalogueImage(objectPath);
+      res.json({ success: true });
+    } catch (err) { routeError(res, err, 'Failed to remove pre-order artwork.'); }
+  });
+
   router.put('/preorder/categories/:categoryId', async (req: AdminRequest, res) => {
     try {
       const category: PreorderCategory = {

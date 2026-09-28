@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   combinationSlug,
+  combinationsForAxes,
+  preorderCardPricing,
   lowestPricePesewas,
   previewPricePesewas,
   readableSelections,
@@ -247,4 +249,121 @@ test('readable selections name the open axes rather than omitting them', () => {
   const axes = shirt().variantAxes;
   assert.equal(readableSelections({ Colour: 'Black', Size: 'XL' }, axes), 'Black, XL');
   assert.equal(readableSelections({ Colour: 'Black' }, axes), 'Black, any size');
+});
+
+/* -- the listing card's pricing ------------------------------------------- */
+
+test('the card prices every delivery option the product offers', () => {
+  const pricing = preorderCardPricing(shirt());
+  assert.deepEqual(pricing.map((entry) => entry.delivery), ['express', 'two-months']);
+  assert.equal(pricing[0].pricePesewas, cedisToPesewas(120));
+  assert.equal(pricing[1].pricePesewas, cedisToPesewas(85));
+});
+
+test('a product whose combinations differ is priced "from", not flatly', () => {
+  // Black is 120 and Black+XL is 145, so 120 is not the whole story.
+  const pricing = preorderCardPricing(shirt());
+  assert.equal(pricing.every((entry) => entry.uniform), false);
+});
+
+test('a product where every combination agrees is uniform, so the card can drop "from"', () => {
+  const product = shirt();
+  product.combinations = product.combinations.map((combination) => ({
+    ...combination,
+    priceExpressPesewas: cedisToPesewas(120),
+    priceTwoMonthsPesewas: cedisToPesewas(85),
+  }));
+  const pricing = preorderCardPricing(product);
+  assert.equal(pricing.length, 2);
+  assert.ok(pricing.every((entry) => entry.uniform), 'every delivery should read as uniform');
+  assert.equal(pricing[0].pricePesewas, cedisToPesewas(120));
+});
+
+test('one unpriced combination is a gap, not agreement, so it is not uniform', () => {
+  // Every Express price agrees except one combination that has none. Saying
+  // "GHS 120" flatly would promise a price the product page cannot honour.
+  const product = shirt();
+  product.combinations = product.combinations.map((combination) => ({
+    ...combination,
+    priceExpressPesewas: cedisToPesewas(120),
+  }));
+  delete product.combinations[1].priceExpressPesewas;
+  const express = preorderCardPricing(product).find((entry) => entry.delivery === 'express');
+  assert.equal(express?.pricePesewas, cedisToPesewas(120));
+  assert.equal(express?.uniform, false);
+});
+
+test('a delivery option with no priced combination is left off the card entirely', () => {
+  const product = shirt();
+  product.combinations = product.combinations.map((combination) => {
+    const next = { ...combination };
+    delete next.priceTwoMonthsPesewas;
+    return next;
+  });
+  assert.deepEqual(
+    preorderCardPricing(product).map((entry) => entry.delivery),
+    ['express']
+  );
+});
+
+test('a delivery the product does not offer is never priced, even if a combination carries one', () => {
+  const product = shirt();
+  product.deliveryOptions = ['express'];
+  assert.deepEqual(preorderCardPricing(product).map((entry) => entry.delivery), ['express']);
+});
+
+/* -- filling combinations from the variants -------------------------------- */
+
+test('filling from one axis yields a row per option, in the order they were entered', () => {
+  const rows = combinationsForAxes([{ name: 'Colour', options: ['Black', 'Navy', 'Red'] }]);
+  assert.deepEqual(rows.map((row) => row.selections.Colour), ['Black', 'Navy', 'Red']);
+  assert.deepEqual(rows.map((row) => row.combinationId), [
+    'colour-black',
+    'colour-navy',
+    'colour-red',
+  ]);
+});
+
+test('filling from two axes varies the first axis slowest, matching the selector order', () => {
+  const rows = combinationsForAxes(shirt().variantAxes);
+  assert.equal(rows.length, 6);
+  assert.deepEqual(rows.slice(0, 2).map((row) => `${row.selections.Colour}/${row.selections.Size}`), [
+    'Black/M',
+    'Black/XL',
+  ]);
+});
+
+test('filling carries the shared price onto every row', () => {
+  const rows = combinationsForAxes([{ name: 'Colour', options: ['Black', 'Navy'] }], {
+    priceExpressPesewas: cedisToPesewas(120),
+    priceTwoMonthsPesewas: cedisToPesewas(85),
+  });
+  assert.ok(rows.every((row) => row.priceExpressPesewas === cedisToPesewas(120)));
+  assert.ok(rows.every((row) => row.priceTwoMonthsPesewas === cedisToPesewas(85)));
+});
+
+test('filling with no price leaves the fields absent rather than zero', () => {
+  // A blank price means "ask", never free — a zero here would put a free
+  // product on the shelf.
+  const [row] = combinationsForAxes([{ name: 'Colour', options: ['Black'] }]);
+  assert.equal('priceExpressPesewas' in row, false);
+  assert.equal('priceTwoMonthsPesewas' in row, false);
+});
+
+test('a product with no variants fills to the single implicit combination', () => {
+  const rows = combinationsForAxes([], { priceExpressPesewas: cedisToPesewas(30) });
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0].selections, {});
+  assert.equal(rows[0].combinationId, 'default');
+});
+
+test('filled rows satisfy the validator, so the button cannot produce an unsaveable product', () => {
+  const product = shirt();
+  product.combinations = combinationsForAxes(product.variantAxes, {
+    priceExpressPesewas: cedisToPesewas(120),
+    priceTwoMonthsPesewas: cedisToPesewas(85),
+  });
+  const { errors, warnings } = validatePreorderProduct(product);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(warnings, []);
 });

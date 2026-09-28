@@ -106,8 +106,11 @@ export const PreorderListingView: React.FC<PreorderListingViewProps> = ({
         </div>
       )}
 
+      {/* Two across on a phone, four on a laptop. Fixed counts rather than
+          auto-fit: auto-fit drops to a single column on a narrow phone, and one
+          tall card per screen makes a catalogue feel empty. */}
       {visible.length > 0 ? (
-        <div className="mt-7 grid gap-5 sm:gap-6 [grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr))]">
+        <div className="mt-7 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
           {visible.map((product) => (
             <PreorderCard key={product.productId} product={product} onSelect={onSelectProduct} />
           ))}

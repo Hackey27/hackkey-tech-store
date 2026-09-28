@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { User } from 'firebase/auth';
-import { Plus, Trash2, TriangleAlert } from 'lucide-react';
+import { ImagePlus, Plus, Trash2, TriangleAlert, UploadCloud } from 'lucide-react';
 import { adminRequest } from './api';
 import { AdminData } from './types';
 import {
@@ -14,6 +14,7 @@ import {
 } from '../../shared/types';
 import {
   combinationSlug,
+  combinationsForAxes,
   readableSelections,
   validatePreorderProduct,
 } from '../../shared/preorderCombinations';
@@ -82,8 +83,12 @@ function SelectionRow({
     <>
       {axes.map((axis) => (
         <td key={axis.name} className="p-2 align-top">
-          <label className="md:sr-only">
-            <span className="mb-1 block text-[11px] font-bold text-slate-600 md:hidden">{axis.name}</span>
+          {/* The caption is for phones, where there is no table header to name
+              the column. It stays in the accessibility tree on a laptop, but
+              the LABEL itself must never be hidden — doing that took the
+              select with it and made this table unusable above 768px. */}
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-bold text-slate-600 md:sr-only">{axis.name}</span>
             <select
               className={inputClass}
               value={selections[axis.name] ?? ANY}
@@ -109,17 +114,196 @@ function SelectionRow({
   );
 }
 
+/* -- images --------------------------------------------------------------- */
+
+/** Bucket paths are private; this is the route that streams them back. */
+function preorderMediaUrl(path?: string): string | undefined {
+  if (!path) return undefined;
+  if (/^https?:\/\//i.test(path)) return path;
+  return `/api/catalog/images?path=${encodeURIComponent(path)}`;
+}
+
+export type UploadImage = (file: File) => Promise<string>;
+
+/**
+ * A real file input, styled as a button.
+ *
+ * `type="file"` is what makes the device open its own picker — Explorer on a
+ * laptop, the photo and file chooser on a phone. Nothing here can be replaced
+ * with a click handler and a dialog of our own without losing that.
+ */
+function ImageUploadButton({
+  label,
+  multiple = false,
+  disabled,
+  busy,
+  onFiles,
+}: {
+  label: string;
+  multiple?: boolean;
+  disabled?: boolean;
+  busy?: boolean;
+  onFiles: (files: FileList) => void;
+}) {
+  return (
+    <label
+      className={`${ghostButton} ${disabled || busy ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+    >
+      {busy ? <UploadCloud className="h-4 w-4 animate-pulse" /> : <ImagePlus className="h-4 w-4" />}
+      {busy ? 'Uploading…' : label}
+      <input
+        type="file"
+        className="sr-only"
+        multiple={multiple}
+        accept="image/jpeg,image/png,image/webp"
+        disabled={disabled || busy}
+        onChange={(event) => {
+          if (event.target.files?.length) onFiles(event.target.files);
+          // Cleared so choosing the same file twice still fires a change.
+          event.currentTarget.value = '';
+        }}
+      />
+    </label>
+  );
+}
+
+/** The product's own artwork: the card preview and the gallery strip. */
+function MediaEditor({
+  product,
+  onChange,
+  upload,
+  canUpload,
+}: {
+  product: PreorderProduct;
+  onChange: (changes: Partial<PreorderProduct>) => void;
+  upload: UploadImage;
+  canUpload: boolean;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async (key: string, files: FileList, apply: (paths: string[]) => void) => {
+    setBusy(key);
+    setError(null);
+    try {
+      apply(await Promise.all(Array.from(files).map(upload)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+      <div>
+        <h4 className="text-sm font-black text-[#014040]">Images</h4>
+        <p className="text-xs text-slate-600">
+          The preview is what the listing card shows. Gallery images appear as
+          thumbnails under the main picture on the product page.
+        </p>
+      </div>
+
+      {!canUpload && (
+        <p className="rounded-xl bg-amber-50 p-3 text-xs font-bold text-amber-900">
+          Give the product an id before uploading — the images are stored under it.
+        </p>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl bg-slate-50 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <b className="text-sm">Preview image</b>
+              <p className="text-[11px] text-slate-500">1200 × 900 px (4:3).</p>
+            </div>
+            <ImageUploadButton
+              label="Upload"
+              disabled={!canUpload}
+              busy={busy === 'preview'}
+              onFiles={(files) => void run('preview', files, ([path]) => onChange({ previewImagePath: path }))}
+            />
+          </div>
+          {product.previewImagePath ? (
+            <div className="relative mt-3 aspect-[4/3] overflow-hidden rounded-xl bg-[#edf5f3]">
+              <img src={preorderMediaUrl(product.previewImagePath)} alt="" className="h-full w-full object-cover" />
+              <button
+                type="button"
+                aria-label="Remove preview image"
+                onClick={() => onChange({ previewImagePath: undefined })}
+                className="absolute right-2 top-2 rounded-lg bg-white/90 p-2 text-rose-700"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <p className="mt-3 rounded-lg border border-dashed p-4 text-center text-xs text-slate-400">
+              Not uploaded
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-xl bg-slate-50 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <b className="text-sm">Gallery</b>
+              <p className="text-[11px] text-slate-500">Several at once is fine.</p>
+            </div>
+            <ImageUploadButton
+              label="Add images"
+              multiple
+              disabled={!canUpload}
+              busy={busy === 'gallery'}
+              onFiles={(files) =>
+                void run('gallery', files, (paths) =>
+                  onChange({ galleryImagePaths: [...product.galleryImagePaths, ...paths] })
+                )
+              }
+            />
+          </div>
+          {product.galleryImagePaths.length ? (
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {product.galleryImagePaths.map((path) => (
+                <div key={path} className="relative aspect-square overflow-hidden rounded-lg bg-white">
+                  <img src={preorderMediaUrl(path)} alt="" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    aria-label="Remove gallery image"
+                    onClick={() =>
+                      onChange({ galleryImagePaths: product.galleryImagePaths.filter((entry) => entry !== path) })
+                    }
+                    className="absolute right-1 top-1 rounded bg-white/90 p-1.5 text-rose-700"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-slate-400">No gallery images yet.</p>
+          )}
+        </div>
+      </div>
+
+      {error && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-800">{error}</p>}
+    </section>
+  );
+}
+
 /* -- combination editor --------------------------------------------------- */
 
 function CombinationEditor({
   product,
   onChange,
+  onPatch,
 }: {
   product: PreorderProduct;
   onChange: (combinations: PreorderCombination[]) => void;
+  onPatch: (changes: Partial<PreorderProduct>) => void;
 }) {
   const axes = product.variantAxes;
   const deliveries = product.deliveryOptions;
+  const uniform = Boolean(product.uniformPricing);
 
   const update = (index: number, patch: Partial<PreorderCombination>) => {
     onChange(
@@ -132,6 +316,27 @@ function CombinationEditor({
       })
     );
   };
+
+  /* Under uniform pricing the shared pair IS the first row's pair. Keeping it
+     there rather than in a field of its own means the stored product has the
+     same shape either way, and nothing downstream — the resolver, the server's
+     re-pricing, the cart — has to know this mode exists. */
+  const sharedPesewas = (delivery: PreorderDelivery): number | undefined =>
+    delivery === 'express'
+      ? product.combinations[0]?.priceExpressPesewas
+      : product.combinations[0]?.priceTwoMonthsPesewas;
+
+  const setShared = (delivery: PreorderDelivery, value: number | undefined) => {
+    const field = delivery === 'express' ? 'priceExpressPesewas' : 'priceTwoMonthsPesewas';
+    onChange(product.combinations.map((combination) => ({ ...combination, [field]: value })));
+  };
+
+  const sharedPrice = () => ({
+    priceExpressPesewas: sharedPesewas('express'),
+    priceTwoMonthsPesewas: sharedPesewas('two-months'),
+  });
+
+  const priceColumns = uniform ? 0 : deliveries.length;
 
   const rows = product.combinations.map((combination, index) => {
     const readable = readableSelections(combination.selections, axes) || 'No variants';
@@ -146,11 +351,11 @@ function CombinationEditor({
             selections={combination.selections}
             onChange={(selections) => update(index, { selections })}
           />
-          {deliveries.map((delivery) => (
+          {!uniform && deliveries.map((delivery) => (
             <td key={delivery} className="p-2 align-top">
-              <label className="md:sr-only">
-                <span className="mb-1 block text-[11px] font-bold text-slate-600 md:hidden">
-                  {DELIVERY_LABELS[delivery]} ₵
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-bold text-slate-600 md:sr-only">
+                  {DELIVERY_LABELS[delivery]} GHS
                 </span>
                 <input
                   className={inputClass}
@@ -186,10 +391,10 @@ function CombinationEditor({
         </tr>
         <tr className="max-md:hidden">
           <td
-            colSpan={axes.length + deliveries.length + 1}
+            colSpan={axes.length + priceColumns + 1}
             className="px-2 pb-2 text-[11px] font-bold text-slate-500"
           >
-            └ {readable}
+            &#9492; {readable}
           </td>
         </tr>
       </React.Fragment>
@@ -202,8 +407,9 @@ function CombinationEditor({
         <div>
           <h4 className="text-sm font-black text-[#014040]">Combinations</h4>
           <p className="text-xs text-slate-600">
-            Leave an axis on “Any” to price every option of it at once — one row for
-            “Black, any size”, and a fuller row only where a size needs its own price.
+            Leave an axis on &ldquo;Any&rdquo; to price every option of it at once &mdash; one
+            row for &ldquo;Black, any size&rdquo;, and a fuller row only where a size needs
+            its own price.
           </p>
         </div>
         <button
@@ -212,13 +418,83 @@ function CombinationEditor({
           onClick={() =>
             onChange([
               ...product.combinations,
-              { combinationId: combinationSlug({}, axes), selections: {} },
+              {
+                combinationId: combinationSlug({}, axes),
+                selections: {},
+                // A row added under uniform pricing arrives priced. Arriving
+                // blank would quietly make that combination unsellable, which
+                // is the sort of failure nobody reports.
+                ...(uniform ? sharedPrice() : {}),
+              },
             ])
           }
         >
           <Plus className="h-4 w-4" />
           Add combination
         </button>
+      </div>
+
+      {/* One price for the whole product. */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={uniform}
+            onChange={(event) => {
+              const on = event.target.checked;
+              onPatch({ uniformPricing: on });
+              // Turning it on levels every row to the first row's pair, so what
+              // is stored matches what the seller is now being shown.
+              if (on) {
+                const shared = sharedPrice();
+                onChange(product.combinations.map((combination) => ({ ...combination, ...shared })));
+              }
+            }}
+          />
+          <span>
+            <b>Same price for every combination</b>
+            <span className="block text-xs text-slate-600">
+              Set the price once below. Each combination still has to be listed
+              &mdash; a combination that is not here is not for sale.
+            </span>
+          </span>
+        </label>
+
+        {uniform && (
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            {deliveries.map((delivery) => (
+              <label key={delivery} className={`${labelClass} w-36`}>
+                {DELIVERY_LABELS[delivery]} GHS
+                <input
+                  className={inputClass}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={cedisField(sharedPesewas(delivery))}
+                  onChange={(event) => setShared(delivery, parseCedis(event.target.value))}
+                />
+              </label>
+            ))}
+            <button
+              type="button"
+              className={ghostButton}
+              onClick={() => onChange(combinationsForAxes(axes, sharedPrice()))}
+            >
+              <Plus className="h-4 w-4" />
+              Fill from variants
+            </button>
+            <p className="w-full text-[11px] text-slate-500">
+              &ldquo;Fill from variants&rdquo; replaces the rows below with one per
+              variant, in the order the variants are listed. It is a deliberate
+              press because it discards rows you added by hand.
+            </p>
+          </div>
+        )}
+        {!deliveries.length && (
+          <p className="mt-2 text-xs font-bold text-amber-800">
+            Choose a delivery option above before setting a price.
+          </p>
+        )}
       </div>
 
       {/* Table on a laptop, stacked cards on a phone. Same rows either way. */}
@@ -229,8 +505,8 @@ function CombinationEditor({
               {axes.map((axis) => (
                 <th key={axis.name} className="p-2">{axis.name}</th>
               ))}
-              {deliveries.map((delivery) => (
-                <th key={delivery} className="p-2">{DELIVERY_LABELS[delivery]} ₵</th>
+              {!uniform && deliveries.map((delivery) => (
+                <th key={delivery} className="p-2">{DELIVERY_LABELS[delivery]} GHS</th>
               ))}
               <th className="p-2" />
             </tr>
@@ -238,7 +514,7 @@ function CombinationEditor({
           <tbody className="max-md:block max-md:space-y-3 max-md:p-3">
             {rows.length ? rows : (
               <tr>
-                <td className="p-4 text-sm text-slate-500" colSpan={axes.length + deliveries.length + 1}>
+                <td className="p-4 text-sm text-slate-500" colSpan={axes.length + priceColumns + 1}>
                   No combinations yet. Nothing is purchasable until you add one.
                 </td>
               </tr>
@@ -255,11 +531,37 @@ function CombinationEditor({
 function ImageAssignmentEditor({
   product,
   onChange,
+  upload,
+  canUpload,
 }: {
   product: PreorderProduct;
   onChange: (assignments: PreorderImageAssignment[]) => void;
+  upload: UploadImage;
+  canUpload: boolean;
 }) {
   const axes = product.variantAxes;
+  const [busy, setBusy] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const setAt = (index: number, patch: Partial<PreorderImageAssignment>) =>
+    onChange(
+      product.imageAssignments.map((entry, position) =>
+        position === index ? { ...entry, ...patch } : entry
+      )
+    );
+
+  const pick = async (index: number, files: FileList) => {
+    setBusy(index);
+    setError(null);
+    try {
+      setAt(index, { imagePath: await upload(files[0]) });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -267,7 +569,8 @@ function ImageAssignmentEditor({
           <h4 className="text-sm font-black text-[#014040]">Image assignment</h4>
           <p className="text-xs text-slate-600">
             Separate from combinations, and partial in the same way: assigning to
-            “Black, any size” covers every Black variant.
+            &ldquo;Black, any size&rdquo; covers every Black variant. Choose the
+            variant, then upload the picture for it.
           </p>
         </div>
         <button
@@ -279,6 +582,12 @@ function ImageAssignmentEditor({
           Assign image
         </button>
       </div>
+
+      {!canUpload && product.imageAssignments.length > 0 && (
+        <p className="rounded-xl bg-amber-50 p-3 text-xs font-bold text-amber-900">
+          Give the product an id before uploading &mdash; the images are stored under it.
+        </p>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <table className="w-full border-collapse text-sm max-md:block">
@@ -298,40 +607,49 @@ function ImageAssignmentEditor({
                   key={index}
                   className="border-t border-slate-200 md:align-top max-md:block max-md:rounded-xl max-md:border max-md:border-slate-200 max-md:p-3"
                 >
+                  <td className="pb-2 text-sm font-black text-[#014040] md:hidden">
+                    {readableSelections(assignment.selections, axes) || 'No variants'}
+                  </td>
                   <SelectionRow
                     axes={axes}
                     selections={assignment.selections}
-                    onChange={(selections) =>
-                      onChange(
-                        product.imageAssignments.map((entry, position) =>
-                          position === index ? { ...entry, selections } : entry
-                        )
-                      )
-                    }
+                    onChange={(selections) => setAt(index, { selections })}
                   />
                   <td className="p-2 align-top">
-                    <label className="md:sr-only">
-                      <span className="mb-1 block text-[11px] font-bold text-slate-600 md:hidden">Image</span>
-                      <select
-                        className={inputClass}
-                        value={assignment.imagePath}
-                        onChange={(event) =>
-                          onChange(
-                            product.imageAssignments.map((entry, position) =>
-                              position === index ? { ...entry, imagePath: event.target.value } : entry
-                            )
-                          )
-                        }
-                      >
-                        <option value="">Choose a gallery image…</option>
-                        {product.galleryImagePaths.map((path) => (
-                          <option key={path} value={path}>{path}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <p className="mt-1 text-[11px] text-slate-500 md:hidden">
-                      {readableSelections(assignment.selections, axes) || 'No variants'}
-                    </p>
+                    <span className="mb-1 block text-[11px] font-bold text-slate-600 md:sr-only">Image</span>
+                    <div className="flex items-start gap-3">
+                      {assignment.imagePath ? (
+                        <img
+                          src={preorderMediaUrl(assignment.imagePath)}
+                          alt=""
+                          className="h-16 w-16 shrink-0 rounded-lg border border-slate-200 object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-300 text-[10px] text-slate-400">
+                          None
+                        </span>
+                      )}
+                      <div className="space-y-1">
+                        <ImageUploadButton
+                          label={assignment.imagePath ? 'Replace' : 'Upload image'}
+                          disabled={!canUpload}
+                          busy={busy === index}
+                          onFiles={(files) => void pick(index, files)}
+                        />
+                        {product.galleryImagePaths.length > 0 && (
+                          <select
+                            className={`${inputClass} text-xs`}
+                            value={product.galleryImagePaths.includes(assignment.imagePath) ? assignment.imagePath : ''}
+                            onChange={(event) => setAt(index, { imagePath: event.target.value })}
+                          >
+                            <option value="">or reuse a gallery image…</option>
+                            {product.galleryImagePaths.map((path, position) => (
+                              <option key={path} value={path}>Gallery image {position + 1}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    </div>
                   </td>
                   <td className="p-2 align-top">
                     <button
@@ -357,7 +675,100 @@ function ImageAssignmentEditor({
           </tbody>
         </table>
       </div>
+
+      {error && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-800">{error}</p>}
     </section>
+  );
+}
+
+/* -- categories ----------------------------------------------------------- */
+
+/** A readable, stable document id from a typed name. */
+function slugifyCategory(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Pick a category, or type one that does not exist yet.
+ *
+ * Typing a new name adds it to the list straight away so the seller can carry
+ * on and hang subcategories off it, but it is only written when the product is
+ * saved. Writing on every keystroke, or even on blur, would litter the
+ * collection with half-typed names and typos that then have to be hunted down.
+ */
+function CategoryPicker({
+  label,
+  placeholder,
+  options,
+  valueId,
+  onSelect,
+  onCreate,
+}: {
+  label: string;
+  placeholder: string;
+  options: PreorderCategory[];
+  valueId: string;
+  onSelect: (categoryId: string) => void;
+  onCreate: (name: string) => void;
+}) {
+  const selected = options.find((category) => category.categoryId === valueId);
+  const [typed, setTyped] = useState('');
+  const listId = `preorder-categories-${label.replace(/\s+/g, '-').toLowerCase()}`;
+
+  const commit = () => {
+    const name = typed.trim();
+    if (!name) return;
+    const existing = options.find(
+      (category) => category.name.toLowerCase() === name.toLowerCase()
+    );
+    if (existing) onSelect(existing.categoryId);
+    else onCreate(name);
+    setTyped('');
+  };
+
+  return (
+    <div className={labelClass}>
+      <span>{label}</span>
+      <select
+        className={inputClass}
+        value={valueId}
+        onChange={(event) => onSelect(event.target.value)}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((category) => (
+          <option key={category.categoryId} value={category.categoryId}>
+            {category.name}
+          </option>
+        ))}
+      </select>
+      <div className="flex gap-2 pt-1">
+        <input
+          className={inputClass}
+          list={listId}
+          value={typed}
+          placeholder={`Or type a new ${label.toLowerCase()}`}
+          onChange={(event) => setTyped(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            commit();
+          }}
+        />
+        <datalist id={listId}>
+          {options.map((category) => (
+            <option key={category.categoryId} value={category.name} />
+          ))}
+        </datalist>
+        <button type="button" className={ghostButton} onClick={commit} disabled={!typed.trim()}>
+          Add
+        </button>
+      </div>
+      {selected && (
+        <p className="pt-1 text-[11px] font-normal text-slate-500">
+          Using <b>{selected.name}</b>
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -595,9 +1006,47 @@ export function PreorderSetupSection({
     [editing]
   );
 
-  const topLevel = data.preorderCategories.filter((category) => !category.parentId);
+  /* Categories typed in but not yet written. They are shown alongside the
+     saved ones so subcategories can be added under a brand new parent, and
+     they reach Firestore only when the product is saved. */
+  const [pendingCategories, setPendingCategories] = useState<PreorderCategory[]>([]);
+  const allCategories = [...data.preorderCategories, ...pendingCategories];
+  const topLevel = allCategories.filter((category) => !category.parentId);
   const children = (parentId: string): PreorderCategory[] =>
-    data.preorderCategories.filter((category) => category.parentId === parentId);
+    allCategories.filter((category) => category.parentId === parentId);
+
+  /** Adds a typed category to the list and returns the id to select. */
+  const addCategory = (name: string, parentId: string | null): string => {
+    const base = slugifyCategory(name);
+    let categoryId = base || `category-${allCategories.length + 1}`;
+    // A name that slugs onto an existing id would silently rename that
+    // category on save, so the duplicate gets a suffix instead.
+    for (let n = 2; allCategories.some((entry) => entry.categoryId === categoryId); n += 1) {
+      categoryId = `${base}-${n}`;
+    }
+    setPendingCategories((current) => [...current, { categoryId, name: name.trim(), parentId }]);
+    return categoryId;
+  };
+
+  const canUpload = Boolean(editing?.productId);
+
+  /**
+   * Stores one file and hands back its path.
+   *
+   * It attaches nothing: the caller puts the path into the draft, and the
+   * draft is written by the usual save. That keeps one write per save rather
+   * than one per image, so an upload can never half-save the product.
+   */
+  const uploadImage: UploadImage = async (file) => {
+    if (!editing?.productId) throw new Error('Give the product an id first.');
+    const blob = new Blob([await file.arrayBuffer()], { type: file.type });
+    const { objectPath } = await adminRequest<{ objectPath: string }>(
+      user,
+      `/preorder/products/${encodeURIComponent(editing.productId)}/images`,
+      { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob }
+    );
+    return objectPath;
+  };
 
   const save = async () => {
     if (!editing || validation.errors.length) return;
@@ -605,12 +1054,21 @@ export function PreorderSetupSection({
     setError(null);
     setMessage(null);
     try {
+      // Categories first: a product saved against a category that does not
+      // exist yet renders under no card at all on the storefront.
+      for (const category of pendingCategories) {
+        await adminRequest(user, `/preorder/categories/${encodeURIComponent(category.categoryId)}`, {
+          method: 'PUT',
+          body: JSON.stringify(category),
+        });
+      }
       const response = await adminRequest<{ warnings: string[] }>(
         user,
         `/preorder/products/${encodeURIComponent(editing.productId)}`,
         { method: 'PUT', body: JSON.stringify(editing) }
       );
       await reload();
+      setPendingCategories([]);
       setDraft(null);
       setSelectedId(editing.productId);
       setMessage(
@@ -708,38 +1166,29 @@ export function PreorderSetupSection({
                     onChange={(event) => patch({ description: event.target.value })}
                   />
                 </label>
-                <label className={labelClass}>
-                  Category
-                  <select
-                    className={inputClass}
-                    value={editing.categoryId}
-                    onChange={(event) => patch({ categoryId: event.target.value, subcategoryId: undefined })}
-                  >
-                    <option value="">Choose…</option>
-                    {topLevel.map((category) => (
-                      <option key={category.categoryId} value={category.categoryId}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {/* Only shown once a category with children is chosen. */}
-                {children(editing.categoryId).length > 0 && (
-                  <label className={labelClass}>
-                    Subcategory
-                    <select
-                      className={inputClass}
-                      value={editing.subcategoryId || ''}
-                      onChange={(event) => patch({ subcategoryId: event.target.value || undefined })}
-                    >
-                      <option value="">None</option>
-                      {children(editing.categoryId).map((category) => (
-                        <option key={category.categoryId} value={category.categoryId}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                <CategoryPicker
+                  label="Category"
+                  placeholder="Choose a category…"
+                  options={topLevel}
+                  valueId={editing.categoryId}
+                  onSelect={(categoryId) => patch({ categoryId, subcategoryId: undefined })}
+                  onCreate={(name) => {
+                    const categoryId = addCategory(name, null);
+                    patch({ categoryId, subcategoryId: undefined });
+                  }}
+                />
+                {/* A subcategory needs a parent to hang from, so this appears as
+                    soon as one is chosen rather than only once children exist —
+                    otherwise the first subcategory could never be added. */}
+                {editing.categoryId && (
+                  <CategoryPicker
+                    label="Subcategory"
+                    placeholder="None"
+                    options={children(editing.categoryId)}
+                    valueId={editing.subcategoryId || ''}
+                    onSelect={(subcategoryId) => patch({ subcategoryId: subcategoryId || undefined })}
+                    onCreate={(name) => patch({ subcategoryId: addCategory(name, editing.categoryId) })}
+                  />
                 )}
                 <fieldset className="md:col-span-2">
                   <legend className="text-xs font-bold text-slate-700">Delivery options</legend>
@@ -781,11 +1230,21 @@ export function PreorderSetupSection({
               <CombinationEditor
                 product={editing}
                 onChange={(combinations) => patch({ combinations })}
+                onPatch={patch}
+              />
+
+              <MediaEditor
+                product={editing}
+                onChange={patch}
+                upload={uploadImage}
+                canUpload={canUpload}
               />
 
               <ImageAssignmentEditor
                 product={editing}
                 onChange={(imageAssignments) => patch({ imageAssignments })}
+                upload={uploadImage}
+                canUpload={canUpload}
               />
 
               {validation.errors.length > 0 && (

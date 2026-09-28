@@ -164,6 +164,62 @@ export function lowestPricePesewas(
   return prices.length ? Math.min(...prices) : null;
 }
 
+export interface PreorderDeliveryPrice {
+  delivery: PreorderDelivery;
+  pricePesewas: number;
+  /** Every combination charges exactly this for this delivery, so the card can
+   *  state the price outright instead of hedging with "from". */
+  uniform: boolean;
+}
+
+/**
+ * What the listing card prints: one entry per delivery option the product
+ * offers, cheapest first-hand price and whether that price is the whole story.
+ *
+ * Uniform requires every combination to be priced for that delivery AND to
+ * agree. A combination left blank is a gap, not agreement — saying "GHS 120"
+ * flatly when one variant is unpriced would be a promise the product page then
+ * breaks, so that case keeps its "from".
+ */
+export function preorderCardPricing(product: PreorderProduct): PreorderDeliveryPrice[] {
+  return product.deliveryOptions.flatMap((delivery) => {
+    const prices = product.combinations
+      .map((c) => (delivery === 'express' ? c.priceExpressPesewas : c.priceTwoMonthsPesewas))
+      .filter((price): price is number => typeof price === 'number');
+    if (!prices.length) return [];
+    const lowest = Math.min(...prices);
+    return [{
+      delivery,
+      pricePesewas: lowest,
+      uniform: prices.length === product.combinations.length && prices.every((p) => p === lowest),
+    }];
+  });
+}
+
+/**
+ * Every full combination the axes allow, in the order the axes were entered.
+ *
+ * The first axis varies slowest, so a single Colour axis comes back in exactly
+ * the order the seller typed the colours. Used by the admin's "fill from
+ * variants" button; with no axes it yields the one implicit combination, which
+ * is the same single code path the rest of this file relies on.
+ */
+export function combinationsForAxes(
+  axes: PreorderAxis[],
+  price?: { priceExpressPesewas?: number; priceTwoMonthsPesewas?: number }
+): PreorderCombination[] {
+  return everySelection(axes).map((selections) => ({
+    combinationId: combinationSlug(selections, axes),
+    selections,
+    ...(typeof price?.priceExpressPesewas === 'number'
+      ? { priceExpressPesewas: price.priceExpressPesewas }
+      : {}),
+    ...(typeof price?.priceTwoMonthsPesewas === 'number'
+      ? { priceTwoMonthsPesewas: price.priceTwoMonthsPesewas }
+      : {}),
+  }));
+}
+
 /** What the listing card shows: Express if offered, otherwise Two months. */
 export function previewPricePesewas(
   product: PreorderProduct

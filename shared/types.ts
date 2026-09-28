@@ -802,6 +802,11 @@ export interface PreorderProduct {
   imageAssignments: PreorderImageAssignment[];
   /** Which delivery options this product allows. At least one. */
   deliveryOptions: PreorderDelivery[];
+  /** The seller has declared one price pair for the whole product. Purely the
+   *  admin's intent: the price still lives on every combination, so nothing
+   *  downstream has to know about this. It exists so that a combination added
+   *  later inherits the price instead of silently arriving blank. */
+  uniformPricing?: boolean;
   active: boolean;
   sortOrder?: number;
 }
