@@ -680,7 +680,7 @@ export interface AdminAuditEntry {
   actorUid: string;
   actorEmail?: string;
   action: string;
-  targetType: 'order' | 'licence' | 'service' | 'announcement' | 'product' | 'bundle' | 'laptop' | 'category' | 'settings';
+  targetType: 'order' | 'licence' | 'service' | 'announcement' | 'product' | 'bundle' | 'laptop' | 'category' | 'settings' | 'preorder-product' | 'preorder-category';
   targetId: string;
   orderId?: string;
   details?: Record<string, unknown>;
@@ -740,4 +740,157 @@ export interface HealthResponse {
   timezone: 'Africa/Accra';
   /** 'test' | 'live' | 'unconfigured', from the Paystack key's prefix. */
   paymentMode: string;
+}
+
+/* ------------------------------------------------------------------------ *
+ * Pre-order
+ *
+ * The sellable unit here is the COMBINATION, not the product. A combination
+ * carries its own price and its own existence: if it was not assigned in the
+ * admin portal it is not for sale. There is no stock quantity anywhere in this
+ * model — a pre-order is an intent to buy, not a claim on inventory.
+ *
+ * Nothing here enters the `orders` collection. A pre-order has no payment, so
+ * giving it a paymentStatus would create a field that must never be set and
+ * would put it in the seller's paid-order queue.
+ * ------------------------------------------------------------------------ */
+
+export type PreorderDelivery = 'express' | 'two-months';
+
+/** A named dimension with named options. Order drives selector order. */
+export interface PreorderAxis {
+  name: string;
+  options: string[];
+}
+
+export interface PreorderCombination {
+  /** Stable and addressable: the deferred search feature links to these. */
+  combinationId: string;
+  /** May be PARTIAL. `{Colour: 'Black'}` prices Black in any size. Empty for a
+   *  product with no axes, which gets one implicit combination so that cart and
+   *  pricing keep a single code path. */
+  selections: Record<string, string>;
+  /** Integer pesewas. Absent means this delivery option is not priced here. */
+  priceExpressPesewas?: number;
+  priceTwoMonthsPesewas?: number;
+}
+
+/** Partial in the same way combinations are: Colour-only covers every size. */
+export interface PreorderImageAssignment {
+  selections: Record<string, string>;
+  imagePath: string;
+}
+
+export interface PreorderDetail {
+  label: string;
+  value: string;
+}
+
+export interface PreorderProduct {
+  productId: string;
+  name: string;
+  description: string;
+  details: PreorderDetail[];
+  categoryId: string;
+  subcategoryId?: string;
+  previewImagePath?: string;
+  galleryImagePaths: string[];
+  /** Empty for a product with no variants. */
+  variantAxes: PreorderAxis[];
+  /** At least one, always. */
+  combinations: PreorderCombination[];
+  imageAssignments: PreorderImageAssignment[];
+  /** Which delivery options this product allows. At least one. */
+  deliveryOptions: PreorderDelivery[];
+  active: boolean;
+  sortOrder?: number;
+}
+
+/**
+ * What `GET /api/preorder/catalogue` returns.
+ *
+ * `products` holds only active products, and every image field carries a URL
+ * the browser can load rather than the bucket path Firestore stores. The field
+ * names are deliberately unchanged, so the shared resolver reads the browser's
+ * copy and the server's copy through one code path.
+ */
+export interface PreorderCatalogueResponse {
+  categories: PreorderCategory[];
+  products: PreorderProduct[];
+}
+
+/** Two levels today via parentId, so a third is a data change not a migration. */
+export interface PreorderCategory {
+  categoryId: string;
+  name: string;
+  parentId: string | null;
+  sortOrder?: number;
+}
+
+/**
+ * Item lifecycle.
+ *
+ * `awaiting-order` is a PROVISIONAL name: the brief's diagram did not survive
+ * the paste and names only the last four states, while saying the first two are
+ * set per item. Rename it before the admin screens are built in pass 5.
+ */
+export type PreorderItemStatus =
+  | 'awaiting-order'
+  | 'delivered-in-china'
+  | 'received-by-shipping'
+  | 'received-in-ghana'
+  | 'delivered-to-client';
+
+/** The three a package owns. They cascade to every item inside it. */
+export type PreorderPackageStatus =
+  | 'delivered-in-china'
+  | 'received-by-shipping'
+  | 'received-in-ghana';
+
+export interface PreorderCustomer {
+  name: string;
+  phone: string;
+  email: string;
+  location: string;
+}
+
+export interface PreorderItem {
+  itemId: string;
+  productId: string;
+  combinationId: string;
+  /** Copied at submission, e.g. "Black, XL", so the line still reads correctly
+   *  after an axis is renamed. */
+  selectionLabel: string;
+  productName: string;
+  delivery: PreorderDelivery;
+  /** Integer pesewas, copied at submission. Prices change; past orders must not. */
+  pricePesewas: number;
+  quantity: number;
+  status: PreorderItemStatus;
+  /** Null until the item is grouped into a physical box. */
+  packageId?: string | null;
+}
+
+export interface Preorder {
+  preorderId: string;
+  customer: PreorderCustomer;
+  /** Status and packageId live on the item rather than in parallel maps, which
+   *  drift out of step with the items they index. */
+  items: PreorderItem[];
+  submittedAt: string;
+  lastUpdated: string;
+  sellerAlertStatus?: 'pending' | 'sent' | 'failed';
+  sellerAlertSentAt?: string;
+  sellerAlertError?: string;
+}
+
+export interface PreorderPackage {
+  /** Written on the physical box, so it is the document id too. */
+  packageId: string;
+  label: string;
+  createdAt: string;
+  lastUpdated: string;
+  status: PreorderPackageStatus;
+  /** Closed to new items once it leaves China. */
+  closed: boolean;
 }

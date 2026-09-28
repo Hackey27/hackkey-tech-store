@@ -1,10 +1,31 @@
 import React, { useEffect, useRef } from 'react';
-import { Search, ShoppingBag } from 'lucide-react';
+import { PackagePlus, Search, ShoppingBag } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import { STORE_COPY } from '../config/storeCopy';
 import { CartItem } from './CartView';
 import { CartFlyout } from './CartFlyout';
 import { WhatsAppIcon } from './WhatsAppIcon';
+import { PreorderCartFlyout } from './preorder/PreorderCartFlyout';
+import { PreorderCartLine } from '../utils/usePreorderCart';
+
+/**
+ * The pre-order basket, when the customer is in that section.
+ *
+ * It takes over the cart button in this header rather than adding a second
+ * one: people find the cart by position, so two of them side by side would
+ * mean reading icons to tell which basket is which. The software cart keeps
+ * its contents untouched underneath — nothing here empties or reads it.
+ */
+export interface PreorderCartSlot {
+  lines: PreorderCartLine[];
+  count: number;
+  totalPesewas: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onRemoveLine: (id: string) => void;
+  onSetQuantity: (id: string, quantity: number) => void;
+  onBrowse: () => void;
+}
 
 interface HeaderProps {
   searchQuery: string;
@@ -26,6 +47,11 @@ interface HeaderProps {
    */
   onCheckout: () => void;
   isLandingTransparent?: boolean;
+  /** Toggles the section panel. Sits to the left of the logo. */
+  onToggleSections: () => void;
+  sectionsExpanded: boolean;
+  /** Present only inside the pre-order section. */
+  preorderCart?: PreorderCartSlot;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -40,6 +66,9 @@ export const Header: React.FC<HeaderProps> = ({
   onCartOpenChange,
   onCheckout,
   isLandingTransparent = false,
+  onToggleSections,
+  sectionsExpanded,
+  preorderCart,
 }) => {
   const cartButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -59,6 +88,22 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Main Header */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
         <div className="flex items-center justify-between gap-4">
+          {/* Sections toggle, to the left of the logo. */}
+          <button
+            type="button"
+            onClick={onToggleSections}
+            aria-expanded={sectionsExpanded}
+            aria-label={sectionsExpanded ? STORE_COPY.sections.closeLabel : STORE_COPY.sections.openLabel}
+            title={STORE_COPY.sections.ariaLabel}
+            className="hk-pressable -ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white hover:bg-white/20"
+          >
+            <span aria-hidden="true" className="flex flex-col gap-[3.5px]">
+              <span className="block h-[2px] w-[18px] rounded-full bg-current" />
+              <span className="block h-[2px] w-[18px] rounded-full bg-current" />
+              <span className="block h-[2px] w-[18px] rounded-full bg-current" />
+            </span>
+          </button>
+
           {/* Brand Logo (Replacing HK with User Logo) */}
           <div
             onClick={() => onSelectTab('home')}
@@ -168,19 +213,26 @@ export const Header: React.FC<HeaderProps> = ({
                 md, so this stays the way in. */}
             <button
               ref={cartButtonRef}
-              id="header-cart-btn"
-              onClick={() => onCartOpenChange(!cartOpen)}
-              aria-expanded={cartOpen}
-              aria-controls="header-cart-flyout"
+              id={preorderCart ? 'header-preorder-cart-btn' : 'header-cart-btn'}
+              data-testid={preorderCart ? 'header-preorder-cart-btn' : 'header-cart-btn'}
+              onClick={() => (preorderCart
+                ? preorderCart.onOpenChange(!preorderCart.open)
+                : onCartOpenChange(!cartOpen))}
+              aria-expanded={preorderCart ? preorderCart.open : cartOpen}
+              aria-controls={preorderCart ? 'preorder-cart-flyout' : 'header-cart-flyout'}
               aria-haspopup="dialog"
               className="relative hidden p-2.5 sm:px-3.5 sm:py-2 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm md:flex items-center gap-2 transition-colors shadow-xs cursor-pointer"
-              title={STORE_COPY.navigation.cart}
+              title={preorderCart ? STORE_COPY.preorder.cart.title : STORE_COPY.navigation.cart}
             >
-              <ShoppingBag className="w-4 h-4 text-[#05ef28]" />
-              <span className="hidden sm:inline">{STORE_COPY.navigation.cart}</span>
-              {cartCount > 0 && (
+              {preorderCart
+                ? <PackagePlus className="w-4 h-4 text-[#05ef28]" />
+                : <ShoppingBag className="w-4 h-4 text-[#05ef28]" />}
+              <span className="hidden sm:inline">
+                {preorderCart ? STORE_COPY.preorder.title : STORE_COPY.navigation.cart}
+              </span>
+              {(preorderCart ? preorderCart.count : cartCount) > 0 && (
                 <span className="w-5 h-5 rounded-full bg-[#05ef28] text-[#014040] font-black text-[11px] flex items-center justify-center">
-                  {cartCount}
+                  {preorderCart ? preorderCart.count : cartCount}
                 </span>
               )}
             </button>
@@ -210,8 +262,11 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </div>
+      {/* Both are mounted, each closed unless its own section is showing. The
+          software cart keeps whatever is in it while the customer browses
+          pre-orders — leaving the section must not cost them their basket. */}
       <CartFlyout
-        open={cartOpen}
+        open={cartOpen && !preorderCart}
         items={cartItems}
         triggerRef={cartButtonRef}
         onClose={() => onCartOpenChange(false)}
@@ -219,6 +274,18 @@ export const Header: React.FC<HeaderProps> = ({
         onBrowse={() => onCartOpenChange(false)}
         onRemoveItem={onRemoveCartItem}
       />
+      {preorderCart && (
+        <PreorderCartFlyout
+          open={preorderCart.open}
+          lines={preorderCart.lines}
+          totalPesewas={preorderCart.totalPesewas}
+          triggerRef={cartButtonRef}
+          onClose={() => preorderCart.onOpenChange(false)}
+          onBrowse={preorderCart.onBrowse}
+          onRemoveLine={preorderCart.onRemoveLine}
+          onSetQuantity={preorderCart.onSetQuantity}
+        />
+      )}
     </header>
   );
 };

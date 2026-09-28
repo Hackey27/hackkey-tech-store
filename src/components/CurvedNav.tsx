@@ -1,14 +1,30 @@
 import React, { useEffect, useRef } from 'react';
 import { AnimatePresence, motion, useReducedMotion, useSpring, useTransform } from 'motion/react';
-import { Home, SearchCheck, HelpCircle, FilePlus2, ShoppingBag } from 'lucide-react';
+import { Home, SearchCheck, HelpCircle, FilePlus2, PackagePlus, ShoppingBag } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 import { useHideOnScrollDown } from '../utils/useHideOnScrollDown';
 
 type NavTab = 'home' | 'find-order' | 'help' | 'request' | 'cart';
 
+/**
+ * Replaces what the cart slot shows and does.
+ *
+ * The pre-order section has its own basket. It takes this slot rather than
+ * adding a sixth button: the bar's geometry is built on five columns, and the
+ * cart is the one destination people reach for by position. Same place, its
+ * own icon, its own count — and the software cart it stands in for keeps
+ * everything that was in it.
+ */
+export interface CartSlotOverride {
+  label: string;
+  count: number;
+  onSelect: () => void;
+}
+
 interface CurvedNavProps {
   activeTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
+  cartSlot?: CartSlotOverride;
 }
 
 /*
@@ -33,7 +49,7 @@ const NOTCH_RY = 26;
 const notchMask = (centrePercent: number) =>
   `radial-gradient(${NOTCH_RX}px ${NOTCH_RY}px at ${centrePercent}% 0px, transparent 99%, #000 100%)`;
 
-export const CurvedNav: React.FC<CurvedNavProps> = ({ activeTab, onSelectTab }) => {
+export const CurvedNav: React.FC<CurvedNavProps> = ({ activeTab, onSelectTab, cartSlot }) => {
   const reduceMotion = useReducedMotion();
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   // Movement is the whole point of docking, so reduced motion keeps the bar put.
@@ -121,24 +137,34 @@ export const CurvedNav: React.FC<CurvedNavProps> = ({ activeTab, onSelectTab }) 
         <div className="relative z-10 grid h-full grid-cols-5">
           {NAV_ITEMS.map((item, position) => {
             const isActive = position === activeIndex;
-            const Icon = item.icon;
+            const overridden = item.id === 'cart' && cartSlot ? cartSlot : null;
+            const Icon = overridden ? PackagePlus : item.icon;
+            const label = overridden ? overridden.label : item.label;
             return (
               <button
                 key={item.id}
                 id={`nav-btn-${item.id}`}
+                data-testid={`nav-btn-${item.id}`}
                 ref={(node) => { buttonRefs.current[position] = node; }}
                 type="button"
-                aria-label={item.label}
+                aria-label={label}
                 aria-current={isActive ? 'page' : undefined}
-                onClick={() => onSelectTab(item.id)}
+                onClick={() => (overridden ? overridden.onSelect() : onSelectTab(item.id))}
                 onKeyDown={(event) => onKeyDown(event, position)}
                 className={`hk-pressable flex cursor-pointer select-none flex-col items-center justify-end gap-1 rounded-[20px] pb-3.5 ${
                   isActive ? 'text-[#014040]' : 'text-slate-500 hover:text-[#014040]'
                 }`}
               >
-                <Icon className="hk-nav-icon h-[18px] w-[18px] stroke-[2]" data-hidden={isActive} aria-hidden />
+                <span className="relative flex">
+                  <Icon className="hk-nav-icon h-[18px] w-[18px] stroke-[2]" data-hidden={isActive} aria-hidden />
+                  {overridden && overridden.count > 0 && (
+                    <span className="absolute -right-2.5 -top-1.5 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-[#05ef28] px-1 text-[9px] font-black text-[#014040]">
+                      {overridden.count}
+                    </span>
+                  )}
+                </span>
                 <span className={`text-[10px] leading-none tracking-tight ${isActive ? 'font-black' : 'font-medium'}`}>
-                  {item.label}
+                  {label}
                 </span>
               </button>
             );

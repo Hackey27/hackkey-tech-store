@@ -144,3 +144,9 @@ vite.config.ts.timestamp-*
 
 # Server bundle output
 dist-server
+
+# Local agent tooling and generated analysis output
+.agents/
+.claude/
+graphify-out/
+skills-lock.json

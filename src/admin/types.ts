@@ -1,4 +1,4 @@
-import { Announcement, Bundle, CatalogueItemKind, Category, CustomerRequest, LandingSettings, Laptop, LicencePoolEntry, Order, PaymentSettings, PricingConfig, Product, Service, SupportSettings } from '../../shared/types';
+import { Announcement, Bundle, CatalogueItemKind, Category, CustomerRequest, LandingSettings, Laptop, LicencePoolEntry, Order, PaymentSettings, PreorderCategory, PreorderProduct, PricingConfig, Product, Service, SupportSettings } from '../../shared/types';
 
 export interface AdminMediaItem {
   kind: CatalogueItemKind | 'category';
@@ -43,6 +43,8 @@ export interface AdminData {
   payments: PaymentSettings;
   support: SupportSettings;
   variants: VariantSummary[];
+  preorderProducts: PreorderProduct[];
+  preorderCategories: PreorderCategory[];
 }
 
 export interface ApiValidationError {

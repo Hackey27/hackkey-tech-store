@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'path';
 import { HealthResponse } from './shared/types';
 import { getCatalogue } from './server/catalogue';
+import { getPreorderCatalogue } from './server/preorderCatalogue';
 import {
   attachDocument,
   createOrders,
@@ -230,6 +231,18 @@ async function startServer() {
       res.json({ tools: publicSupportTools(await getSupportSettings()) });
     } catch (err) {
       failed(res, err, 'Failed to retrieve support tools');
+    }
+  });
+
+  // The pre-order section's whole catalogue in one response: it is small, and
+  // a product page needs its product's combinations before it can price
+  // anything, so splitting it per product would only cost a second round trip.
+  app.get('/api/preorder/catalogue', async (_req: Request, res: Response) => {
+    try {
+      res.setHeader('Cache-Control', 'public, max-age=60');
+      res.json(await getPreorderCatalogue());
+    } catch (err) {
+      failed(res, err, 'Failed to retrieve the pre-order catalogue');
     }
   });
 

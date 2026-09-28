@@ -25,7 +25,14 @@ export const COLLECTIONS = {
   reviews: 'reviews',
   adminAudit: 'admin_audit',
   settings: 'settings',
-  storeSettings: 'storeSettings'
+  storeSettings: 'storeSettings',
+  // Pre-order. Namespaced rather than sharing `products` and `categories`,
+  // which already mean software: two shapes in one collection would break the
+  // catalogue's own queries.
+  preorderCategories: 'preorderCategories',
+  preorderProducts: 'preorderProducts',
+  preorders: 'preorders',
+  preorderPackages: 'preorderPackages'
 } as const;
 
 let db: Firestore | null = null;

@@ -19,6 +19,7 @@ import { invalidateCatalogueCache } from './catalogue';
 import { AdminActor } from './adminAuth';
 import { LicenceImportRow, validateLicenceRows, validateServiceDefinition } from './adminValidation';
 import { COLLECTIONS, getFirestore } from './firestore';
+import { listPreorderCategories, listPreorderProducts } from './preorderData';
 import {
   defaultCustomerInputType,
   defaultDeliveryCodeType,
@@ -73,7 +74,7 @@ export async function listVariantSummaries(): Promise<VariantSummary[]> {
 
 export async function adminBootstrap() {
   const db = getFirestore();
-  const [ordersSnap, requestsSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, bundlesSnap, laptopsSnap, categoriesSnap, landingSnap, variants, pricing, payments, support] = await Promise.all([
+  const [ordersSnap, requestsSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, bundlesSnap, laptopsSnap, categoriesSnap, landingSnap, variants, pricing, payments, support, preorderProducts, preorderCategories] = await Promise.all([
     db.collection(COLLECTIONS.orders).get(),
     db.collection(COLLECTIONS.requests).get(),
     db.collection(COLLECTIONS.licencePool).get(),
@@ -87,7 +88,10 @@ export async function adminBootstrap() {
     listVariantSummaries(),
     getPricingConfig(),
     getPaymentSettings(),
-    getSupportSettings()
+    getSupportSettings(),
+    // Through the pre-order data module, never getFirestore() directly.
+    listPreorderProducts(true),
+    listPreorderCategories()
   ]);
 
   const orders = ordersSnap.docs
@@ -138,7 +142,7 @@ export async function adminBootstrap() {
     ...categories.map((item) => ({ kind: 'category' as const, itemId: item.categoryId, name: item.name, imagePath: item.imagePath, iconImagePath: item.iconImagePath, sortOrder: item.sortOrder }))
   ].sort((a, b) => a.name.localeCompare(b.name));
 
-  return { orders, requests, licences, services, announcements, products, bundles, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {}, pricing, payments, support };
+  return { orders, requests, licences, services, announcements, products, bundles, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {}, pricing, payments, support, preorderProducts, preorderCategories };
 }
 
 export async function savePricingConfiguration(input: Partial<PricingConfig>): Promise<PricingConfig> {

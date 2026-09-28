@@ -34,7 +34,9 @@ import { savePaymentSettings } from './paymentSettings';
 import { saveSupportSettings } from './supportSettings';
 import { setPaymentLater } from './paymentReminders';
 import { buildOrderNotification, validateNotificationPurpose } from '../src/utils/orderNotification';
-import { CustomerNotificationPurpose, Order } from '../shared/types';
+import { CustomerNotificationPurpose, Order, PreorderCategory, PreorderProduct } from '../shared/types';
+import { savePreorderCategory, savePreorderProduct } from './preorderData';
+import { invalidatePreorderCatalogueCache } from './preorderCatalogue';
 import { COLLECTIONS, getFirestore } from './firestore';
 import {
   catalogueImageObjectPath,
@@ -649,6 +651,39 @@ export function createAdminRouter(): Router {
       await writeAdminAudit(actor(req), { action: 'product.configuration-save', targetType: 'product', targetId: product.productId });
       res.json({ product });
     } catch (err) { routeError(res, err, 'Failed to save product configuration.'); }
+  });
+
+  /* -- pre-order setup ---------------------------------------------------
+   *
+   * savePreorderProduct runs validatePreorderProduct and throws on an error,
+   * so a duplicate selection cannot be written by this route even if the
+   * portal's own check were bypassed. Warnings come back in the response for
+   * the seller to read: a deliberate gap in the variant grid is legitimate.  */
+
+  router.put('/preorder/products/:productId', async (req: AdminRequest, res) => {
+    try {
+      const product: PreorderProduct = { ...req.body, productId: String(req.params.productId) };
+      const { warnings } = await savePreorderProduct(product);
+      // The storefront caches this catalogue for 60 seconds. Without this a
+      // seller saves, reloads the shop, sees the old product and saves again.
+      invalidatePreorderCatalogueCache();
+      await writeAdminAudit(actor(req), { action: 'preorder.product-save', targetType: 'preorder-product', targetId: product.productId });
+      res.json({ product, warnings });
+    } catch (err) { routeError(res, err, 'Failed to save the pre-order product.'); }
+  });
+
+  router.put('/preorder/categories/:categoryId', async (req: AdminRequest, res) => {
+    try {
+      const category: PreorderCategory = {
+        ...req.body,
+        categoryId: String(req.params.categoryId),
+        parentId: req.body?.parentId || null
+      };
+      await savePreorderCategory(category);
+      invalidatePreorderCatalogueCache();
+      await writeAdminAudit(actor(req), { action: 'preorder.category-save', targetType: 'preorder-category', targetId: category.categoryId });
+      res.json({ category });
+    } catch (err) { routeError(res, err, 'Failed to save the pre-order category.'); }
   });
 
   router.put('/categories/:categoryId', async (req: AdminRequest, res) => {

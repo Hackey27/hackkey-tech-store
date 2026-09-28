@@ -34,17 +34,33 @@ import { fulfilmentTimeState } from './utils/fulfilmentTime';
 import { cartDeliveryNotice } from './utils/cartDeliveryNotice';
 import { DeliveryWindowGate } from './components/DeliveryWindowGate';
 import { CardSoftwareChoice, CardChoiceRequest, availableCardChoices } from './components/CardSoftwareChoice';
+import { SectionNav } from './components/SectionNav';
+import { SectionPlaceholder } from './components/SectionPlaceholder';
+import { SECTION_TABS, SectionId, sectionForPath } from './config/sections';
+import { useSectionShell } from './utils/useSectionShell';
+import { PreorderSection } from './components/preorder/PreorderSection';
+import { usePreorderCart } from './utils/usePreorderCart';
 
 type StoreRoute =
   | { view: 'home' }
   | { view: 'category'; categoryId: string }
   | { view: 'product'; itemId: string }
   | { view: 'order-access'; orderId: string }
-  | { view: 'payment-return' };
+  | { view: 'payment-return' }
+  /** The pre-order section. `productId` present means one product's page. */
+  | { view: 'preorder'; productId?: string }
+  /** A section with a tab but no content yet. Software and Services is never one. */
+  | { view: 'section'; section: Exclude<SectionId, 'software'> };
 
 function currentRoute(): StoreRoute {
   const path = window.location.pathname;
   if (path === '/payment/return') return { view: 'payment-return' };
+  const section = sectionForPath(path);
+  if (section.id === 'preorder') {
+    const preorderProduct = path.match(/^\/preorder\/([^/]+)\/?$/);
+    return { view: 'preorder', productId: preorderProduct ? decodeURIComponent(preorderProduct[1]) : undefined };
+  }
+  if (section.id !== 'software') return { view: 'section', section: section.id };
   const category = path.match(/^\/category\/([^/]+)\/?$/);
   if (category) return { view: 'category', categoryId: decodeURIComponent(category[1]) };
   const product = path.match(/^\/product\/([^/]+)\/?$/);
@@ -58,6 +74,7 @@ export const App: React.FC = () => {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [paymentOptions, setPaymentOptions] = useState<PublicPaymentOptions | null>(null);
   const [route, setRoute] = useState<StoreRoute>(() => currentRoute());
+  const shell = useSectionShell();
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +85,10 @@ export const App: React.FC = () => {
   // Cart state
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+  // The pre-order basket. A separate hook holding separate lines: a customer
+  // can be buying a licence and pre-ordering a laptop at the same time, and
+  // neither basket may empty or price the other.
+  const preorderCart = usePreorderCart();
   const [cardChoice, setCardChoice] = useState<CardChoiceRequest | null>(null);
   const [buyNowItem, setBuyNowItem] = useState<CartItem | null>(null);
   // A snapshot, not a live reference: submitting empties the cart, and the
@@ -309,10 +330,29 @@ export const App: React.FC = () => {
     );
   }
 
+  const activeSection: SectionId =
+    route.view === 'preorder' ? 'preorder' : route.view === 'section' ? route.section : 'software';
+  // The nav's cart slot belongs to whichever section the customer is in.
+  const inPreorder = route.view === 'preorder';
+
   return (
     <div className="min-h-screen flex flex-col bg-[#f7faf9] text-slate-900 selection:bg-[#05ef28] selection:text-[#014040]">
+      <SectionNav
+        activeSection={activeSection}
+        onSelectSection={(section) => {
+          const tab = SECTION_TABS.find((candidate) => candidate.id === section);
+          if (!tab) return;
+          navigate(tab.path);
+          if (tab.id === 'software') setActiveTab('home');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        shell={shell}
+      />
+
       {/* Clean Storefront Header */}
       <Header
+        onToggleSections={shell.toggle}
+        sectionsExpanded={shell.collapse < 0.5}
         searchQuery={searchQuery}
         onSearchChange={(q) => {
           setSearchQuery(q);
@@ -337,6 +377,16 @@ export const App: React.FC = () => {
         onCartOpenChange={setCartOpen}
         onCheckout={() => setCartCheckoutItems(cartItems)}
         isLandingTransparent={landingActive && !landingPassed}
+        preorderCart={inPreorder ? {
+          lines: preorderCart.lines,
+          count: preorderCart.count,
+          totalPesewas: preorderCart.totalPesewas,
+          open: preorderCart.open,
+          onOpenChange: preorderCart.setOpen,
+          onRemoveLine: preorderCart.remove,
+          onSetQuantity: preorderCart.setQuantity,
+          onBrowse: () => { preorderCart.setOpen(false); navigate('/preorder'); },
+        } : undefined}
       />
 
       <SearchResultsOverlay
@@ -348,7 +398,9 @@ export const App: React.FC = () => {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 pb-20 md:pb-12">
+      {/* The panel pushes the page's content across, but never the top bar: the
+          logo and the hamburger stay in one place across every section. */}
+      <main className="hk-section-shift flex-1 pb-20 md:pb-12" style={{ paddingLeft: shell.shiftPx }}>
         {route.view === 'category' && (
           isLoading ? (
             <div className="mx-auto max-w-7xl px-4 py-16 text-center text-sm font-bold text-[#014040]">{STORE_COPY.catalog.loading}</div>
@@ -385,6 +437,22 @@ export const App: React.FC = () => {
         )}
 
         {route.view === 'order-access' && <FindOrderView catalogItems={catalog?.products || []} paymentOptions={paymentOptions || undefined} sharedOrderId={route.orderId} sharedAccessToken={new URLSearchParams(window.location.search).get('access') || ''} />}
+
+        {route.view === 'preorder' && (
+          <PreorderSection
+            productId={route.productId}
+            onOpenProduct={(productId) => navigate(`/preorder/${encodeURIComponent(productId)}`)}
+            onBack={() => navigateBack('/preorder')}
+            onAdd={preorderCart.add}
+          />
+        )}
+
+        {route.view === 'section' && (
+          <SectionPlaceholder
+            tab={SECTION_TABS.find((tab) => tab.id === route.section)!}
+            onBack={() => navigateBack('/')}
+          />
+        )}
 
         {/* Tab 1: Storefront Home */}
         {route.view === 'home' && activeTab === 'home' && (
@@ -588,6 +656,11 @@ export const App: React.FC = () => {
       {/* Mobile Fixed Bottom Navigation */}
       <CurvedNav
         activeTab={route.view === 'order-access' ? 'find-order' : activeTab}
+        cartSlot={inPreorder ? {
+          label: STORE_COPY.preorder.title,
+          count: preorderCart.count,
+          onSelect: () => preorderCart.setOpen(true),
+        } : undefined}
         onSelectTab={(tab) => {
           // The cart is a flyout rather than a page, same as the header's cart
           // button. Setting it as the active tab would show an empty page.
@@ -600,7 +673,7 @@ export const App: React.FC = () => {
       />
 
       {/* Storefront footer */}
-      <footer className={`${route.view === 'home' && activeTab === 'home' ? '' : 'hidden md:block'} hk-brand-pattern hk-pattern-outline hk-footer-pattern relative border-t border-[#025656] bg-[#014040] pb-24 pt-9 text-xs text-white md:pb-8`}>
+      <footer style={{ paddingLeft: shell.shiftPx }} className={`hk-section-shift ${route.view === 'home' && activeTab === 'home' ? '' : 'hidden md:block'} hk-brand-pattern hk-pattern-outline hk-footer-pattern relative border-t border-[#025656] bg-[#014040] pb-24 pt-9 text-xs text-white md:pb-8`}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 gap-8 border-b border-white/20 pb-7 md:grid-cols-3">
             <div className="space-y-3">

@@ -94,8 +94,12 @@ function machineCodeType(variants: Variant[]): MachineCodeType {
 }
 
 /** Storage-backed catalogue images stay private in the bucket. The stable
- *  application URL validates the prefix before streaming them to a customer. */
-function catalogueImageUrl(value?: string): string | undefined {
+ *  application URL validates the prefix before streaming them to a customer.
+ *
+ *  Exported because the pre-order catalogue serves images from the same bucket
+ *  through the same route. A second copy of this rule would be a second place
+ *  for the `catalogue/` prefix check to be forgotten. */
+export function catalogueImageUrl(value?: string): string | undefined {
   if (!value) return undefined;
   if (/^https?:\/\//i.test(value)) return value;
   if (!value.startsWith('catalogue/')) return undefined;

@@ -29,6 +29,88 @@ export const STORE_COPY = {
     ariaLabel: 'Main navigation',
   },
 
+  // Section shell (the hamburger panel down the left)
+  sections: {
+    ariaLabel: 'Store sections',
+    openLabel: 'Open the store sections',
+    closeLabel: 'Close the store sections',
+    comingSoon: 'Coming soon',
+    comingSoonNote: 'This section is being built. Everything already on sale stays where it is until it moves here.',
+    software: {
+      label: 'Software and Services',
+      caption: 'Licences, research tools and support',
+    },
+    laptops: {
+      label: 'Laptops on sale',
+      caption: 'Browse laptops in the main catalogue for now',
+    },
+    preorder: {
+      label: 'Pre-order',
+      caption: 'Order now, delivered in weeks',
+    },
+    hacks: {
+      label: 'Hack-this',
+      caption: 'Guides and fixes from the bench',
+    },
+    technicians: {
+      label: 'For technicians',
+      caption: 'Tools and parts for the trade',
+    },
+  },
+
+  // The pre-order section. Its own block rather than reusing the software
+  // copy: "Add to cart" and "Pre-order this" are different promises, and a
+  // customer reading the second should not be told about instant delivery.
+  preorder: {
+    title: 'Pre-order',
+    lead: 'Order it now and we bring it in. Pick what you want, choose how fast you need it, and we do the rest.',
+    itemCount: (count: number) => `${count} item${count === 1 ? '' : 's'} to pre-order`,
+    allCategories: 'Everything',
+    empty: 'Nothing is open for pre-order just yet. Check back soon.',
+    emptyCategory: 'Nothing in this group yet.',
+    loading: 'Loading pre-orders…',
+    loadFailed: 'We could not load the pre-order catalogue.',
+    retry: 'Try again',
+    back: 'Back to pre-orders',
+    notFoundTitle: 'We could not find that pre-order',
+    notFoundDescription: 'It may have been taken down. Everything still open is on the pre-order page.',
+    /** The listing card. "from" because the price shown is the cheapest
+     *  combination, and most products have a dearer one. */
+    fromPrice: (priceStr: string) => `from ${priceStr}`,
+    askForPrice: 'Ask for price',
+    delivery: {
+      label: 'Delivery',
+      express: 'Express',
+      twoMonths: 'Two months',
+      expressNote: 'Faster, at a higher price',
+      twoMonthsNote: 'The cheaper wait',
+    },
+    choosePrompt: (axes: string[]) =>
+      `Choose ${axes.map((axis) => axis.toLowerCase()).join(' and ')} to see the price`,
+    unavailableOption: 'Not available with what you have chosen',
+    addToCart: 'Add to pre-order',
+    details: 'Details',
+    cart: {
+      title: 'Your pre-order',
+      openLabel: 'Open your pre-order basket',
+      closeLabel: 'Close your pre-order basket',
+      lineCount: (count: number) => `${count} line${count === 1 ? '' : 's'} ready`,
+      empty: 'Nothing here yet',
+      emptyDescription: 'Pick something from the pre-order page and it will show up here.',
+      browse: 'Browse pre-orders',
+      quantity: 'Quantity',
+      increase: 'One more',
+      decrease: 'One fewer',
+      remove: (name: string) => `Remove ${name} from your pre-order`,
+      total: 'Total',
+      continue: 'Continue browsing',
+      /** Shown under the total. Pre-order prices are quoted per delivery
+       *  speed, and a customer should see which one they picked before they
+       *  commit to anything. */
+      note: 'Prices are held for each delivery speed you chose.',
+    },
+  },
+
   // Hero section
   hero: {
     title: 'Hack-Key Tech Store',
@@ -424,6 +506,7 @@ export const ADMIN_COPY = {
     pricing: 'Pricing & promotions',
     payments: 'Payments',
     support: 'Support tools',
+    preorder: 'Pre-order setup',
   },
   support: {
     title: 'Remote support tools',
