@@ -90,6 +90,16 @@ export const STORE_COPY = {
     unavailableOption: 'Not available with what you have chosen',
     addToCart: 'Add to pre-order',
     openImage: 'Open this image',
+    search: {
+      ariaLabel: (query: string) => `Pre-order results for ${query}`,
+      heading: (query: string) => `Pre-orders matching \u201c${query}\u201d`,
+      searching: 'Searching pre-orders…',
+      count: (count: number) => `${count} match${count === 1 ? '' : 'es'}`,
+      close: 'Close pre-order results',
+      wholeProduct: 'All variants',
+      emptyTitle: 'Nothing in pre-orders matches that',
+      emptyBody: 'Try a product name, or a colour or size you are after.',
+    },
     addToPreorder: 'Add to pre-order',
     chooseOptions: 'Choose options',
     filters: {

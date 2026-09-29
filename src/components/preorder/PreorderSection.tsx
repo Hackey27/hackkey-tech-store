@@ -15,6 +15,10 @@ interface PreorderSectionProps {
   onAdd: (addition: PreorderCartAddition) => void;
   filtersOpen: boolean;
   onFiltersOpenChange: (open: boolean) => void;
+  /** From ?combination= on the current URL. */
+  combinationId?: string;
+  /** Lets the section hand its catalogue up for searching. */
+  onProductsLoaded?: (products: PreorderProduct[]) => void;
 }
 
 /**
@@ -34,6 +38,8 @@ export const PreorderSection: React.FC<PreorderSectionProps> = ({
   onAdd,
   filtersOpen,
   onFiltersOpenChange,
+  combinationId,
+  onProductsLoaded,
 }) => {
   const [catalogue, setCatalogue] = useState<PreorderCatalogueResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,7 +51,9 @@ export const PreorderSection: React.FC<PreorderSectionProps> = ({
     try {
       const response = await fetch('/api/preorder/catalogue');
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setCatalogue((await response.json()) as PreorderCatalogueResponse);
+      const loaded = (await response.json()) as PreorderCatalogueResponse;
+      setCatalogue(loaded);
+      onProductsLoaded?.(loaded.products);
     } catch (err) {
       console.error('[preorder] failed to load the catalogue:', err);
       setError(STORE_COPY.preorder.loadFailed);
@@ -140,7 +148,14 @@ export const PreorderSection: React.FC<PreorderSectionProps> = ({
         </div>
       );
     }
-    return <PreorderProductView product={product} onBack={onBack} onAdd={onAdd} />;
+    return (
+      <PreorderProductView
+        product={product}
+        onBack={onBack}
+        onAdd={onAdd}
+        initialCombinationId={combinationId}
+      />
+    );
   }
 
   return (

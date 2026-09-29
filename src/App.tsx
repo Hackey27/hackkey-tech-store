@@ -40,6 +40,9 @@ import { SECTION_TABS, SectionId, sectionForPath } from './config/sections';
 import { useSectionShell } from './utils/useSectionShell';
 import { PreorderSection } from './components/preorder/PreorderSection';
 import { PreorderCheckoutView } from './components/preorder/PreorderCheckoutView';
+import { PreorderSearchOverlay } from './components/preorder/PreorderSearchOverlay';
+import { preorderResultHref, searchPreorder } from './utils/preorderSearch';
+import type { PreorderProduct } from '../shared/types';
 import { usePreorderCart } from './utils/usePreorderCart';
 
 type StoreRoute =
@@ -99,6 +102,13 @@ export const App: React.FC = () => {
      behind the bottom bar's Filters button, which is the only reason this
      lives up here rather than inside the listing. */
   const [preorderFiltersOpen, setPreorderFiltersOpen] = useState(false);
+  /* Lifted so the header's search box can reach it. The section still owns the
+     fetch; this is the same list, not a second copy. */
+  const [preorderProducts, setPreorderProducts] = useState<PreorderProduct[]>([]);
+  const preorderResults = useMemo(
+    () => (inPreorder ? searchPreorder(preorderProducts, searchQuery) : []),
+    [inPreorder, preorderProducts, searchQuery]
+  );
   const [cardChoice, setCardChoice] = useState<CardChoiceRequest | null>(null);
   const [buyNowItem, setBuyNowItem] = useState<CartItem | null>(null);
   // A snapshot, not a live reference: submitting empties the cart, and the
@@ -383,7 +393,9 @@ export const App: React.FC = () => {
         searchQuery={searchQuery}
         onSearchChange={(q) => {
           setSearchQuery(q);
-          if (q.trim()) {
+          // In the pre-order section the same box searches pre-orders, so it
+          // must not bounce the customer back to the software storefront.
+          if (q.trim() && !inPreorder) {
             if (route.view !== 'home') navigate('/');
             setActiveTab('home');
             setShowAllSoftware(true);
@@ -418,6 +430,15 @@ export const App: React.FC = () => {
         } : undefined}
       />
 
+      {inPreorder ? (
+        <PreorderSearchOverlay
+          query={searchQuery}
+          results={preorderResults}
+          loading={false}
+          onClose={() => setSearchQuery('')}
+          onSelect={(result) => { setSearchQuery(''); navigate(preorderResultHref(result)); }}
+        />
+      ) : (
       <SearchResultsOverlay
         query={searchQuery}
         items={searchResults}
@@ -425,6 +446,7 @@ export const App: React.FC = () => {
         onClose={() => setSearchQuery('')}
         onSelect={(item) => { setSearchQuery(''); openProduct(item); }}
       />
+      )}
 
       {/* Main Content Area */}
       {/* The panel overlays this rather than displacing it. Nothing on the page
@@ -475,6 +497,8 @@ export const App: React.FC = () => {
             onAdd={preorderCart.add}
             filtersOpen={preorderFiltersOpen}
             onFiltersOpenChange={setPreorderFiltersOpen}
+            combinationId={new URLSearchParams(window.location.search).get('combination') || undefined}
+            onProductsLoaded={setPreorderProducts}
           />
         )}
 

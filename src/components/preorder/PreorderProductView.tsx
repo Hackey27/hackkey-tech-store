@@ -15,6 +15,8 @@ interface PreorderProductViewProps {
   product: PreorderProduct;
   onBack: () => void;
   onAdd: (addition: PreorderCartAddition) => void;
+  /** From ?combination= on a shared or searched link. */
+  initialCombinationId?: string;
 }
 
 const DELIVERY_LABELS: Record<PreorderDelivery, string> = {
@@ -143,8 +145,22 @@ export const PreorderProductView: React.FC<PreorderProductViewProps> = ({
   product,
   onBack,
   onAdd,
+  initialCombinationId,
 }) => {
-  const [selections, setSelections] = useState<PreorderSelections>({});
+  /* A linked combination preselects the axes it names, and only those. A
+     partial combination such as {Colour: Black} therefore lands with Black
+     chosen and the size still open, which is exactly what that combination
+     means. An id that no longer exists preselects nothing rather than
+     erroring — the link still opens the product. */
+  const preselected = (): PreorderSelections => {
+    if (!initialCombinationId) return {};
+    const combination = product.combinations.find(
+      (entry) => entry.combinationId === initialCombinationId
+    );
+    return combination ? { ...combination.selections } : {};
+  };
+
+  const [selections, setSelections] = useState<PreorderSelections>(preselected);
   const [delivery, setDelivery] = useState<PreorderDelivery>(
     () => product.deliveryOptions[0] || 'express'
   );
@@ -152,9 +168,10 @@ export const PreorderProductView: React.FC<PreorderProductViewProps> = ({
   // Switching products through a shared link resets the page rather than
   // carrying one product's Colour over to another that happens to share it.
   useEffect(() => {
-    setSelections({});
+    setSelections(preselected());
     setDelivery(product.deliveryOptions[0] || 'express');
-  }, [product.productId, product.deliveryOptions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.productId, initialCombinationId]);
 
   const resolved = useMemo(
     () => resolvePreorderSelection(product, selections),
