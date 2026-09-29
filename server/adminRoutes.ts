@@ -35,8 +35,24 @@ import { saveSupportSettings } from './supportSettings';
 import { setPaymentLater } from './paymentReminders';
 import { buildOrderNotification, validateNotificationPurpose } from '../src/utils/orderNotification';
 import { CustomerNotificationPurpose, Order, PreorderCategory, PreorderProduct } from '../shared/types';
-import { savePreorderCategory, savePreorderProduct } from './preorderData';
+import { assignItemToPackage, createPreorderPackage, savePreorderCategory, savePreorderProduct, setPackageStatus, setPreorderItemStatus } from './preorderData';
 import { invalidatePreorderCatalogueCache } from './preorderCatalogue';
+import { PreorderItemStatus, PreorderPackageStatus } from '../shared/types';
+
+/** The five item statuses and the three a package owns, in order. Kept here so
+ *  a body cannot smuggle in a status the admin screens never offer. */
+const PREORDER_ITEM_STATUSES: PreorderItemStatus[] = [
+  'awaiting-order',
+  'delivered-in-china',
+  'received-by-shipping',
+  'received-in-ghana',
+  'delivered-to-client',
+];
+const PREORDER_PACKAGE_STATUSES: PreorderPackageStatus[] = [
+  'delivered-in-china',
+  'received-by-shipping',
+  'received-in-ghana',
+];
 import { COLLECTIONS, getFirestore } from './firestore';
 import {
   catalogueImageObjectPath,
@@ -720,6 +736,82 @@ export function createAdminRouter(): Router {
       await deleteCatalogueImage(objectPath);
       res.json({ success: true });
     } catch (err) { routeError(res, err, 'Failed to remove pre-order artwork.'); }
+  });
+
+  /* -- pre-order management ----------------------------------------------
+   *
+   * Statuses one and two, and the last, are set on an item. Three and four are
+   * set on the PACKAGE and cascade to everything inside it, which is what the
+   * transaction in preorderData guarantees: a partial write would leave some
+   * items claiming to be in Ghana and others still with the shipper, with
+   * nothing on screen to say which is right.                                */
+
+  router.put('/preorder/orders/:preorderId/items/:itemId/status', async (req: AdminRequest, res) => {
+    try {
+      const status = String(req.body?.status || '') as PreorderItemStatus;
+      if (!PREORDER_ITEM_STATUSES.includes(status)) {
+        return res.status(400).json({ error: 'That is not a pre-order item status.' });
+      }
+      await setPreorderItemStatus(String(req.params.preorderId), String(req.params.itemId), status);
+      await writeAdminAudit(actor(req), {
+        action: 'preorder.item-status',
+        targetType: 'preorder',
+        targetId: String(req.params.preorderId),
+        details: { itemId: String(req.params.itemId), status },
+      });
+      res.json({ success: true });
+    } catch (err) { routeError(res, err, 'Failed to update the item status.'); }
+  });
+
+  router.post('/preorder/packages', async (req: AdminRequest, res) => {
+    try {
+      const packageId = String(req.body?.packageId || '').trim();
+      const label = String(req.body?.label || '').trim();
+      if (!packageId) return res.status(400).json({ error: 'A package needs the identifier written on the box.' });
+      const now = new Date().toISOString();
+      await createPreorderPackage({
+        packageId,
+        label: label || packageId,
+        createdAt: now,
+        lastUpdated: now,
+        status: 'delivered-in-china',
+        closed: false,
+      });
+      await writeAdminAudit(actor(req), { action: 'preorder.package-create', targetType: 'preorder-package', targetId: packageId });
+      res.json({ success: true });
+    } catch (err) { routeError(res, err, 'Failed to create the package.'); }
+  });
+
+  router.put('/preorder/orders/:preorderId/items/:itemId/package', async (req: AdminRequest, res) => {
+    try {
+      const packageId = String(req.body?.packageId || '').trim();
+      if (!packageId) return res.status(400).json({ error: 'Choose a package.' });
+      await assignItemToPackage(String(req.params.preorderId), String(req.params.itemId), packageId);
+      await writeAdminAudit(actor(req), {
+        action: 'preorder.package-assign',
+        targetType: 'preorder',
+        targetId: String(req.params.preorderId),
+        details: { itemId: String(req.params.itemId), packageId },
+      });
+      res.json({ success: true });
+    } catch (err) { routeError(res, err, 'Failed to assign the item to that package.'); }
+  });
+
+  router.put('/preorder/packages/:packageId/status', async (req: AdminRequest, res) => {
+    try {
+      const status = String(req.body?.status || '') as PreorderPackageStatus;
+      if (!PREORDER_PACKAGE_STATUSES.includes(status)) {
+        return res.status(400).json({ error: 'That is not a package status.' });
+      }
+      const { itemsUpdated } = await setPackageStatus(String(req.params.packageId), status);
+      await writeAdminAudit(actor(req), {
+        action: 'preorder.package-status',
+        targetType: 'preorder-package',
+        targetId: String(req.params.packageId),
+        details: { status, itemsUpdated },
+      });
+      res.json({ itemsUpdated });
+    } catch (err) { routeError(res, err, 'Failed to move the package on.'); }
   });
 
   router.put('/preorder/categories/:categoryId', async (req: AdminRequest, res) => {

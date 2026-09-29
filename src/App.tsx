@@ -39,6 +39,7 @@ import { SectionPlaceholder } from './components/SectionPlaceholder';
 import { SECTION_TABS, SectionId, sectionForPath } from './config/sections';
 import { useSectionShell } from './utils/useSectionShell';
 import { PreorderSection } from './components/preorder/PreorderSection';
+import { PreorderCheckoutView } from './components/preorder/PreorderCheckoutView';
 import { usePreorderCart } from './utils/usePreorderCart';
 
 type StoreRoute =
@@ -49,6 +50,7 @@ type StoreRoute =
   | { view: 'payment-return' }
   /** The pre-order section. `productId` present means one product's page. */
   | { view: 'preorder'; productId?: string }
+  | { view: 'preorder-checkout' }
   /** A section with a tab but no content yet. Software and Services is never one. */
   | { view: 'section'; section: Exclude<SectionId, 'software'> };
 
@@ -57,6 +59,7 @@ function currentRoute(): StoreRoute {
   if (path === '/payment/return') return { view: 'payment-return' };
   const section = sectionForPath(path);
   if (section.id === 'preorder') {
+    if (/^\/preorder\/checkout\/?$/.test(path)) return { view: 'preorder-checkout' };
     const preorderProduct = path.match(/^\/preorder\/([^/]+)\/?$/);
     return { view: 'preorder', productId: preorderProduct ? decodeURIComponent(preorderProduct[1]) : undefined };
   }
@@ -74,6 +77,9 @@ export const App: React.FC = () => {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [paymentOptions, setPaymentOptions] = useState<PublicPaymentOptions | null>(null);
   const [route, setRoute] = useState<StoreRoute>(() => currentRoute());
+  /* The whole pre-order section, checkout included: it drives the nav's cart
+     slot, its own bottom bar, and the panel that gets out of its way. */
+  const inPreorder = route.view === 'preorder' || route.view === 'preorder-checkout';
   const shell = useSectionShell();
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -116,10 +122,10 @@ export const App: React.FC = () => {
      half-covered on the first look. Keyed on entering the section, so a panel
      the reader opens by hand afterwards stays open. */
   useEffect(() => {
-    if (route.view === 'preorder') shell.close();
+    if (inPreorder) shell.close();
     // `shell.close` is stable and the route object is rebuilt on every
     // navigation, so this keys on the section rather than the object.
-  }, [route.view === 'preorder']);
+  }, [inPreorder]);
 
   // Fetch catalog from Phase 1 backend endpoint /api/catalog
   const fetchCatalogData = async () => {
@@ -346,9 +352,11 @@ export const App: React.FC = () => {
   }
 
   const activeSection: SectionId =
-    route.view === 'preorder' ? 'preorder' : route.view === 'section' ? route.section : 'software';
-  // The nav's cart slot belongs to whichever section the customer is in.
-  const inPreorder = route.view === 'preorder';
+    route.view === 'preorder' || route.view === 'preorder-checkout'
+      ? 'preorder'
+      : route.view === 'section'
+        ? route.section
+        : 'software';
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f7faf9] text-slate-900 selection:bg-[#05ef28] selection:text-[#014040]">
@@ -405,6 +413,7 @@ export const App: React.FC = () => {
           onRemoveLine: preorderCart.remove,
           onSetQuantity: preorderCart.setQuantity,
           onSetDelivery: preorderCart.setDelivery,
+          onSubmitDetails: () => { preorderCart.setOpen(false); navigate('/preorder/checkout'); },
           onBrowse: () => { preorderCart.setOpen(false); navigate('/preorder'); },
         } : undefined}
       />
@@ -466,6 +475,15 @@ export const App: React.FC = () => {
             onAdd={preorderCart.add}
             filtersOpen={preorderFiltersOpen}
             onFiltersOpenChange={setPreorderFiltersOpen}
+          />
+        )}
+
+        {route.view === 'preorder-checkout' && (
+          <PreorderCheckoutView
+            lines={preorderCart.lines}
+            onBack={() => navigateBack('/preorder')}
+            onSubmitted={preorderCart.clear}
+            onBrowse={() => navigate('/preorder')}
           />
         )}
 
@@ -698,7 +716,7 @@ export const App: React.FC = () => {
               return;
             }
             if (tab === 'home') {
-              if (route.productId) navigate('/preorder');
+              if (route.view !== 'preorder' || route.productId) navigate('/preorder');
               window.scrollTo({ top: 0, behavior: 'smooth' });
               return;
             }

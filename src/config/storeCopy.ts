@@ -140,6 +140,23 @@ export const STORE_COPY = {
        *  speed, and a customer should see which one they picked before they
        *  commit to anything. */
       note: 'Prices are held for each delivery speed you chose.',
+      submitDetails: 'Submit details',
+    },
+    checkout: {
+      title: 'Your pre-order details',
+      detailsTitle: 'Where we reach you',
+      name: 'Full name',
+      phone: 'Phone (WhatsApp)',
+      email: 'Email',
+      location: 'Delivery location',
+      submit: 'Submit pre-order',
+      submitting: 'Submitting…',
+      failed: 'We could not record your pre-order. Please try again.',
+      note: 'No payment is taken now. We confirm what is available, then message you to arrange it.',
+      expressWhen: 'Arrives in weeks',
+      twoMonthsWhen: 'Arrives in about two months',
+      doneTitle: 'Pre-order received',
+      doneBody: 'We have your request and will message you on WhatsApp with next steps. Keep this reference.',
     },
   },
 
@@ -539,6 +556,7 @@ export const ADMIN_COPY = {
     payments: 'Payments',
     support: 'Support tools',
     preorder: 'Pre-order setup',
+    preorderOrders: 'Pre-orders',
   },
   support: {
     title: 'Remote support tools',

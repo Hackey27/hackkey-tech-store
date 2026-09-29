@@ -1,38 +1,9 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
-import {
-  AlertTriangle,
-  ArrowDown,
-  ArrowUp,
-  Bell,
-  BadgePercent,
-  CalendarClock,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  ClipboardList,
-  Copy,
-  Download,
-  Eye,
-  FileText,
-  KeyRound,
-  ImagePlus,
-  LifeBuoy,
-  LogOut,
-  Mail,
-  Plus,
-  RefreshCw,
-  Save,
-  Search,
-  Send,
-  Settings2,
-  Trash2,
-  UploadCloud,
-  WalletCards,
-  X
-} from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, BadgePercent, Bell, CalendarClock, Check, ChevronDown, ChevronRight, ClipboardList, Copy, Download, Eye, FileText, ImagePlus, KeyRound, LifeBuoy, LogOut, Mail, PackageCheck, Plus, RefreshCw, Save, Search, Send, Settings2, Trash2, UploadCloud, WalletCards, X } from 'lucide-react';
 import { ADMIN_COPY } from '../config/storeCopy';
 import { PreorderSetupSection } from './PreorderSetupSection';
+import { PreorderOrdersSection } from './PreorderOrdersSection';
 import { Announcement, Bundle, Category, CustomerNotificationPurpose, CustomerRequest, InstallationGuideConfig, InstallationGuideImageConfig, InstallationGuideStepConfig, Laptop as LaptopType, Order, PricingConfig, Product, Service, ServiceField, ServiceFieldType, ServiceOption, SupportTool, Variant } from '../../shared/types';
 import { applyPricingRules, formatPesewas } from '../../shared/money';
 import { defaultCustomerInputType, defaultDeliveryCodeType, effectiveActivationWebsiteUrl } from '../../shared/softwareFulfilment';
@@ -51,7 +22,7 @@ import { notificationActionLabel, notificationPurposeForOrder } from '../utils/o
 import { DEFAULT_INSTALLATION_BUTTON_LABEL, defaultInstallationGuideForProduct } from '../data/installationGuides';
 import { guideMarkerPosition, guideScreenshotUrl } from '../utils/guideImages';
 
-type Section = 'orders' | 'requests' | 'categories' | 'services' | 'announcements' | 'landing' | 'pricing' | 'payments' | 'support' | 'preorder';
+type Section = 'orders' | 'requests' | 'categories' | 'services' | 'announcements' | 'landing' | 'pricing' | 'payments' | 'support' | 'preorder' | 'preorderOrders';
 
 const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#014040] focus:ring-2 focus:ring-[#014040]/10';
 const labelClass = 'space-y-1 text-xs font-bold text-slate-700';
@@ -1383,7 +1354,7 @@ export default function AdminPortal() {
 
   if (checking) return <div className="min-h-screen bg-[#f7faf9] p-8 text-[#014040]">{ADMIN_COPY.loading}</div>;
   if (!user) return <SignIn />;
-  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'requests', icon: <FileText /> }, { id: 'categories', icon: <Settings2 /> }, { id: 'services', icon: <Settings2 /> }, { id: 'pricing', icon: <BadgePercent /> }, { id: 'payments', icon: <WalletCards /> }, { id: 'support', icon: <LifeBuoy /> }, { id: 'preorder', icon: <CalendarClock /> }, { id: 'landing', icon: <ImagePlus /> }, { id: 'announcements', icon: <Bell /> }];
+  const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'requests', icon: <FileText /> }, { id: 'categories', icon: <Settings2 /> }, { id: 'services', icon: <Settings2 /> }, { id: 'pricing', icon: <BadgePercent /> }, { id: 'payments', icon: <WalletCards /> }, { id: 'support', icon: <LifeBuoy /> }, { id: 'preorder', icon: <CalendarClock /> }, { id: 'preorderOrders', icon: <PackageCheck /> }, { id: 'landing', icon: <ImagePlus /> }, { id: 'announcements', icon: <Bell /> }];
   const content = !data ? <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">{ADMIN_COPY.loading}</div>
     : section === 'orders' ? <OrdersSection data={data} user={user} reload={reload} />
     : section === 'requests' ? <RequestsSection requests={data.requests} />
@@ -1393,6 +1364,7 @@ export default function AdminPortal() {
     : section === 'payments' ? <PaymentsSection data={data} user={user} reload={reload} />
     : section === 'support' ? <SupportToolsSection data={data} user={user} reload={reload} />
     : section === 'preorder' ? <PreorderSetupSection data={data} user={user} reload={reload} />
+    : section === 'preorderOrders' ? <PreorderOrdersSection data={data} user={user} reload={reload} />
     : section === 'landing' ? <LandingBannersSection data={data} user={user} reload={reload} />
     : <AnnouncementsSection data={data} user={user} reload={reload} />;
   return <div className="min-h-screen bg-[#f7faf9] text-slate-900"><header className="border-b border-[#cbdcd9] bg-[#014040] text-white"><div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-4 sm:px-6"><div><p className="text-lg font-black">{ADMIN_COPY.brand}</p><p className="text-xs text-slate-300">{user.email}</p></div><div className="flex gap-2"><button className="rounded-xl border border-white/20 p-2 hover:bg-white/10" onClick={reload} aria-label={ADMIN_COPY.refresh}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button><button className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 text-xs font-bold hover:bg-white/10" onClick={() => signOut(adminAuth)}><LogOut className="h-4 w-4" />{ADMIN_COPY.signOut}</button></div></div></header><div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[210px_1fr]"><label className="space-y-1 text-xs font-black uppercase tracking-wider text-slate-600 lg:hidden">Admin section<select className={inputClass} value={section} onChange={(event) => setSection(event.target.value as Section)}>{nav.map((item) => <option key={item.id} value={item.id}>{ADMIN_COPY.sections[item.id]}</option>)}</select></label><nav className="hidden h-fit gap-2 rounded-2xl border border-slate-200 bg-white p-2 lg:flex lg:flex-col">{nav.map((item) => <button key={item.id} onClick={() => setSection(item.id)} className={`inline-flex min-w-fit items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black ${section === item.id ? 'bg-[#014040] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{React.cloneElement(item.icon as React.ReactElement, { className: 'h-4 w-4' })}{ADMIN_COPY.sections[item.id]}</button>)}</nav><main className="min-w-0">{error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-sm font-bold text-rose-800">{error}</p>}{content}</main></div></div>;

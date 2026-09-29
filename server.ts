@@ -4,6 +4,7 @@ import path from 'path';
 import { HealthResponse } from './shared/types';
 import { getCatalogue } from './server/catalogue';
 import { getPreorderCatalogue } from './server/preorderCatalogue';
+import { PreorderSubmissionError, submitPreorder } from './server/preorderOrders';
 import {
   attachDocument,
   createOrders,
@@ -243,6 +244,19 @@ async function startServer() {
       res.json(await getPreorderCatalogue());
     } catch (err) {
       failed(res, err, 'Failed to retrieve the pre-order catalogue');
+    }
+  });
+
+  /* A pre-order is not a payment. It records what someone wants and alerts the
+     seller; money is arranged afterwards, which is why this touches none of
+     the payment path. Prices are read from Firestore, never from the body. */
+  app.post('/api/preorder/orders', async (req: Request, res: Response) => {
+    try {
+      const preorder = await submitPreorder({ customer: req.body?.customer, items: req.body?.items });
+      res.json({ preorderId: preorder.preorderId, submittedAt: preorder.submittedAt });
+    } catch (err) {
+      if (err instanceof PreorderSubmissionError) return res.status(400).json({ error: err.message });
+      failed(res, err, 'Failed to submit the pre-order');
     }
   });
 

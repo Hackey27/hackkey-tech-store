@@ -26,6 +26,7 @@ export interface PreorderCartSlot {
   onRemoveLine: (id: string) => void;
   onSetQuantity: (id: string, quantity: number) => void;
   onSetDelivery: (id: string, delivery: PreorderDelivery) => void;
+  onSubmitDetails: () => void;
   onBrowse: () => void;
 }
 
@@ -290,6 +291,7 @@ export const Header: React.FC<HeaderProps> = ({
           onRemoveLine={preorderCart.onRemoveLine}
           onSetQuantity={preorderCart.onSetQuantity}
           onSetDelivery={preorderCart.onSetDelivery}
+          onSubmitDetails={preorderCart.onSubmitDetails}
         />
       )}
     </header>

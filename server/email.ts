@@ -1,4 +1,4 @@
-import { CustomerRequest, Order } from '../shared/types';
+import { CustomerRequest, Order, Preorder } from '../shared/types';
 import { formatPesewas } from '../shared/money';
 import { STORE_COPY } from '../src/config/storeCopy';
 
@@ -165,6 +165,49 @@ export async function sendSellerOrderSubmittedAlert(orders: Order[], totalPesewa
       '',
       ...rows
     ]
+  });
+}
+
+/**
+ * Tells the seller a pre-order has landed.
+ *
+ * Built on sendSellerAlert like every other alert in this file, so it inherits
+ * the one mail configuration, the retry behaviour and the idempotency key
+ * rather than becoming a second way of reaching the seller.
+ *
+ * Grouped by delivery speed, because that is the seller's first question: what
+ * has to go on the next express run, and what can wait for the slow shipment.
+ */
+export async function sendSellerPreorderAlert(preorder: Preorder): Promise<MailReceipt> {
+  const total = preorder.items.reduce((sum, item) => sum + item.pricePesewas * item.quantity, 0);
+  const group = (delivery: 'express' | 'two-months', heading: string): string[] => {
+    const rows = preorder.items.filter((item) => item.delivery === delivery);
+    if (!rows.length) return [];
+    return [
+      '',
+      `${heading}:`,
+      ...rows.map((item) => {
+        const label = item.selectionLabel ? ` (${item.selectionLabel})` : '';
+        return `  ${item.quantity} x ${item.productName}${label}   ${formatPesewas(item.pricePesewas * item.quantity)}`;
+      }),
+    ];
+  };
+
+  return sendSellerAlert({
+    subject: `Action needed: new pre-order — ${preorder.preorderId}`,
+    idempotencyKey: `seller-preorder-submitted/${preorder.preorderId}`,
+    lines: [
+      'A customer has submitted a pre-order.',
+      '',
+      `Reference: ${preorder.preorderId}`,
+      `Name: ${preorder.customer.name}`,
+      `Phone (WhatsApp): ${preorder.customer.phone}`,
+      `Email: ${preorder.customer.email}`,
+      `Location: ${preorder.customer.location}`,
+      `Total: ${formatPesewas(total)}`,
+      ...group('express', 'Express'),
+      ...group('two-months', 'Two months'),
+    ],
   });
 }
 

@@ -1,6 +1,6 @@
 import React, { RefObject, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Minus, PackagePlus, Plus, Trash2, X } from 'lucide-react';
+import { ArrowRight, Minus, PackagePlus, Plus, Trash2, X } from 'lucide-react';
 import { formatPesewas } from '../../../shared/money';
 import { STORE_COPY } from '../../config/storeCopy';
 import { PreorderCartLine } from '../../utils/usePreorderCart';
@@ -16,6 +16,7 @@ interface PreorderCartFlyoutProps {
   onRemoveLine: (id: string) => void;
   onSetQuantity: (id: string, quantity: number) => void;
   onSetDelivery: (id: string, delivery: PreorderDelivery) => void;
+  onSubmitDetails: () => void;
 }
 
 /**
@@ -42,6 +43,7 @@ export const PreorderCartFlyout: React.FC<PreorderCartFlyoutProps> = ({
   onRemoveLine,
   onSetQuantity,
   onSetDelivery,
+  onSubmitDetails,
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -262,8 +264,17 @@ export const PreorderCartFlyout: React.FC<PreorderCartFlyoutProps> = ({
               <p className="mb-3 text-[11px] text-slate-500">{STORE_COPY.preorder.cart.note}</p>
               <button
                 type="button"
+                data-testid="preorder-submit-details"
+                onClick={onSubmitDetails}
+                className="hk-pressable flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-4 py-3 text-sm font-black text-[#014040] hover:bg-[#04d824]"
+              >
+                {STORE_COPY.preorder.cart.submitDetails}
+                <ArrowRight className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
                 onClick={onBrowse}
-                className="hk-pressable w-full rounded-xl border border-[#014040] px-4 py-2.5 text-sm font-bold text-[#014040] hover:bg-[#edf5f3]"
+                className="hk-pressable mt-2 w-full rounded-xl border border-[#014040] px-4 py-2.5 text-sm font-bold text-[#014040] hover:bg-[#edf5f3]"
               >
                 {STORE_COPY.preorder.cart.continue}
               </button>
