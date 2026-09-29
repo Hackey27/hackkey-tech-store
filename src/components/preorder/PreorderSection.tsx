@@ -6,6 +6,8 @@ import { PreorderCartAddition } from '../../utils/usePreorderCart';
 import { buildSingleCombinationAddition } from '../../utils/preorderAdd';
 import { PreorderListingView } from './PreorderListingView';
 import { PreorderProductView } from './PreorderProductView';
+import { PreorderComparePicker } from './PreorderComparePicker';
+import { PreorderCompareView } from './PreorderCompareView';
 
 interface PreorderSectionProps {
   /** Present when the path is /preorder/{productId}. */
@@ -19,11 +21,20 @@ interface PreorderSectionProps {
   combinationId?: string;
   /** Lets the section hand its catalogue up for searching. */
   onProductsLoaded?: (products: PreorderProduct[]) => void;
-  comparedIds: string[];
-  compareFull: boolean;
-  onToggleCompare: (product: PreorderProduct) => void;
-  onOpenCompare: () => void;
-  onClearCompare: () => void;
+  /** 'compare' renders the picker or the comparison instead of the listing. */
+  mode: 'browse' | 'compare';
+  compare: {
+    productIds: string[];
+    active: boolean;
+    picking: boolean;
+    full: boolean;
+    pick: (productId: string) => void;
+    remove: (productId: string) => void;
+    addAnother: () => void;
+    clear: () => void;
+    start: (productId: string) => void;
+  };
+  onAddProductToCart: (product: PreorderProduct) => void;
 }
 
 /**
@@ -45,11 +56,9 @@ export const PreorderSection: React.FC<PreorderSectionProps> = ({
   onFiltersOpenChange,
   combinationId,
   onProductsLoaded,
-  comparedIds,
-  compareFull,
-  onToggleCompare,
-  onOpenCompare,
-  onClearCompare,
+  mode,
+  compare,
+  onAddProductToCart,
 }) => {
   const [catalogue, setCatalogue] = useState<PreorderCatalogueResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -136,23 +145,62 @@ export const PreorderSection: React.FC<PreorderSectionProps> = ({
         onBack={onBack}
         onAdd={onAdd}
         initialCombinationId={combinationId}
+        onCompare={(chosenProduct) => compare.start(chosenProduct.productId)}
+        comparing={compare.productIds.includes(product.productId)}
+        canCompare={!compare.full}
       />
     );
   }
 
-  return (
+  const chosen = compare.productIds
+    .map((id) => products.find((product) => product.productId === id))
+    .filter((product): product is PreorderProduct => Boolean(product));
+
+  /* The real listing, used both for browsing and as the comparison's picker.
+     During a session its cards carry a compare control, and choosing one takes
+     the product rather than opening its page. */
+  const listing = (
     <PreorderListingView
       categories={catalogue?.categories || []}
       products={products}
-      onSelectProduct={(product) => onOpenProduct(product.productId)}
+      onSelectProduct={(product) =>
+        compare.picking ? compare.pick(product.productId) : onOpenProduct(product.productId)
+      }
       onAddProduct={addSingleCombination}
-      comparedIds={comparedIds}
-      compareFull={compareFull}
-      onToggleCompare={onToggleCompare}
-      onOpenCompare={onOpenCompare}
-      onClearCompare={onClearCompare}
+      comparedIds={compare.productIds}
+      compareFull={compare.full}
+      compareActive={compare.active}
+      onToggleCompare={(product) => compare.pick(product.productId)}
       filtersOpen={filtersOpen}
       onFiltersOpenChange={onFiltersOpenChange}
     />
   );
+
+  if (mode === 'compare') {
+    // Fewer than two is not a comparison, so the picker stays up.
+    if (compare.picking || chosen.length < 2) {
+      return (
+        <PreorderComparePicker
+          chosen={chosen}
+          onRemove={compare.remove}
+          onCancel={compare.clear}
+          listing={listing}
+        />
+      );
+    }
+    return (
+      <PreorderCompareView
+        products={chosen}
+        onRemove={compare.remove}
+        onBack={onBack}
+        onBrowse={compare.clear}
+        onOpenProduct={onOpenProduct}
+        onAdd={onAddProductToCart}
+        onAddAnother={compare.addAnother}
+        canAddAnother={!compare.full}
+      />
+    );
+  }
+
+  return listing;
 };

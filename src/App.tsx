@@ -111,6 +111,14 @@ export const App: React.FC = () => {
   // neither basket may empty or price the other.
   const preorderCart = usePreorderCart();
   const preorderCompare = usePreorderCompare();
+  /* Starting or reopening a comparison is a navigation as well as a state
+     change, so the two are kept together rather than left to each caller. */
+  const compareSession = {
+    ...preorderCompare,
+    start: (productId: string) => { preorderCompare.start(productId); navigate('/preorder/compare'); },
+    addAnother: () => { preorderCompare.addAnother(); navigate('/preorder/compare'); },
+    clear: () => { preorderCompare.clear(); navigate('/preorder'); },
+  };
   /* The pre-order filter strip is always on screen above md; on a phone it is
      behind the bottom bar's Filters button, which is the only reason this
      lives up here rather than inside the listing. */
@@ -510,9 +518,15 @@ export const App: React.FC = () => {
 
         {route.view === 'order-access' && <FindOrderView catalogItems={catalog?.products || []} paymentOptions={paymentOptions || undefined} sharedOrderId={route.orderId} sharedAccessToken={new URLSearchParams(window.location.search).get('access') || ''} />}
 
-        {route.view === 'preorder' && (
+        {(route.view === 'preorder' || route.view === 'preorder-compare') && (
           <PreorderSection
-            productId={route.productId}
+            mode={route.view === 'preorder-compare' ? 'compare' : 'browse'}
+            compare={compareSession}
+            onAddProductToCart={(product) => {
+              const addition = buildSingleCombinationAddition(product);
+              if (addition) preorderCart.add(addition);
+            }}
+            productId={route.view === 'preorder' ? route.productId : undefined}
             onOpenProduct={(productId) => navigate(`/preorder/${encodeURIComponent(productId)}`)}
             onBack={() => navigateBack('/preorder')}
             onAdd={preorderCart.add}
@@ -520,29 +534,6 @@ export const App: React.FC = () => {
             onFiltersOpenChange={setPreorderFiltersOpen}
             combinationId={new URLSearchParams(window.location.search).get('combination') || undefined}
             onProductsLoaded={setPreorderProducts}
-            comparedIds={preorderCompare.productIds}
-            compareFull={preorderCompare.full}
-            onToggleCompare={(product) => preorderCompare.toggle(product.productId)}
-            onOpenCompare={() => navigate('/preorder/compare')}
-            onClearCompare={preorderCompare.clear}
-          />
-        )}
-
-        {route.view === 'preorder-compare' && (
-          <PreorderCompareView
-            /* Ordered as they were picked, and resolved from the live
-               catalogue so a refreshed price cannot be compared stale. */
-            products={preorderCompare.productIds
-              .map((id) => preorderProducts.find((product) => product.productId === id))
-              .filter((product): product is PreorderProduct => Boolean(product))}
-            onRemove={preorderCompare.remove}
-            onBack={() => navigateBack('/preorder')}
-            onBrowse={() => navigate('/preorder')}
-            onOpenProduct={(productId) => navigate(`/preorder/${encodeURIComponent(productId)}`)}
-            onAdd={(product) => {
-              const addition = buildSingleCombinationAddition(product);
-              if (addition) preorderCart.add(addition);
-            }}
           />
         )}
 

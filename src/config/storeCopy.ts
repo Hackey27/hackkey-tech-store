@@ -94,6 +94,12 @@ export const STORE_COPY = {
       title: 'Side by side',
       lead: 'Details stay under each product\u2019s own labels \u2014 these are described differently by design, and pretending otherwise would invent equivalences nobody stated.',
       add: 'Compare',
+      start: 'Compare with another',
+      cancel: 'Stop comparing',
+      addAnother: 'Add another to compare',
+      pickPrompt: (chosen: number) =>
+        chosen === 1 ? 'Now pick something to compare it with' : 'Pick another to add',
+      pinnedNote: 'Kept for the comparison. Pick the next one from the list.',
       added: 'Comparing',
       full: (max: number) => `Comparing ${max} already`,
       open: (count: number) => `Compare ${count}`,

@@ -29,6 +29,12 @@ test('selection keeps the order things were picked in', () => {
   assert.deepEqual(togglePreorderCompare(togglePreorderCompare(['c'], 'a'), 'b'), ['c', 'a', 'b']);
 });
 
+test('the session starts from one product and goes looking for the next', () => {
+  // A single column is not a comparison, so starting must lead to the picker
+  // rather than to a lonely product on its own.
+  assert.deepEqual(togglePreorderCompare([], 'a'), ['a']);
+});
+
 test('a fourth pick is refused rather than pushing one out', () => {
   // Dropping the oldest would take away something the customer chose without
   // saying so. The control is disabled at this point; this is the backstop.

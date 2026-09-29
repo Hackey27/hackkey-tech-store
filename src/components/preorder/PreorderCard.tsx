@@ -14,6 +14,10 @@ interface PreorderCardProps {
   /** False once the comparison is full, so the control can say so rather than
    *  swallowing the tap. */
   canCompare: boolean;
+  /** Only true while a comparison is running. Outside one the card carries no
+   *  compare control at all, so ordinary browsing is not cluttered by a
+   *  feature almost nobody is using at that moment. */
+  compareActive: boolean;
   onToggleCompare: (product: PreorderProduct) => void;
 }
 
@@ -45,6 +49,7 @@ export const PreorderCard: React.FC<PreorderCardProps> = ({
   onAdd,
   comparing,
   canCompare,
+  compareActive,
   onToggleCompare,
 }) => {
   /* One combination means there is nothing left to choose, so the card can sell
@@ -73,9 +78,10 @@ export const PreorderCard: React.FC<PreorderCardProps> = ({
       className="hk-pressable group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-[#d8e7e4] bg-white text-left text-slate-900 hover:border-[#014040]/70 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#014040]"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-[#edf5f3]">
-        {/* Over the picture rather than in the body: the body is already
-            carrying a name, a description, two prices and a button. */}
-        <button
+        {/* Only while a comparison is running, and over the picture rather than
+            in the body: the body already carries a name, a description, two
+            prices and a button. */}
+        {compareActive && <button
           type="button"
           data-testid={`preorder-compare-toggle-${product.productId}`}
           aria-pressed={comparing}
@@ -91,7 +97,7 @@ export const PreorderCard: React.FC<PreorderCardProps> = ({
           }`}
         >
           {comparing ? STORE_COPY.preorder.compare.added : STORE_COPY.preorder.compare.add}
-        </button>
+        </button>}
         {imageUrl && !imageFailed ? (
           <img
             src={imageUrl}

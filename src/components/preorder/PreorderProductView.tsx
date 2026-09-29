@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, PackagePlus } from 'lucide-react';
+import { ArrowLeft, PackagePlus, Scale } from 'lucide-react';
 import { PreorderDelivery, PreorderProduct } from '../../../shared/types';
 import {
   PreorderSelections,
@@ -17,6 +17,11 @@ interface PreorderProductViewProps {
   onAdd: (addition: PreorderCartAddition) => void;
   /** From ?combination= on a shared or searched link. */
   initialCombinationId?: string;
+  /** Starts a comparison with this product. The only way in — a customer has
+   *  to have opened something before comparing it means anything. */
+  onCompare: (product: PreorderProduct) => void;
+  comparing: boolean;
+  canCompare: boolean;
 }
 
 const DELIVERY_LABELS: Record<PreorderDelivery, string> = {
@@ -146,6 +151,9 @@ export const PreorderProductView: React.FC<PreorderProductViewProps> = ({
   onBack,
   onAdd,
   initialCombinationId,
+  onCompare,
+  comparing,
+  canCompare,
 }) => {
   /* A linked combination preselects the axes it names, and only those. A
      partial combination such as {Colour: Black} therefore lands with Black
@@ -415,6 +423,21 @@ export const PreorderProductView: React.FC<PreorderProductViewProps> = ({
               {STORE_COPY.preorder.addToCart}
             </button>
           </div>
+
+          <button
+            type="button"
+            data-testid="preorder-product-compare"
+            disabled={comparing || !canCompare}
+            onClick={() => onCompare(product)}
+            className={`hk-pressable mt-3 flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-black ${
+              comparing || !canCompare
+                ? 'cursor-not-allowed border-[#dfe9e7] text-slate-400'
+                : 'border-[#014040] text-[#014040] hover:bg-[#edf5f3]'
+            }`}
+          >
+            <Scale className="h-4 w-4" />
+            {comparing ? STORE_COPY.preorder.compare.added : STORE_COPY.preorder.compare.start}
+          </button>
 
           {product.details.length > 0 && (
             <div className="mt-7">

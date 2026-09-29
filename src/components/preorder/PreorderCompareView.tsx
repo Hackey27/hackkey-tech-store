@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, PackagePlus, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowLeft, PackagePlus, Plus, SlidersHorizontal, X } from 'lucide-react';
 import { PreorderProduct } from '../../../shared/types';
 import { preorderCardPricing } from '../../../shared/preorderCombinations';
 import { formatPesewas } from '../../../shared/money';
@@ -12,6 +12,9 @@ interface PreorderCompareViewProps {
   onBack: () => void;
   onBrowse: () => void;
   onOpenProduct: (productId: string) => void;
+  /** Reopens the picker for a further product. */
+  onAddAnother: () => void;
+  canAddAnother: boolean;
   /** Only ever called for a product with exactly one combination. */
   onAdd: (product: PreorderProduct) => void;
 }
@@ -37,6 +40,8 @@ export const PreorderCompareView: React.FC<PreorderCompareViewProps> = ({
   onBrowse,
   onOpenProduct,
   onAdd,
+  onAddAnother,
+  canAddAnother,
 }) => {
   const [lightbox, setLightbox] = useState<{ images: string[]; at: number; name: string } | null>(null);
 
@@ -87,6 +92,18 @@ export const PreorderCompareView: React.FC<PreorderCompareViewProps> = ({
         {STORE_COPY.preorder.compare.title}
       </h1>
       <p className="mt-2 text-sm text-slate-600">{STORE_COPY.preorder.compare.lead}</p>
+
+      {canAddAnother && (
+        <button
+          type="button"
+          data-testid="preorder-compare-add-another"
+          onClick={onAddAnother}
+          className="hk-pressable mt-4 inline-flex items-center gap-2 rounded-xl border border-[#014040] px-4 py-2 text-xs font-black text-[#014040] hover:bg-[#edf5f3]"
+        >
+          <Plus className="h-4 w-4" />
+          {STORE_COPY.preorder.compare.addAnother}
+        </button>
+      )}
 
       {/* Columns scroll sideways on a phone rather than shrinking to slivers. */}
       <div className="mt-6 overflow-x-auto pb-3">
