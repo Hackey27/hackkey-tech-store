@@ -54,21 +54,7 @@ const PREORDER_PACKAGE_STATUSES: PreorderPackageStatus[] = [
   'received-in-ghana',
 ];
 import { COLLECTIONS, getFirestore } from './firestore';
-import {
-  catalogueImageObjectPath,
-  deleteCatalogueImage,
-  isCatalogueImagePath,
-  MAX_CATALOGUE_IMAGE_BYTES,
-  saveCatalogueImage,
-  createSignedDownload,
-  createSignedReportUpload,
-  confirmUpload,
-  isReportObjectPathForOrder,
-  safeDocumentLabel,
-  safeOriginalFilename,
-  validateUpload,
-  validateCatalogueImage
-} from './storage';
+import { MAX_CATALOGUE_IMAGE_BYTES, catalogueImageObjectPath, confirmUpload, createSignedDownload, createSignedReportUpload, deleteCatalogueImage, isCatalogueImagePath, isReportObjectPathForOrder, isRequestImagePath, safeDocumentLabel, safeOriginalFilename, saveCatalogueImage, validateCatalogueImage, validateUpload } from './storage';
 
 function actor(req: AdminRequest) {
   if (!req.adminActor) throw new Error('Missing authenticated admin actor.');
@@ -736,6 +722,26 @@ export function createAdminRouter(): Router {
       await deleteCatalogueImage(objectPath);
       res.json({ success: true });
     } catch (err) { routeError(res, err, 'Failed to remove pre-order artwork.'); }
+  });
+
+  /**
+   * A short-lived link to one picture attached to a product request.
+   *
+   * The same shape customer documents use: the bytes are never public, and the
+   * admin is handed a signed URL that expires rather than a permanent one. A
+   * browser cannot put an Authorization header on an <img>, so returning a URL
+   * is what lets the portal show a thumbnail at all.
+   *
+   * Not written to admin_audit. These are pictures a customer attached so that
+   * somebody would look at them, and a thumbnail grid would write an audit row
+   * per image per view — noise that would bury the reveals that do matter.
+   */
+  router.get('/requests/images', async (req: AdminRequest, res) => {
+    const objectPath = String(req.query.path || '');
+    if (!isRequestImagePath(objectPath)) return res.status(400).json({ error: 'That is not a request image.' });
+    try {
+      res.json({ url: await createSignedDownload(objectPath) });
+    } catch (err) { routeError(res, err, 'Failed to open that picture.'); }
   });
 
   /* -- pre-order management ----------------------------------------------

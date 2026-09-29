@@ -33,8 +33,13 @@ import {
   verifyWebhookSignature
 } from './server/paystack';
 import {
+  MAX_CATALOGUE_IMAGE_BYTES,
   catalogueImageFile,
   confirmUpload,
+  isRequestImagePath,
+  requestImageObjectPath,
+  saveRequestImage,
+  validateCatalogueImage,
   createSignedDownload,
   createSignedUpload,
   isDocumentObjectPathForOrder,
@@ -55,6 +60,9 @@ import { retryFailedSubmissionAlerts } from './server/submissionAlerts';
 import { resolveCustomBundleChoices } from './src/utils/customBundle';
 
 // Cloud Run injects PORT (8080 by default); 3000 keeps local dev unchanged.
+/** The spec's ceiling, enforced on the server as well as in the form. */
+const MAX_REQUEST_IMAGES = 5;
+
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = '0.0.0.0';
 
@@ -717,6 +725,79 @@ async function startServer() {
       failed(res, err, 'Failed to submit custom bundle request');
     }
   });
+
+  /**
+   * "Can you source this?" from the pre-order section.
+   *
+   * Goes through createRequest like every other storefront request, so it
+   * lands in the one requests inbox, gets the same seller alert, and inherits
+   * the alert-retry state the scheduler already understands. A separate
+   * collection or a second mail path would be two places to look for the same
+   * kind of message.
+   */
+  app.post('/api/requests/preorder-product', async (req: Request, res: Response) => {
+    const { customerName, phone, email, notes, productName, link, images } = req.body || {};
+    const pictures = Array.isArray(images) ? images.filter((path: unknown) => typeof path === 'string') : [];
+
+    if (!customerName || !phone || !productName) {
+      return res.status(400).json({ error: 'Your name, a contact number and what you are looking for are required.' });
+    }
+    // One of the two, because a name alone rarely identifies a product well
+    // enough to source it.
+    if (!String(link || '').trim() && !pictures.length) {
+      return res.status(400).json({ error: 'Add a link to the product, or a picture of it.' });
+    }
+    if (pictures.length > MAX_REQUEST_IMAGES) {
+      return res.status(400).json({ error: `Up to ${MAX_REQUEST_IMAGES} pictures, please.` });
+    }
+    // Every path must be one this server issued, so the stored request cannot
+    // be made to point at an arbitrary object in the bucket.
+    if (!pictures.every((path: string) => isRequestImagePath(path))) {
+      return res.status(400).json({ error: 'One of those pictures did not upload properly. Please try again.' });
+    }
+
+    try {
+      const request = await createRequest('preorder-product', {
+        customerName,
+        phone,
+        email,
+        notes,
+        details: { productName: String(productName).trim(), link: String(link || '').trim(), images: pictures },
+      });
+      res.json({ success: true, requestId: request.requestId });
+    } catch (err) {
+      failed(res, err, 'Failed to submit the product request');
+    }
+  });
+
+  /** Stores one picture for a product request and hands back its path. The
+   *  request itself is submitted separately, carrying the paths. */
+  app.post(
+    '/api/requests/preorder-product/images',
+    express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: MAX_CATALOGUE_IMAGE_BYTES }),
+    async (req: Request, res: Response) => {
+      // Anonymous, so it is rate limited per caller: an open upload endpoint is
+      // otherwise a way to fill someone else's bucket.
+      const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+      if (isRateLimited(`${clientIp}-request-image`)) {
+        return res.status(429).json({ error: 'Too many uploads. Please wait a moment and try again.' });
+      }
+
+      const contentType = String(req.header('content-type') || '').split(';')[0].trim();
+      const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+      const validation = validateCatalogueImage(contentType, bytes.length);
+      if (!validation.ok) return res.status(400).json({ error: validation.error });
+
+      // Stored outside the publicly served prefix: only the admin API reads it.
+      const objectPath = requestImageObjectPath(contentType);
+      try {
+        await saveRequestImage(objectPath, bytes, contentType);
+        res.json({ objectPath });
+      } catch (err) {
+        failed(res, err, 'Failed to store that picture');
+      }
+    }
+  );
 
   // Service enquiry
   app.post('/api/services/submit', async (req: Request, res: Response) => {

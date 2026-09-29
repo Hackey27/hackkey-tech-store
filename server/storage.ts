@@ -80,6 +80,43 @@ export function isCatalogueImagePath(objectPath: string): boolean {
   return objectPath.startsWith('catalogue/') && !objectPath.includes('..');
 }
 
+/**
+ * A picture a customer attached to a product request.
+ *
+ * Deliberately NOT under `catalogue/`. That prefix is what the public
+ * `/api/catalog/images` route will serve to anyone holding the URL, which is
+ * right for shop artwork the seller published and wrong for a photograph a
+ * customer sent in. These live behind the admin API and are read through a
+ * short-lived signed URL, the same way customer documents are.
+ */
+export function requestImageObjectPath(
+  contentType: string,
+  randomId = crypto.randomUUID()
+): string {
+  const extension = ALLOWED_CATALOGUE_IMAGE_TYPES[contentType] || 'bin';
+  return `requests/preorder/${Date.now()}-${randomId}.${extension}`;
+}
+
+export function isRequestImagePath(objectPath: string): boolean {
+  return objectPath.startsWith('requests/') && !objectPath.includes('..');
+}
+
+export async function saveRequestImage(
+  objectPath: string,
+  bytes: Buffer,
+  contentType: string
+): Promise<void> {
+  if (!isRequestImagePath(objectPath)) throw new Error('Invalid request image path.');
+  const validation = validateCatalogueImage(contentType, bytes.length);
+  if (!validation.ok) throw new Error(validation.error);
+  await getStorage().bucket(bucketName()).file(objectPath).save(bytes, {
+    resumable: false,
+    contentType,
+    // Private: no public cache directive, and nothing serves it without auth.
+    metadata: { cacheControl: 'private, max-age=0, no-store' }
+  });
+}
+
 export async function saveCatalogueImage(
   objectPath: string,
   bytes: Buffer,

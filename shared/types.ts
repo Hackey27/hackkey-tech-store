@@ -635,7 +635,9 @@ export type RequestKind =
   | 'custom-bundle'
   | 'humanizing'
   | 'software-request'
-  | 'service-enquiry';
+  | 'service-enquiry'
+  /** "I could not find it in pre-orders — can you source this?" */
+  | 'preorder-product';
 
 export interface CustomerRequest {
   requestId: string;

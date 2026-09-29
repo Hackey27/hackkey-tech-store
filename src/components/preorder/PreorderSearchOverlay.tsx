@@ -13,6 +13,8 @@ interface PreorderSearchOverlayProps {
   loading: boolean;
   onClose: () => void;
   onSelect: (result: PreorderSearchResult) => void;
+  /** Offered where the customer has hit the wall: nothing matched. */
+  onRequestProduct: () => void;
 }
 
 /**
@@ -33,6 +35,7 @@ export function PreorderSearchOverlay({
   loading,
   onClose,
   onSelect,
+  onRequestProduct,
 }: PreorderSearchOverlayProps) {
   if (!query.trim()) return null;
   const groups = groupPreorderResults(results);
@@ -79,6 +82,14 @@ export function PreorderSearchOverlay({
               </span>
               <h2 className="mt-4 font-black text-slate-800">{STORE_COPY.preorder.search.emptyTitle}</h2>
               <p className="mt-1 text-sm text-slate-500">{STORE_COPY.preorder.search.emptyBody}</p>
+              <button
+                type="button"
+                data-testid="preorder-request-cta"
+                onClick={onRequestProduct}
+                className="hk-pressable mt-5 inline-flex items-center gap-2 rounded-xl bg-[#014040] px-5 py-3 text-sm font-black text-white hover:bg-[#025656]"
+              >
+                {STORE_COPY.preorder.search.requestCta}
+              </button>
             </div>
           )}
 

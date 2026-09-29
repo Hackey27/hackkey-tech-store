@@ -41,6 +41,7 @@ import { useSectionShell } from './utils/useSectionShell';
 import { PreorderSection } from './components/preorder/PreorderSection';
 import { PreorderCheckoutView } from './components/preorder/PreorderCheckoutView';
 import { PreorderSearchOverlay } from './components/preorder/PreorderSearchOverlay';
+import { PreorderRequestView } from './components/preorder/PreorderRequestView';
 import { preorderResultHref, searchPreorder } from './utils/preorderSearch';
 import type { PreorderProduct } from '../shared/types';
 import { usePreorderCart } from './utils/usePreorderCart';
@@ -54,6 +55,7 @@ type StoreRoute =
   /** The pre-order section. `productId` present means one product's page. */
   | { view: 'preorder'; productId?: string }
   | { view: 'preorder-checkout' }
+  | { view: 'preorder-request' }
   /** A section with a tab but no content yet. Software and Services is never one. */
   | { view: 'section'; section: Exclude<SectionId, 'software'> };
 
@@ -63,6 +65,7 @@ function currentRoute(): StoreRoute {
   const section = sectionForPath(path);
   if (section.id === 'preorder') {
     if (/^\/preorder\/checkout\/?$/.test(path)) return { view: 'preorder-checkout' };
+    if (/^\/preorder\/request\/?$/.test(path)) return { view: 'preorder-request' };
     const preorderProduct = path.match(/^\/preorder\/([^/]+)\/?$/);
     return { view: 'preorder', productId: preorderProduct ? decodeURIComponent(preorderProduct[1]) : undefined };
   }
@@ -82,7 +85,10 @@ export const App: React.FC = () => {
   const [route, setRoute] = useState<StoreRoute>(() => currentRoute());
   /* The whole pre-order section, checkout included: it drives the nav's cart
      slot, its own bottom bar, and the panel that gets out of its way. */
-  const inPreorder = route.view === 'preorder' || route.view === 'preorder-checkout';
+  const inPreorder =
+    route.view === 'preorder' ||
+    route.view === 'preorder-checkout' ||
+    route.view === 'preorder-request';
   const shell = useSectionShell();
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -105,6 +111,9 @@ export const App: React.FC = () => {
   /* Lifted so the header's search box can reach it. The section still owns the
      fetch; this is the same list, not a second copy. */
   const [preorderProducts, setPreorderProducts] = useState<PreorderProduct[]>([]);
+  /* The words that found nothing, carried into the request form. Retyping what
+     you just typed is the quickest way to lose someone at this point. */
+  const [requestedProductName, setRequestedProductName] = useState('');
   const preorderResults = useMemo(
     () => (inPreorder ? searchPreorder(preorderProducts, searchQuery) : []),
     [inPreorder, preorderProducts, searchQuery]
@@ -362,7 +371,7 @@ export const App: React.FC = () => {
   }
 
   const activeSection: SectionId =
-    route.view === 'preorder' || route.view === 'preorder-checkout'
+    inPreorder
       ? 'preorder'
       : route.view === 'section'
         ? route.section
@@ -437,6 +446,11 @@ export const App: React.FC = () => {
           loading={false}
           onClose={() => setSearchQuery('')}
           onSelect={(result) => { setSearchQuery(''); navigate(preorderResultHref(result)); }}
+          onRequestProduct={() => {
+            setRequestedProductName(searchQuery.trim());
+            setSearchQuery('');
+            navigate('/preorder/request');
+          }}
         />
       ) : (
       <SearchResultsOverlay
@@ -499,6 +513,14 @@ export const App: React.FC = () => {
             onFiltersOpenChange={setPreorderFiltersOpen}
             combinationId={new URLSearchParams(window.location.search).get('combination') || undefined}
             onProductsLoaded={setPreorderProducts}
+          />
+        )}
+
+        {route.view === 'preorder-request' && (
+          <PreorderRequestView
+            initialProductName={requestedProductName}
+            onBack={() => navigateBack('/preorder')}
+            onBrowse={() => navigate('/preorder')}
           />
         )}
 

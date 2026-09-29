@@ -505,14 +505,42 @@ function OrdersSection({ data, user, reload }: { data: AdminData; user: User; re
   );
 }
 
-function RequestsSection({ requests }: { requests: CustomerRequest[] }) {
+/**
+ * One customer-attached picture, fetched through the admin API.
+ *
+ * The bytes are private, so the portal asks for a short-lived signed URL and
+ * puts that in the img. An <img> cannot carry an Authorization header, which
+ * is why the route returns a link rather than the image itself.
+ */
+function RequestImage({ user, path }: { user: User; path: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    adminRequest<{ url: string }>(user, `/requests/images?path=${encodeURIComponent(path)}`)
+      .then((body) => { if (live) setUrl(body.url); })
+      .catch(() => { if (live) setFailed(true); });
+    return () => { live = false; };
+  }, [user, path]);
+
+  if (failed) return <span className="flex aspect-square items-center justify-center rounded-lg border border-dashed text-[10px] text-slate-400">Unavailable</span>;
+  if (!url) return <span className="aspect-square animate-pulse rounded-lg bg-slate-200" />;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square overflow-hidden rounded-lg border border-slate-200">
+      <img src={url} alt="" className="h-full w-full object-cover" />
+    </a>
+  );
+}
+
+function RequestsSection({ requests, user }: { requests: CustomerRequest[]; user: User }) {
   const [query, setQuery] = useState('');
   const normalized = query.trim().toLowerCase();
   const visible = requests.filter((request) => !normalized || [request.requestId, request.kind, request.customerName, request.phone, request.email, request.notes, JSON.stringify(request.details)].some((value) => String(value || '').toLowerCase().includes(normalized)));
   return <div className="space-y-5">
-    <div><h2 className="text-2xl font-black text-[#014040]">Customer requests</h2><p className="text-sm text-slate-600">Laptop, software, custom-bundle and quote enquiries submitted from the storefront.</p></div>
+    <div><h2 className="text-2xl font-black text-[#014040]">Customer requests</h2><p className="text-sm text-slate-600">Laptop, software, custom-bundle, pre-order sourcing and quote enquiries submitted from the storefront.</p></div>
     <label className="relative block max-w-2xl"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><input className={`${inputClass} pl-10`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, phone, email, request reference or submitted details" /></label>
-    <div className="space-y-3">{visible.map((request) => <details key={request.requestId} className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><summary className="cursor-pointer list-none p-4 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-black text-[#014040]">{request.customerName}</h3><p className="mt-1 text-xs font-bold text-slate-500">{request.kind.replaceAll('-', ' ')} · {request.requestId}</p></div><div className="text-right text-xs text-slate-500"><span className="rounded-full bg-[#edf5f3] px-2.5 py-1 font-black uppercase text-[#014040]">{request.status || 'new'}</span><time className="mt-2 block">{request.requestDate ? new Date(request.requestDate).toLocaleString() : ''}</time></div></div></summary><div className="space-y-4 border-t bg-slate-50 p-4 sm:p-5"><div className="grid gap-3 text-sm sm:grid-cols-2"><div><b className="block text-xs uppercase tracking-wider text-slate-500">Phone</b><a className="font-bold text-[#014040] hover:underline" href={`tel:${request.phone}`}>{request.phone}</a></div><div><b className="block text-xs uppercase tracking-wider text-slate-500">Email</b>{request.email ? <a className="break-all font-bold text-[#014040] hover:underline" href={`mailto:${request.email}`}>{request.email}</a> : <span>—</span>}</div></div>{request.notes && <div><b className="text-xs uppercase tracking-wider text-slate-500">Notes</b><p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{request.notes}</p></div>}<dl className="grid gap-3 rounded-xl border bg-white p-4 sm:grid-cols-2">{Object.entries(request.details || {}).map(([key, value]) => <div key={key}><dt className="text-[10px] font-black uppercase tracking-wider text-slate-500">{key.replace(/([A-Z])/g, ' $1')}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm font-semibold text-slate-800">{typeof value === 'string' ? value || '—' : JSON.stringify(value, null, 2)}</dd></div>)}</dl></div></details>)}</div>
+    <div className="space-y-3">{visible.map((request) => <details key={request.requestId} className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><summary className="cursor-pointer list-none p-4 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-black text-[#014040]">{request.customerName}</h3><p className="mt-1 text-xs font-bold text-slate-500">{request.kind.replaceAll('-', ' ')} · {request.requestId}</p></div><div className="text-right text-xs text-slate-500"><span className="rounded-full bg-[#edf5f3] px-2.5 py-1 font-black uppercase text-[#014040]">{request.status || 'new'}</span><time className="mt-2 block">{request.requestDate ? new Date(request.requestDate).toLocaleString() : ''}</time></div></div></summary><div className="space-y-4 border-t bg-slate-50 p-4 sm:p-5"><div className="grid gap-3 text-sm sm:grid-cols-2"><div><b className="block text-xs uppercase tracking-wider text-slate-500">Phone</b><a className="font-bold text-[#014040] hover:underline" href={`tel:${request.phone}`}>{request.phone}</a></div><div><b className="block text-xs uppercase tracking-wider text-slate-500">Email</b>{request.email ? <a className="break-all font-bold text-[#014040] hover:underline" href={`mailto:${request.email}`}>{request.email}</a> : <span>—</span>}</div></div>{request.notes && <div><b className="text-xs uppercase tracking-wider text-slate-500">Notes</b><p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{request.notes}</p></div>}<dl className="grid gap-3 rounded-xl border bg-white p-4 sm:grid-cols-2">{Object.entries(request.details || {}).map(([key, value]) => <div key={key} className={key === 'images' ? 'sm:col-span-2' : undefined}><dt className="text-[10px] font-black uppercase tracking-wider text-slate-500">{key.replace(/([A-Z])/g, ' $1')}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm font-semibold text-slate-800">{key === 'images' && Array.isArray(value) ? (value.length ? <div className="grid grid-cols-5 gap-2">{(value as string[]).map((path) => <RequestImage key={path} user={user} path={path} />)}</div> : '—') : key === 'link' && typeof value === 'string' && value ? <a href={value} target="_blank" rel="noopener noreferrer" className="break-all text-[#014040] underline">{value}</a> : typeof value === 'string' ? value || '—' : JSON.stringify(value, null, 2)}</dd></div>)}</dl></div></details>)}</div>
     {!visible.length && <p className="rounded-2xl border bg-white p-8 text-center text-sm text-slate-500">No requests match this search.</p>}
   </div>;
 }
@@ -1357,7 +1385,7 @@ export default function AdminPortal() {
   const nav: Array<{ id: Section; icon: React.ReactNode }> = [{ id: 'orders', icon: <ClipboardList /> }, { id: 'requests', icon: <FileText /> }, { id: 'categories', icon: <Settings2 /> }, { id: 'services', icon: <Settings2 /> }, { id: 'pricing', icon: <BadgePercent /> }, { id: 'payments', icon: <WalletCards /> }, { id: 'support', icon: <LifeBuoy /> }, { id: 'preorder', icon: <CalendarClock /> }, { id: 'preorderOrders', icon: <PackageCheck /> }, { id: 'landing', icon: <ImagePlus /> }, { id: 'announcements', icon: <Bell /> }];
   const content = !data ? <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">{ADMIN_COPY.loading}</div>
     : section === 'orders' ? <OrdersSection data={data} user={user} reload={reload} />
-    : section === 'requests' ? <RequestsSection requests={data.requests} />
+    : section === 'requests' ? <RequestsSection requests={data.requests} user={user} />
     : section === 'categories' ? <CategorySetupSection data={data} user={user} reload={reload} />
     : section === 'services' ? <ServicesSection data={data} user={user} reload={reload} />
     : section === 'pricing' ? <PricingPromotionsSection data={data} user={user} reload={reload} />
