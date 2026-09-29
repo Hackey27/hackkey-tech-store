@@ -54,6 +54,7 @@ export const PreorderListingView: React.FC<PreorderListingViewProps> = ({
         <div className="mt-6">
           <PreorderFilterStrip
             categories={categories}
+            products={products}
             filters={filters}
             onChange={setFilters}
             resultCount={visible.length}

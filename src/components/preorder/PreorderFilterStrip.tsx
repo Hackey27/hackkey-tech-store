@@ -1,15 +1,18 @@
-import React from 'react';
-import { SlidersHorizontal, X } from 'lucide-react';
-import { PreorderCategory, PreorderDelivery } from '../../../shared/types';
+import React, { useState } from 'react';
+import { ChevronDown, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
+import { PreorderCategory, PreorderDelivery, PreorderProduct } from '../../../shared/types';
 import { STORE_COPY } from '../../config/storeCopy';
 import {
   EMPTY_PREORDER_FILTERS,
   PreorderFilterState,
   isPreorderFilterActive,
 } from '../../utils/preorderFilters';
+import { PreorderAdvancedPanel } from './PreorderAdvancedPanel';
 
 interface PreorderFilterStripProps {
   categories: PreorderCategory[];
+  /** Every product, so the Advanced panel can derive its facets. */
+  products: PreorderProduct[];
   filters: PreorderFilterState;
   onChange: (filters: PreorderFilterState) => void;
   resultCount: number;
@@ -36,18 +39,29 @@ const fieldLabel = 'block text-[10px] font-black uppercase tracking-wider text-w
  */
 export const PreorderFilterStrip: React.FC<PreorderFilterStripProps> = ({
   categories,
+  products,
   filters,
   onChange,
   resultCount,
   open,
   onOpenChange,
 }) => {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const parents = categories.filter((category) => !category.parentId);
-  const children = categories.filter(
-    (category) => filters.categoryId && category.parentId === filters.categoryId
-  );
   const active = isPreorderFilterActive(filters);
   const set = (patch: Partial<PreorderFilterState>) => onChange({ ...filters, ...patch });
+
+  /* The quick dropdowns are a one-category shortcut into the same list the
+     Advanced tree edits. Once the tree holds more than one they can no longer
+     represent it, so they say so rather than showing one of the selections and
+     quietly misreporting the rest. */
+  const singleSelection = filters.categoryIds.length === 1 ? filters.categoryIds[0] : '';
+  const selectedIsChild = categories.find(
+    (category) => category.categoryId === singleSelection && category.parentId
+  );
+  const quickParent = selectedIsChild ? selectedIsChild.parentId || '' : singleSelection;
+  const quickChildren = categories.filter((category) => category.parentId === quickParent);
+  const multiple = filters.categoryIds.length > 1;
 
   return (
     <div
@@ -95,9 +109,12 @@ export const PreorderFilterStrip: React.FC<PreorderFilterStripProps> = ({
           <select
             data-testid="preorder-filter-category"
             className={selectClass}
-            value={filters.categoryId}
-            onChange={(event) => set({ categoryId: event.target.value, subcategoryId: '' })}
+            value={multiple ? '__multiple__' : quickParent}
+            onChange={(event) =>
+              set({ categoryIds: event.target.value ? [event.target.value] : [] })
+            }
           >
+            {multiple && <option value="__multiple__">{STORE_COPY.preorder.filters.multiple(filters.categoryIds.length)}</option>}
             <option value="">{STORE_COPY.preorder.allCategories}</option>
             {parents.map((category) => (
               <option key={category.categoryId} value={category.categoryId}>{category.name}</option>
@@ -105,17 +122,21 @@ export const PreorderFilterStrip: React.FC<PreorderFilterStripProps> = ({
           </select>
         </label>
 
-        {children.length > 0 ? (
+        {!multiple && quickChildren.length > 0 ? (
           <label className="space-y-1">
             <span className={fieldLabel}>{STORE_COPY.preorder.filters.subcategory}</span>
             <select
               data-testid="preorder-filter-subcategory"
               className={selectClass}
-              value={filters.subcategoryId}
-              onChange={(event) => set({ subcategoryId: event.target.value })}
+              value={selectedIsChild ? singleSelection : ''}
+              onChange={(event) =>
+                // Narrowing replaces the parent selection rather than adding to
+                // it; widening again falls back to the parent.
+                set({ categoryIds: [event.target.value || quickParent].filter(Boolean) })
+              }
             >
               <option value="">{STORE_COPY.preorder.filters.allOf}</option>
-              {children.map((category) => (
+              {quickChildren.map((category) => (
                 <option key={category.categoryId} value={category.categoryId}>{category.name}</option>
               ))}
             </select>
@@ -197,6 +218,29 @@ export const PreorderFilterStrip: React.FC<PreorderFilterStripProps> = ({
           {STORE_COPY.preorder.filters.priceNote}
         </p>
       </div>
+
+      <button
+        type="button"
+        data-testid="preorder-advanced-toggle"
+        aria-expanded={advancedOpen}
+        aria-controls="preorder-advanced-panel"
+        onClick={() => setAdvancedOpen((current) => !current)}
+        className="hk-pressable mt-3 inline-flex items-center gap-1.5 rounded-lg border border-white/30 px-2.5 py-1.5 text-[11px] font-black hover:bg-white/10"
+      >
+        {advancedOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        {STORE_COPY.preorder.filters.advanced}
+      </button>
+
+      {advancedOpen && (
+        <div id="preorder-advanced-panel">
+          <PreorderAdvancedPanel
+            categories={categories}
+            products={products}
+            filters={filters}
+            onChange={onChange}
+          />
+        </div>
+      )}
     </div>
   );
 };

@@ -18,6 +18,7 @@ import {
   readableSelections,
   validatePreorderProduct,
 } from '../../shared/preorderCombinations';
+import { similarAxisNames } from '../utils/preorderFilters';
 import { cedisToPesewas, pesewasToCedis } from '../../shared/money';
 
 const inputClass =
@@ -777,9 +778,12 @@ function CategoryPicker({
 function AxisEditor({
   axes,
   onChange,
+  knownAxisNames,
 }: {
   axes: PreorderAxis[];
   onChange: (axes: PreorderAxis[]) => void;
+  /** Axis names already used on other pre-order products. */
+  knownAxisNames: string[];
 }) {
   const move = (index: number, delta: number) => {
     const next = axes.slice();
@@ -850,6 +854,17 @@ function AxisEditor({
               Remove
             </button>
           </div>
+
+          {/* The storefront's Advanced filter matches axes by exact name, so a
+              near-miss here means neither axis ever surfaces as a filter and
+              nothing looks broken. A hint, not a block. */}
+          {similarAxisNames(axis.name, knownAxisNames).length > 0 && (
+            <p className="rounded-lg bg-amber-50 p-2 text-[11px] text-amber-900">
+              Other products already use{' '}
+              <b>{similarAxisNames(axis.name, knownAxisNames).join('”, “')}</b>. Filters group
+              variants by exact name, so use the same wording if this is the same thing.
+            </p>
+          )}
 
           <div className="flex flex-wrap gap-2">
             {axis.options.map((option, optionIndex) => (
@@ -1029,6 +1044,16 @@ export function PreorderSetupSection({
   };
 
   const canUpload = Boolean(editing?.productId);
+
+  /* Axis names in use on every OTHER product, for the near-miss hint. */
+  const otherAxisNames = useMemo(
+    () => [...new Set(
+      products
+        .filter((candidate) => candidate.productId !== editing?.productId)
+        .flatMap((candidate) => candidate.variantAxes.map((axis) => axis.name))
+    )],
+    [products, editing?.productId]
+  );
 
   /**
    * Stores one file and hands back its path.
@@ -1225,7 +1250,11 @@ export function PreorderSetupSection({
                 <DetailsEditor details={editing.details} onChange={(details) => patch({ details })} />
               </div>
 
-              <AxisEditor axes={editing.variantAxes} onChange={(variantAxes) => patch({ variantAxes })} />
+              <AxisEditor
+                axes={editing.variantAxes}
+                onChange={(variantAxes) => patch({ variantAxes })}
+                knownAxisNames={otherAxisNames}
+              />
 
               <CombinationEditor
                 product={editing}
