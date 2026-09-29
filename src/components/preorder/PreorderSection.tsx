@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
 import { PreorderCatalogueResponse, PreorderProduct } from '../../../shared/types';
-import { readableSelections, resolvePreorderSelection } from '../../../shared/preorderCombinations';
 import { STORE_COPY } from '../../config/storeCopy';
 import { PreorderCartAddition } from '../../utils/usePreorderCart';
+import { buildSingleCombinationAddition } from '../../utils/preorderAdd';
 import { PreorderListingView } from './PreorderListingView';
 import { PreorderProductView } from './PreorderProductView';
 
@@ -19,6 +19,11 @@ interface PreorderSectionProps {
   combinationId?: string;
   /** Lets the section hand its catalogue up for searching. */
   onProductsLoaded?: (products: PreorderProduct[]) => void;
+  comparedIds: string[];
+  compareFull: boolean;
+  onToggleCompare: (product: PreorderProduct) => void;
+  onOpenCompare: () => void;
+  onClearCompare: () => void;
 }
 
 /**
@@ -40,6 +45,11 @@ export const PreorderSection: React.FC<PreorderSectionProps> = ({
   onFiltersOpenChange,
   combinationId,
   onProductsLoaded,
+  comparedIds,
+  compareFull,
+  onToggleCompare,
+  onOpenCompare,
+  onClearCompare,
 }) => {
   const [catalogue, setCatalogue] = useState<PreorderCatalogueResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,37 +102,9 @@ export const PreorderSection: React.FC<PreorderSectionProps> = ({
 
   const products = catalogue?.products || [];
 
-  /**
-   * The listing card's add button, for a product with nothing left to choose.
-   *
-   * It resolves through the same function the product page uses rather than
-   * reading the combination directly, so the card and the page cannot end up
-   * pricing the same item differently. The delivery it picks is the product's
-   * first offered one; the cart's per-item selector is where that gets
-   * changed, which is why that selector carries both prices.
-   */
   const addSingleCombination = (product: PreorderProduct) => {
-    const resolved = resolvePreorderSelection(product, {});
-    const combination = resolved.combination;
-    if (!combination) return;
-    const delivery = product.deliveryOptions[0];
-    const pricePesewas =
-      delivery === 'express' ? resolved.priceExpressPesewas : resolved.priceTwoMonthsPesewas;
-    if (typeof pricePesewas !== 'number') return;
-    onAdd({
-      productId: product.productId,
-      productName: product.name,
-      combinationId: combination.combinationId,
-      selectionLabel: readableSelections(combination.selections, product.variantAxes),
-      delivery,
-      pricePesewas,
-      pricesPesewas: {
-        express: resolved.priceExpressPesewas ?? undefined,
-        'two-months': resolved.priceTwoMonthsPesewas ?? undefined,
-      },
-      availableDeliveries: product.deliveryOptions,
-      imageUrl: resolved.imagePath || undefined,
-    });
+    const addition = buildSingleCombinationAddition(product);
+    if (addition) onAdd(addition);
   };
 
   if (productId) {
@@ -164,6 +146,11 @@ export const PreorderSection: React.FC<PreorderSectionProps> = ({
       products={products}
       onSelectProduct={(product) => onOpenProduct(product.productId)}
       onAddProduct={addSingleCombination}
+      comparedIds={comparedIds}
+      compareFull={compareFull}
+      onToggleCompare={onToggleCompare}
+      onOpenCompare={onOpenCompare}
+      onClearCompare={onClearCompare}
       filtersOpen={filtersOpen}
       onFiltersOpenChange={onFiltersOpenChange}
     />

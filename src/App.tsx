@@ -45,6 +45,9 @@ import { PreorderRequestView } from './components/preorder/PreorderRequestView';
 import { preorderResultHref, searchPreorder } from './utils/preorderSearch';
 import type { PreorderProduct } from '../shared/types';
 import { usePreorderCart } from './utils/usePreorderCart';
+import { usePreorderCompare } from './utils/usePreorderCompare';
+import { buildSingleCombinationAddition } from './utils/preorderAdd';
+import { PreorderCompareView } from './components/preorder/PreorderCompareView';
 
 type StoreRoute =
   | { view: 'home' }
@@ -56,6 +59,7 @@ type StoreRoute =
   | { view: 'preorder'; productId?: string }
   | { view: 'preorder-checkout' }
   | { view: 'preorder-request' }
+  | { view: 'preorder-compare' }
   /** A section with a tab but no content yet. Software and Services is never one. */
   | { view: 'section'; section: Exclude<SectionId, 'software'> };
 
@@ -66,6 +70,7 @@ function currentRoute(): StoreRoute {
   if (section.id === 'preorder') {
     if (/^\/preorder\/checkout\/?$/.test(path)) return { view: 'preorder-checkout' };
     if (/^\/preorder\/request\/?$/.test(path)) return { view: 'preorder-request' };
+    if (/^\/preorder\/compare\/?$/.test(path)) return { view: 'preorder-compare' };
     const preorderProduct = path.match(/^\/preorder\/([^/]+)\/?$/);
     return { view: 'preorder', productId: preorderProduct ? decodeURIComponent(preorderProduct[1]) : undefined };
   }
@@ -88,7 +93,8 @@ export const App: React.FC = () => {
   const inPreorder =
     route.view === 'preorder' ||
     route.view === 'preorder-checkout' ||
-    route.view === 'preorder-request';
+    route.view === 'preorder-request' ||
+    route.view === 'preorder-compare';
   const shell = useSectionShell();
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -104,6 +110,7 @@ export const App: React.FC = () => {
   // can be buying a licence and pre-ordering a laptop at the same time, and
   // neither basket may empty or price the other.
   const preorderCart = usePreorderCart();
+  const preorderCompare = usePreorderCompare();
   /* The pre-order filter strip is always on screen above md; on a phone it is
      behind the bottom bar's Filters button, which is the only reason this
      lives up here rather than inside the listing. */
@@ -513,6 +520,29 @@ export const App: React.FC = () => {
             onFiltersOpenChange={setPreorderFiltersOpen}
             combinationId={new URLSearchParams(window.location.search).get('combination') || undefined}
             onProductsLoaded={setPreorderProducts}
+            comparedIds={preorderCompare.productIds}
+            compareFull={preorderCompare.full}
+            onToggleCompare={(product) => preorderCompare.toggle(product.productId)}
+            onOpenCompare={() => navigate('/preorder/compare')}
+            onClearCompare={preorderCompare.clear}
+          />
+        )}
+
+        {route.view === 'preorder-compare' && (
+          <PreorderCompareView
+            /* Ordered as they were picked, and resolved from the live
+               catalogue so a refreshed price cannot be compared stale. */
+            products={preorderCompare.productIds
+              .map((id) => preorderProducts.find((product) => product.productId === id))
+              .filter((product): product is PreorderProduct => Boolean(product))}
+            onRemove={preorderCompare.remove}
+            onBack={() => navigateBack('/preorder')}
+            onBrowse={() => navigate('/preorder')}
+            onOpenProduct={(productId) => navigate(`/preorder/${encodeURIComponent(productId)}`)}
+            onAdd={(product) => {
+              const addition = buildSingleCombinationAddition(product);
+              if (addition) preorderCart.add(addition);
+            }}
           />
         )}
 

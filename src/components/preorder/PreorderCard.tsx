@@ -10,6 +10,11 @@ interface PreorderCardProps {
   onSelect: (product: PreorderProduct) => void;
   /** Only ever called for a product with exactly one combination. */
   onAdd: (product: PreorderProduct) => void;
+  comparing: boolean;
+  /** False once the comparison is full, so the control can say so rather than
+   *  swallowing the tap. */
+  canCompare: boolean;
+  onToggleCompare: (product: PreorderProduct) => void;
 }
 
 /**
@@ -34,7 +39,14 @@ function pricingAvailable(product: PreorderProduct): boolean {
   return preorderCardPricing(product).length > 0;
 }
 
-export const PreorderCard: React.FC<PreorderCardProps> = ({ product, onSelect, onAdd }) => {
+export const PreorderCard: React.FC<PreorderCardProps> = ({
+  product,
+  onSelect,
+  onAdd,
+  comparing,
+  canCompare,
+  onToggleCompare,
+}) => {
   /* One combination means there is nothing left to choose, so the card can sell
      it outright. Anything with variants has no price until the customer picks,
      so its button opens the product page instead of pretending to add. */
@@ -61,6 +73,25 @@ export const PreorderCard: React.FC<PreorderCardProps> = ({ product, onSelect, o
       className="hk-pressable group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-[#d8e7e4] bg-white text-left text-slate-900 hover:border-[#014040]/70 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#014040]"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-[#edf5f3]">
+        {/* Over the picture rather than in the body: the body is already
+            carrying a name, a description, two prices and a button. */}
+        <button
+          type="button"
+          data-testid={`preorder-compare-toggle-${product.productId}`}
+          aria-pressed={comparing}
+          disabled={!comparing && !canCompare}
+          title={!comparing && !canCompare ? STORE_COPY.preorder.compare.full(3) : undefined}
+          onClick={(event) => { event.stopPropagation(); onToggleCompare(product); }}
+          className={`hk-pressable absolute right-2 top-2 z-10 rounded-lg px-2 py-1 text-[10px] font-black shadow-sm ${
+            comparing
+              ? 'bg-[#014040] text-white'
+              : canCompare
+                ? 'bg-white/90 text-[#014040] hover:bg-white'
+                : 'cursor-not-allowed bg-white/60 text-slate-400'
+          }`}
+        >
+          {comparing ? STORE_COPY.preorder.compare.added : STORE_COPY.preorder.compare.add}
+        </button>
         {imageUrl && !imageFailed ? (
           <img
             src={imageUrl}
