@@ -28,8 +28,16 @@ export interface PreorderCartLine {
    *  re-derived so a later axis rename cannot silently relabel a basket. */
   selectionLabel: string;
   delivery: PreorderDelivery;
-  /** Integer pesewas, as everywhere else in the store. */
+  /** Integer pesewas for the delivery currently chosen on this line. */
   pricePesewas: number;
+  /** Both of the winning combination's prices, copied when the line is added.
+   *  The cart lets a customer switch delivery per item, and it must be able to
+   *  re-price that line without going back to the catalogue — which by then
+   *  may have refreshed underneath them. */
+  pricesPesewas: Partial<Record<PreorderDelivery, number>>;
+  /** The deliveries this product offers at all. Some are Two months only, so
+   *  the selector has to be per item rather than per cart. */
+  availableDeliveries: PreorderDelivery[];
   quantity: number;
   imageUrl?: string;
 }
@@ -50,6 +58,7 @@ export interface PreorderCart {
   add: (addition: PreorderCartAddition) => void;
   remove: (id: string) => void;
   setQuantity: (id: string, quantity: number) => void;
+  setDelivery: (id: string, delivery: PreorderDelivery) => void;
   clear: () => void;
 }
 
@@ -100,6 +109,42 @@ export function removePreorderLine(lines: PreorderCartLine[], id: string): Preor
   return lines.filter((line) => line.id !== id);
 }
 
+/**
+ * Switches one line's delivery speed and re-prices it.
+ *
+ * Delivery is part of a line's identity, so this is a move rather than an
+ * edit: if the customer already has the same combination at the speed they are
+ * switching to, the two lines merge instead of the basket showing the same
+ * thing twice. A speed the winning combination carries no price for is
+ * refused outright — the alternative is a line priced at zero, and a free
+ * item on a pre-order is not something anyone would query until it shipped.
+ */
+export function setPreorderLineDelivery(
+  lines: PreorderCartLine[],
+  id: string,
+  delivery: PreorderDelivery
+): PreorderCartLine[] {
+  const line = lines.find((entry) => entry.id === id);
+  if (!line || line.delivery === delivery) return lines;
+
+  const pricePesewas = line.pricesPesewas[delivery];
+  if (typeof pricePesewas !== 'number') return lines;
+
+  const movedId = preorderLineId(line.productId, line.combinationId, delivery);
+  const moved: PreorderCartLine = { ...line, id: movedId, delivery, pricePesewas };
+  const existing = lines.find((entry) => entry.id === movedId);
+
+  if (!existing) return lines.map((entry) => (entry.id === id ? moved : entry));
+
+  return lines
+    .filter((entry) => entry.id !== id)
+    .map((entry) =>
+      entry.id === movedId
+        ? { ...entry, quantity: Math.min(MAX_QUANTITY, entry.quantity + line.quantity) }
+        : entry
+    );
+}
+
 export function setPreorderLineQuantity(
   lines: PreorderCartLine[],
   id: string,
@@ -142,10 +187,14 @@ export function usePreorderCart(): PreorderCart {
     setLines((current) => setPreorderLineQuantity(current, id, quantity));
   }, []);
 
+  const setDelivery = useCallback((id: string, delivery: PreorderDelivery) => {
+    setLines((current) => setPreorderLineDelivery(current, id, delivery));
+  }, []);
+
   const clear = useCallback(() => setLines([]), []);
 
   const count = useMemo(() => preorderCartCount(lines), [lines]);
   const totalPesewas = useMemo(() => preorderCartTotalPesewas(lines), [lines]);
 
-  return { lines, count, totalPesewas, open, setOpen, add, remove, setQuantity, clear };
+  return { lines, count, totalPesewas, open, setOpen, add, remove, setQuantity, setDelivery, clear };
 }

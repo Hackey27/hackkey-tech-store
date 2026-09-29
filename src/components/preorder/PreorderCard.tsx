@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, PackagePlus, SlidersHorizontal } from 'lucide-react';
 import { PreorderProduct } from '../../../shared/types';
 import { preorderCardPricing } from '../../../shared/preorderCombinations';
 import { formatPesewas } from '../../../shared/money';
@@ -8,6 +8,8 @@ import { STORE_COPY } from '../../config/storeCopy';
 interface PreorderCardProps {
   product: PreorderProduct;
   onSelect: (product: PreorderProduct) => void;
+  /** Only ever called for a product with exactly one combination. */
+  onAdd: (product: PreorderProduct) => void;
 }
 
 /**
@@ -28,7 +30,15 @@ interface PreorderCardProps {
  * would be the one that disagrees with the product page, and that is the one
  * the customer quotes back at you.
  */
-export const PreorderCard: React.FC<PreorderCardProps> = ({ product, onSelect }) => {
+function pricingAvailable(product: PreorderProduct): boolean {
+  return preorderCardPricing(product).length > 0;
+}
+
+export const PreorderCard: React.FC<PreorderCardProps> = ({ product, onSelect, onAdd }) => {
+  /* One combination means there is nothing left to choose, so the card can sell
+     it outright. Anything with variants has no price until the customer picks,
+     so its button opens the product page instead of pretending to add. */
+  const directlyAddable = product.combinations.length === 1 && pricingAvailable(product);
   const pricing = preorderCardPricing(product);
   const [imageFailed, setImageFailed] = useState(false);
   const imageUrl = product.previewImagePath || product.galleryImagePaths?.[0];
@@ -106,10 +116,25 @@ export const PreorderCard: React.FC<PreorderCardProps> = ({ product, onSelect })
               {STORE_COPY.preorder.askForPrice}
             </span>
           )}
-          <ChevronRight
-            aria-hidden="true"
-            className="mt-2 h-4 w-4 text-[#014040]/40 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
-          />
+          <button
+            type="button"
+            data-testid={directlyAddable ? 'preorder-card-add' : 'preorder-card-choose'}
+            onClick={(event) => {
+              // The whole card navigates, so the button has to keep its click.
+              event.stopPropagation();
+              if (directlyAddable) onAdd(product);
+              else onSelect(product);
+            }}
+            className={`hk-pressable mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[11px] font-black sm:text-xs ${
+              directlyAddable
+                ? 'bg-[#05ef28] text-[#014040] hover:bg-[#04d824]'
+                : 'border border-[#014040] text-[#014040] hover:bg-[#edf5f3]'
+            }`}
+          >
+            {directlyAddable ? <PackagePlus className="h-3.5 w-3.5 shrink-0" /> : <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />}
+            {directlyAddable ? STORE_COPY.preorder.addToPreorder : STORE_COPY.preorder.chooseOptions}
+            {!directlyAddable && <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />}
+          </button>
         </div>
       </div>
     </article>

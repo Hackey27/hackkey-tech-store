@@ -7,6 +7,7 @@ import { CartFlyout } from './CartFlyout';
 import { WhatsAppIcon } from './WhatsAppIcon';
 import { PreorderCartFlyout } from './preorder/PreorderCartFlyout';
 import { PreorderCartLine } from '../utils/usePreorderCart';
+import { PreorderDelivery } from '../../shared/types';
 
 /**
  * The pre-order basket, when the customer is in that section.
@@ -24,6 +25,7 @@ export interface PreorderCartSlot {
   onOpenChange: (open: boolean) => void;
   onRemoveLine: (id: string) => void;
   onSetQuantity: (id: string, quantity: number) => void;
+  onSetDelivery: (id: string, delivery: PreorderDelivery) => void;
   onBrowse: () => void;
 }
 
@@ -287,6 +289,7 @@ export const Header: React.FC<HeaderProps> = ({
           onBrowse={preorderCart.onBrowse}
           onRemoveLine={preorderCart.onRemoveLine}
           onSetQuantity={preorderCart.onSetQuantity}
+          onSetDelivery={preorderCart.onSetDelivery}
         />
       )}
     </header>

@@ -202,6 +202,13 @@ export const PreorderProductView: React.FC<PreorderProductViewProps> = ({
       selectionLabel: readableSelections(resolved.combination.selections, product.variantAxes),
       delivery,
       pricePesewas,
+      // Both prices travel with the line so the cart can switch delivery
+      // without re-reading a catalogue that may have refreshed by then.
+      pricesPesewas: {
+        express: resolved.priceExpressPesewas ?? undefined,
+        'two-months': resolved.priceTwoMonthsPesewas ?? undefined,
+      },
+      availableDeliveries: product.deliveryOptions,
       imageUrl: resolved.imagePath || undefined,
     });
   };

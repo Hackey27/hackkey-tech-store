@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
-import { PreorderCatalogueResponse } from '../../../shared/types';
+import { PreorderCatalogueResponse, PreorderProduct } from '../../../shared/types';
+import { readableSelections, resolvePreorderSelection } from '../../../shared/preorderCombinations';
 import { STORE_COPY } from '../../config/storeCopy';
 import { PreorderCartAddition } from '../../utils/usePreorderCart';
 import { PreorderListingView } from './PreorderListingView';
@@ -12,6 +13,8 @@ interface PreorderSectionProps {
   onOpenProduct: (productId: string) => void;
   onBack: () => void;
   onAdd: (addition: PreorderCartAddition) => void;
+  filtersOpen: boolean;
+  onFiltersOpenChange: (open: boolean) => void;
 }
 
 /**
@@ -29,6 +32,8 @@ export const PreorderSection: React.FC<PreorderSectionProps> = ({
   onOpenProduct,
   onBack,
   onAdd,
+  filtersOpen,
+  onFiltersOpenChange,
 }) => {
   const [catalogue, setCatalogue] = useState<PreorderCatalogueResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,6 +84,39 @@ export const PreorderSection: React.FC<PreorderSectionProps> = ({
 
   const products = catalogue?.products || [];
 
+  /**
+   * The listing card's add button, for a product with nothing left to choose.
+   *
+   * It resolves through the same function the product page uses rather than
+   * reading the combination directly, so the card and the page cannot end up
+   * pricing the same item differently. The delivery it picks is the product's
+   * first offered one; the cart's per-item selector is where that gets
+   * changed, which is why that selector carries both prices.
+   */
+  const addSingleCombination = (product: PreorderProduct) => {
+    const resolved = resolvePreorderSelection(product, {});
+    const combination = resolved.combination;
+    if (!combination) return;
+    const delivery = product.deliveryOptions[0];
+    const pricePesewas =
+      delivery === 'express' ? resolved.priceExpressPesewas : resolved.priceTwoMonthsPesewas;
+    if (typeof pricePesewas !== 'number') return;
+    onAdd({
+      productId: product.productId,
+      productName: product.name,
+      combinationId: combination.combinationId,
+      selectionLabel: readableSelections(combination.selections, product.variantAxes),
+      delivery,
+      pricePesewas,
+      pricesPesewas: {
+        express: resolved.priceExpressPesewas ?? undefined,
+        'two-months': resolved.priceTwoMonthsPesewas ?? undefined,
+      },
+      availableDeliveries: product.deliveryOptions,
+      imageUrl: resolved.imagePath || undefined,
+    });
+  };
+
   if (productId) {
     const product = products.find((candidate) => candidate.productId === productId);
     if (!product) {
@@ -110,6 +148,9 @@ export const PreorderSection: React.FC<PreorderSectionProps> = ({
       categories={catalogue?.categories || []}
       products={products}
       onSelectProduct={(product) => onOpenProduct(product.productId)}
+      onAddProduct={addSingleCombination}
+      filtersOpen={filtersOpen}
+      onFiltersOpenChange={onFiltersOpenChange}
     />
   );
 };

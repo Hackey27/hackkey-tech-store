@@ -4,6 +4,7 @@ import { Minus, PackagePlus, Plus, Trash2, X } from 'lucide-react';
 import { formatPesewas } from '../../../shared/money';
 import { STORE_COPY } from '../../config/storeCopy';
 import { PreorderCartLine } from '../../utils/usePreorderCart';
+import { PreorderDelivery } from '../../../shared/types';
 
 interface PreorderCartFlyoutProps {
   open: boolean;
@@ -14,6 +15,7 @@ interface PreorderCartFlyoutProps {
   onBrowse: () => void;
   onRemoveLine: (id: string) => void;
   onSetQuantity: (id: string, quantity: number) => void;
+  onSetDelivery: (id: string, delivery: PreorderDelivery) => void;
 }
 
 /**
@@ -39,6 +41,7 @@ export const PreorderCartFlyout: React.FC<PreorderCartFlyoutProps> = ({
   onBrowse,
   onRemoveLine,
   onSetQuantity,
+  onSetDelivery,
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -174,16 +177,45 @@ export const PreorderCartFlyout: React.FC<PreorderCartFlyoutProps> = ({
                   data-testid="preorder-cart-line"
                   className="flex items-start justify-between gap-4 py-3.5"
                 >
-                  <div className="min-w-0">
+                  {/* The resolved image, so a basket of three variants of the
+                      same product is tellable apart at a glance. */}
+                  {line.imageUrl ? (
+                    <img
+                      src={line.imageUrl}
+                      alt=""
+                      data-testid="preorder-cart-line-image"
+                      className="h-14 w-14 shrink-0 rounded-lg border border-[#e2ecea] object-cover"
+                    />
+                  ) : (
+                    <span className="h-14 w-14 shrink-0 rounded-lg border border-dashed border-[#e2ecea]" />
+                  )}
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-[#014040]">{line.productName}</p>
                     {line.selectionLabel && (
                       <p className="truncate text-[11px] text-slate-500">{line.selectionLabel}</p>
                     )}
-                    <p className="mt-0.5 text-[11px] font-semibold text-[#025656]">
-                      {line.delivery === 'express'
-                        ? STORE_COPY.preorder.delivery.express
-                        : STORE_COPY.preorder.delivery.twoMonths}
-                    </p>
+                    {/* Per item, not per cart: some products are Two months
+                        only, so one control for the whole basket could not
+                        represent what is actually orderable. */}
+                    <select
+                      data-testid="preorder-cart-line-delivery"
+                      aria-label={STORE_COPY.preorder.delivery.label}
+                      value={line.delivery}
+                      onChange={(event) => onSetDelivery(line.id, event.target.value as PreorderDelivery)}
+                      className="mt-1 w-full rounded-lg border border-[#d0e4e0] bg-white px-2 py-1 text-[11px] font-bold text-[#025656]"
+                    >
+                      {line.availableDeliveries.map((delivery) => (
+                        <option
+                          key={delivery}
+                          value={delivery}
+                          disabled={typeof line.pricesPesewas[delivery] !== 'number'}
+                        >
+                          {delivery === 'express'
+                            ? STORE_COPY.preorder.delivery.express
+                            : STORE_COPY.preorder.delivery.twoMonths}
+                        </option>
+                      ))}
+                    </select>
                     <div className="mt-2 inline-flex items-center gap-1 rounded-lg border border-[#d0e4e0]">
                       <button
                         type="button"

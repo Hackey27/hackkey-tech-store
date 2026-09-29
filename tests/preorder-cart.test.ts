@@ -8,6 +8,7 @@ import {
   preorderCartTotalPesewas,
   preorderLineId,
   removePreorderLine,
+  setPreorderLineDelivery,
   setPreorderLineQuantity,
 } from '../src/utils/usePreorderCart';
 import { cedisToPesewas } from '../shared/money';
@@ -30,6 +31,8 @@ function addition(overrides: Partial<PreorderCartAddition> = {}): PreorderCartAd
     selectionLabel: 'Black, XL',
     delivery: 'express',
     pricePesewas: cedisToPesewas(145),
+    pricesPesewas: { express: cedisToPesewas(145) },
+    availableDeliveries: ['express'],
     ...overrides,
   };
 }
@@ -142,4 +145,60 @@ test('the badge counts units, and the total multiplies each line by its quantity
 test('an empty basket totals zero rather than anything stranger', () => {
   assert.equal(preorderCartCount([]), 0);
   assert.equal(preorderCartTotalPesewas([]), 0);
+});
+
+/* -- switching a line's delivery ------------------------------------------- */
+
+function twoSpeed(overrides: Partial<PreorderCartAddition> = {}): PreorderCartAddition {
+  return {
+    ...addition(),
+    pricesPesewas: { express: cedisToPesewas(145), 'two-months': cedisToPesewas(100) },
+    availableDeliveries: ['express', 'two-months'],
+    ...overrides,
+  };
+}
+
+test('switching delivery re-prices the line from the price copied with it', () => {
+  const lines = addPreorderLine([], twoSpeed());
+  const switched = setPreorderLineDelivery(lines, lines[0].id, 'two-months');
+  assert.equal(switched.length, 1);
+  assert.equal(switched[0].delivery, 'two-months');
+  assert.equal(switched[0].pricePesewas, cedisToPesewas(100));
+});
+
+test('...and re-identifies it, since delivery is part of a line id', () => {
+  const lines = addPreorderLine([], twoSpeed());
+  const switched = setPreorderLineDelivery(lines, lines[0].id, 'two-months');
+  assert.equal(switched[0].id, preorderLineId('shirt', 'colour-black__size-xl', 'two-months'));
+});
+
+test('switching onto a line that already exists merges instead of duplicating', () => {
+  // The same combination at both speeds, then the express one switched down.
+  // Two identical rows in a basket reads as a bug.
+  const both = addPreorderLine(
+    addPreorderLine([], twoSpeed()),
+    twoSpeed({ delivery: 'two-months', pricePesewas: cedisToPesewas(100) })
+  );
+  assert.equal(both.length, 2);
+  const merged = setPreorderLineDelivery(both, both[0].id, 'two-months');
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].delivery, 'two-months');
+  assert.equal(merged[0].quantity, 2);
+});
+
+test('a speed the combination carries no price for is refused', () => {
+  // Allowing it would put a line on the order at no price, and a free
+  // pre-order is not something anyone queries until it ships.
+  const lines = addPreorderLine([], twoSpeed({ pricesPesewas: { express: cedisToPesewas(145) } }));
+  assert.deepEqual(setPreorderLineDelivery(lines, lines[0].id, 'two-months'), lines);
+});
+
+test('switching to the speed already selected changes nothing', () => {
+  const lines = addPreorderLine([], twoSpeed());
+  assert.equal(setPreorderLineDelivery(lines, lines[0].id, 'express'), lines);
+});
+
+test('an unknown line id is a no-op rather than a throw', () => {
+  const lines = addPreorderLine([], twoSpeed());
+  assert.equal(setPreorderLineDelivery(lines, 'nope', 'two-months'), lines);
 });

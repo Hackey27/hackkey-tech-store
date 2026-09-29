@@ -4,7 +4,7 @@ import { Hero } from './components/Hero';
 import { CategoryCard } from './components/CategoryCard';
 import { CategoryPage } from './components/CategoryPage';
 import { ProductCard } from './components/ProductCard';
-import { CurvedNav } from './components/CurvedNav';
+import { CurvedNav, PREORDER_NAV_ITEMS } from './components/CurvedNav';
 import { useScrollReveal } from './utils/useScrollReveal';
 import { FindOrderView } from './components/FindOrderView';
 import { HelpHubView } from './components/HelpHubView';
@@ -89,6 +89,10 @@ export const App: React.FC = () => {
   // can be buying a licence and pre-ordering a laptop at the same time, and
   // neither basket may empty or price the other.
   const preorderCart = usePreorderCart();
+  /* The pre-order filter strip is always on screen above md; on a phone it is
+     behind the bottom bar's Filters button, which is the only reason this
+     lives up here rather than inside the listing. */
+  const [preorderFiltersOpen, setPreorderFiltersOpen] = useState(false);
   const [cardChoice, setCardChoice] = useState<CardChoiceRequest | null>(null);
   const [buyNowItem, setBuyNowItem] = useState<CartItem | null>(null);
   // A snapshot, not a live reference: submitting empties the cart, and the
@@ -105,6 +109,17 @@ export const App: React.FC = () => {
   const announcementHandledRef = useRef(false);
   const [nextSteps, setNextSteps] = useState<{ phone: string; orderId: string } | null>(null);
   const [requestLaunchMode, setRequestLaunchMode] = useState<'software' | 'laptop' | null>(null);
+
+  /* The section panel's opening display floats over the top-left of the page,
+     which on the pre-order listing is exactly where the filter strip's first
+     controls sit. Arriving in the section closes it, so the strip is never
+     half-covered on the first look. Keyed on entering the section, so a panel
+     the reader opens by hand afterwards stays open. */
+  useEffect(() => {
+    if (route.view === 'preorder') shell.close();
+    // `shell.close` is stable and the route object is rebuilt on every
+    // navigation, so this keys on the section rather than the object.
+  }, [route.view === 'preorder']);
 
   // Fetch catalog from Phase 1 backend endpoint /api/catalog
   const fetchCatalogData = async () => {
@@ -389,6 +404,7 @@ export const App: React.FC = () => {
           onOpenChange: preorderCart.setOpen,
           onRemoveLine: preorderCart.remove,
           onSetQuantity: preorderCart.setQuantity,
+          onSetDelivery: preorderCart.setDelivery,
           onBrowse: () => { preorderCart.setOpen(false); navigate('/preorder'); },
         } : undefined}
       />
@@ -448,6 +464,8 @@ export const App: React.FC = () => {
             onOpenProduct={(productId) => navigate(`/preorder/${encodeURIComponent(productId)}`)}
             onBack={() => navigateBack('/preorder')}
             onAdd={preorderCart.add}
+            filtersOpen={preorderFiltersOpen}
+            onFiltersOpenChange={setPreorderFiltersOpen}
           />
         )}
 
@@ -659,6 +677,9 @@ export const App: React.FC = () => {
 
       {/* Mobile Fixed Bottom Navigation */}
       <CurvedNav
+        // The pre-order tab gets its own three-item bar; every other section
+        // keeps the software one.
+        items={inPreorder ? PREORDER_NAV_ITEMS : undefined}
         activeTab={route.view === 'order-access' ? 'find-order' : activeTab}
         cartSlot={inPreorder ? {
           label: STORE_COPY.preorder.title,
@@ -666,12 +687,30 @@ export const App: React.FC = () => {
           onSelect: () => preorderCart.setOpen(true),
         } : undefined}
         onSelectTab={(tab) => {
+          if (inPreorder) {
+            // Filters opens the strip; Home is the pre-order listing, not the
+            // storefront — leaving the section from its own bar would be a
+            // surprise.
+            if (tab === 'filters') {
+              // Both want the same corner of a phone screen.
+              shell.close();
+              setPreorderFiltersOpen(true);
+              return;
+            }
+            if (tab === 'home') {
+              if (route.productId) navigate('/preorder');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              return;
+            }
+          }
           // The cart is a flyout rather than a page, same as the header's cart
           // button. Setting it as the active tab would show an empty page.
           if (tab === 'cart') { setCartOpen(true); return; }
           if (route.view !== 'home') navigate('/');
           if (tab === 'request') setRequestLaunchMode(null);
-          setActiveTab(tab);
+          // 'filters' and 'cart' never become the active tab: they open a
+          // panel rather than a page, and the bar falls back to Home.
+          if (tab !== 'filters') setActiveTab(tab);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
       />
