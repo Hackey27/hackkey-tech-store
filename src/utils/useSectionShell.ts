@@ -1,15 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
-/** How far the reader has to scroll before the opening display gets out of
- *  the way. Far enough not to trip on a stray wheel notch. */
-const COLLAPSE_THRESHOLD_PX = 120;
 /** Width of the expanded panel. It overlays the page, so this displaces
  *  nothing. */
 export const SECTION_PANEL_WIDTH_PX = 248;
-/** Width of the collapsed rail. Matched to the header hamburger's 40px button
- *  so the rail's icons sit on the same vertical line as the hamburger. */
-export const COLLAPSED_RAIL_PX = 40;
-
 /**
  * Where the panel is, and how it got there.
  *
@@ -75,7 +68,7 @@ export function useSectionShell(): SectionShell {
     const onScroll = () => {
       // Only the opening display yields to scroll, and only once.
       setState((current) =>
-        current === 'showcase' && window.scrollY > COLLAPSE_THRESHOLD_PX ? 'closed' : current
+        current === 'showcase' && window.scrollY > 0 ? 'closed' : current
       );
     };
     // A reload that restores a scroll position partway down the page should

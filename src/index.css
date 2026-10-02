@@ -413,28 +413,6 @@
   background: #014040;
 }
 
-/* Section shell (the hamburger panel down the left).
- *
- * Width and opacity are scrubbed to scroll position in JS, so the only job here
- * is to ease the parts that change in steps: the jump when the reader takes
- * control by hand, and the eased expansion when they scroll back to the top.
- *
- * Width is transitioned deliberately, against the usual rule about animating
- * layout properties. The panel is a fixed-position element outside the document
- * flow and it overlays the page rather than displacing it, so its width drives
- * no reflow of anything. */
-.hk-section-nav {
-  transition:
-    width 260ms var(--hk-ease-out),
-    opacity 200ms ease;
-}
-
-/* The scrub is the whole point, so reduced motion gets the two end states and
- * no travel between them. */
-@media (prefers-reduced-motion: reduce) {
-  .hk-section-nav { transition: none; }
-}
-
 /* Keep card actions available to touch and keyboard users. */
 @media (min-width: 768px) and (hover: hover) and (pointer: fine) {
   .hk-card-compare { opacity: 0; pointer-events: none; transition: opacity 150ms; }
