@@ -259,6 +259,55 @@ export const PreorderProductView: React.FC<PreorderProductViewProps> = ({
     ),
   });
 
+  const variantSelectors = (
+    <>
+      {resolved.axes.map((axis) =>
+        axis.visible ? (
+          <fieldset
+            key={axis.name}
+            data-testid={`preorder-axis-${axis.name}`}
+            className="mt-6"
+          >
+            <legend className="text-xs font-black uppercase tracking-wider text-[#025656]">
+              {axis.name}
+            </legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {axis.options.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  data-testid={`preorder-option-${axis.name}-${option.value}`}
+                  data-enabled={option.enabled ? "true" : "false"}
+                  disabled={!option.enabled}
+                  aria-pressed={option.selected}
+                  title={
+                    option.enabled
+                      ? undefined
+                      : STORE_COPY.preorder.unavailableOption
+                  }
+                  onClick={() => toggleOption(axis.name, option.value)}
+                  className={`hk-pressable rounded-xl border px-3.5 py-2 text-sm font-bold ${
+                    option.selected
+                      ? "border-[#014040] bg-[#014040] text-white"
+                      : option.enabled
+                        ? "border-[#d0e4e0] bg-white text-[#014040] hover:bg-[#edf5f3]"
+                        : // Greyed and struck through, never hidden: a
+                          // customer should be able to see that Red exists
+                          // and is simply not available with what they
+                          // have picked so far.
+                          "cursor-not-allowed border-[#e6eeec] bg-[#f4f8f7] text-slate-400 line-through"
+                  }`}
+                >
+                  {option.value}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        ) : null,
+      )}
+    </>
+  );
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <button
@@ -296,53 +345,9 @@ export const PreorderProductView: React.FC<PreorderProductViewProps> = ({
             </div>
           )}
 
-          {/* Selectors, in the product's own axis order. A hidden axis keeps
-              its place in that order rather than being filtered out, so the
-              ones still showing do not jump sideways as choices narrow. */}
-          {resolved.axes.map((axis) =>
-            axis.visible ? (
-              <fieldset
-                key={axis.name}
-                data-testid={`preorder-axis-${axis.name}`}
-                className="mt-6"
-              >
-                <legend className="text-xs font-black uppercase tracking-wider text-[#025656]">
-                  {axis.name}
-                </legend>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {axis.options.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      data-testid={`preorder-option-${axis.name}-${option.value}`}
-                      data-enabled={option.enabled ? "true" : "false"}
-                      disabled={!option.enabled}
-                      aria-pressed={option.selected}
-                      title={
-                        option.enabled
-                          ? undefined
-                          : STORE_COPY.preorder.unavailableOption
-                      }
-                      onClick={() => toggleOption(axis.name, option.value)}
-                      className={`hk-pressable rounded-xl border px-3.5 py-2 text-sm font-bold ${
-                        option.selected
-                          ? "border-[#014040] bg-[#014040] text-white"
-                          : option.enabled
-                            ? "border-[#d0e4e0] bg-white text-[#014040] hover:bg-[#edf5f3]"
-                            : // Greyed and struck through, never hidden: a
-                              // customer should be able to see that Red exists
-                              // and is simply not available with what they
-                              // have picked so far.
-                              "cursor-not-allowed border-[#e6eeec] bg-[#f4f8f7] text-slate-400 line-through"
-                      }`}
-                    >
-                      {option.value}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-            ) : null,
-          )}
+          <div className="lg:hidden" data-testid="preorder-mobile-variants">
+            {variantSelectors}
+          </div>
 
           <section className="mt-7" aria-label="Product gallery">
             {product.galleryImagePaths.length > 0 && (
@@ -399,110 +404,121 @@ export const PreorderProductView: React.FC<PreorderProductViewProps> = ({
             </div>
           )}
         </div>
-        <aside
-          data-testid="preorder-sticky-pricing"
-          className="sticky top-[112px] z-30 row-start-1 rounded-2xl border border-[#d8e7e4] bg-white/95 p-3 shadow-sm backdrop-blur-sm md:top-[76px] lg:col-start-2 lg:p-5"
-        >
-          <fieldset data-testid="preorder-delivery">
-            <legend className="mb-2 text-[10px] font-black uppercase tracking-wider text-[#014040]">
-              Delivery time
-            </legend>
-            <div className="grid grid-cols-2 gap-2">
-              {product.deliveryOptions.map((option) => {
-                const actual =
-                  option === "express"
-                    ? resolved.priceExpressPesewas
-                    : resolved.priceTwoMonthsPesewas;
-                const starting = matchingPricing.find(
-                  (entry) => entry.delivery === option,
-                );
-                return (
-                  <button
-                    key={option}
-                    type="button"
-                    data-testid={"preorder-delivery-" + option}
-                    aria-pressed={delivery === option}
-                    onClick={() => setDelivery(option)}
-                    className={
-                      "hk-pressable flex min-w-0 flex-col items-start gap-1.5 rounded-xl border p-2 text-left " +
-                      (delivery === option
-                        ? "border-[#014040] bg-[#edf5f3]"
-                        : "border-[#d0e4e0] bg-white")
-                    }
-                  >
-                    <PreorderDeliveryLabel delivery={option} />
-                    <span className="break-words text-sm font-black text-[#014040] sm:text-base">
-                      {actual !== null
-                        ? formatPesewas(actual)
-                        : starting
-                          ? starting.uniform
-                            ? formatPesewas(starting.pricePesewas)
-                            : STORE_COPY.preorder.fromPrice(
-                                formatPesewas(starting.pricePesewas),
-                              )
-                          : STORE_COPY.preorder.askForPrice}
-                    </span>
-                    <span className="hidden text-[11px] text-slate-500 lg:block">
-                      {DELIVERY_NOTES[option]}
-                    </span>
-                  </button>
-                );
-              })}
+        <div className="sticky top-[112px] z-30 row-start-1 min-w-0 md:top-[76px] lg:col-start-2">
+          <aside
+            data-testid="preorder-sticky-pricing"
+            className="rounded-2xl border border-[#d8e7e4] bg-white/95 p-3 shadow-sm backdrop-blur-sm lg:p-5"
+          >
+            <fieldset data-testid="preorder-delivery">
+              <legend className="mb-2 text-[10px] font-black uppercase tracking-wider text-[#014040]">
+                Delivery time
+              </legend>
+              <div className="grid grid-cols-2 gap-2">
+                {product.deliveryOptions.map((option) => {
+                  const actual =
+                    option === "express"
+                      ? resolved.priceExpressPesewas
+                      : resolved.priceTwoMonthsPesewas;
+                  const starting = matchingPricing.find(
+                    (entry) => entry.delivery === option,
+                  );
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      data-testid={"preorder-delivery-" + option}
+                      aria-pressed={delivery === option}
+                      onClick={() => setDelivery(option)}
+                      className={
+                        "hk-pressable flex min-w-0 flex-col items-start gap-1.5 rounded-xl border p-2 text-left " +
+                        (delivery === option
+                          ? "border-[#014040] bg-[#edf5f3]"
+                          : "border-[#d0e4e0] bg-white")
+                      }
+                    >
+                      <PreorderDeliveryLabel delivery={option} />
+                      <span className="break-words text-sm font-black text-[#014040] sm:text-base">
+                        {actual !== null
+                          ? formatPesewas(actual)
+                          : starting
+                            ? starting.uniform
+                              ? formatPesewas(starting.pricePesewas)
+                              : STORE_COPY.preorder.fromPrice(
+                                  formatPesewas(starting.pricePesewas),
+                                )
+                            : STORE_COPY.preorder.askForPrice}
+                      </span>
+                      <span className="hidden text-[11px] text-slate-500 lg:block">
+                        {DELIVERY_NOTES[option]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+            <div className="hidden lg:block">
+              {pricePesewas !== null ? (
+                <p
+                  key={pricePesewas}
+                  data-testid="preorder-price"
+                  className="hk-price-change mt-4 text-2xl font-black text-[#014040]"
+                >
+                  {formatPesewas(pricePesewas)}
+                </p>
+              ) : (
+                <p
+                  data-testid="preorder-price-pending"
+                  className="mt-3 text-sm font-bold text-[#025656]"
+                >
+                  {resolved.missingAxes.length
+                    ? STORE_COPY.preorder.choosePrompt(resolved.missingAxes)
+                    : STORE_COPY.preorder.askForPrice}
+                </p>
+              )}
             </div>
-          </fieldset>
-          <div className="hidden lg:block">
-            {pricePesewas !== null ? (
-              <p
-                key={pricePesewas}
-                data-testid="preorder-price"
-                className="hk-price-change mt-4 text-2xl font-black text-[#014040]"
-              >
-                {formatPesewas(pricePesewas)}
-              </p>
-            ) : (
-              <p
-                data-testid="preorder-price-pending"
-                className="mt-3 text-sm font-bold text-[#025656]"
-              >
-                {resolved.missingAxes.length
+            <button
+              type="button"
+              id="preorder-add-btn"
+              data-testid="preorder-add-btn"
+              disabled={!canAdd}
+              onClick={handleAdd}
+              className={
+                "hk-pressable mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black " +
+                (canAdd
+                  ? "bg-[#05ef28] text-[#014040] hover:bg-[#04d824]"
+                  : "cursor-not-allowed bg-[#dfe9e7] text-slate-500")
+              }
+            >
+              <PackagePlus className="h-4 w-4" />
+              {canAdd
+                ? STORE_COPY.preorder.addToCart
+                : resolved.missingAxes.length
                   ? STORE_COPY.preorder.choosePrompt(resolved.missingAxes)
                   : STORE_COPY.preorder.askForPrice}
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            id="preorder-add-btn"
-            data-testid="preorder-add-btn"
-            disabled={!canAdd}
-            onClick={handleAdd}
-            className={
-              "hk-pressable mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black " +
-              (canAdd
-                ? "bg-[#05ef28] text-[#014040] hover:bg-[#04d824]"
-                : "cursor-not-allowed bg-[#dfe9e7] text-slate-500")
-            }
-          >
-            <PackagePlus className="h-4 w-4" />
-            {canAdd
-              ? STORE_COPY.preorder.addToCart
-              : resolved.missingAxes.length
-                ? STORE_COPY.preorder.choosePrompt(resolved.missingAxes)
-                : STORE_COPY.preorder.askForPrice}
-          </button>
-          <button
-            type="button"
-            data-testid="preorder-product-compare"
-            disabled={comparing || !canCompare}
-            onClick={() => onCompare(product)}
-            className="hk-pressable mt-3 hidden w-full items-center justify-center gap-2 rounded-xl border border-[#014040] px-4 py-2.5 text-xs font-black text-[#014040] disabled:opacity-50 lg:flex"
-          >
-            <Scale className="h-4 w-4" />
-            {comparing
-              ? STORE_COPY.preorder.compare.added
-              : STORE_COPY.preorder.compare.start}
-          </button>
-        </aside>
+            </button>
+            <button
+              type="button"
+              data-testid="preorder-product-compare"
+              disabled={comparing || !canCompare}
+              onClick={() => onCompare(product)}
+              className="hk-pressable mt-3 hidden w-full items-center justify-center gap-2 rounded-xl border border-[#014040] px-4 py-2.5 text-xs font-black text-[#014040] disabled:opacity-50 lg:flex"
+            >
+              <Scale className="h-4 w-4" />
+              {comparing
+                ? STORE_COPY.preorder.compare.added
+                : STORE_COPY.preorder.compare.start}
+            </button>
+          </aside>
+          {resolved.axes.some((axis) => axis.visible) && (
+            <section
+              data-testid="preorder-desktop-variants"
+              aria-label="Product variants"
+              className="mt-4 hidden rounded-2xl border border-[#d8e7e4] bg-white px-5 pb-5 lg:block"
+            >
+              {variantSelectors}
+            </section>
+          )}
+        </div>
       </div>
       <button
         type="button"
