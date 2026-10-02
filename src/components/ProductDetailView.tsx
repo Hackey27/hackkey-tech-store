@@ -354,13 +354,6 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
 
         {product.kind === 'laptop' && product.laptop && <div className="max-w-4xl lg:hidden"><LaptopSpecs laptop={product.laptop} /></div>}
 
-        {product.showSingleLicenceDisclaimer === true && (
-          <div className="flex max-w-3xl items-start gap-2 rounded-2xl border-l-4 border-[#e0a800] bg-[#fffaf0] p-4 text-xs leading-relaxed text-[#8a5b00]">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{STORE_COPY.deviceLock.before}</span>
-          </div>
-        )}
-
         {isParallelsProduct && <section className="max-w-3xl rounded-2xl border border-amber-200 bg-[#fffaf0] p-4"><h2 className="text-base font-black text-[#014040]">Before installing Parallels</h2><p className="mt-2 text-sm leading-6 text-slate-700">You will need approximately <strong>8GB of data</strong> to download the required files and about <strong>50GB of free storage</strong> on your MacBook for the installation.</p></section>}
 
         <ProductGallery images={product.screenshots || []} productName={productName} kind={product.kind} openRequest={galleryOpenRequest} />

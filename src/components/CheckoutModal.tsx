@@ -47,6 +47,8 @@ export function CheckoutModal({ items, mode, paymentOptions, onClose, onPaymentR
   const [error, setError] = useState('');
   const [paymentResult, setPaymentResult] = useState<{ options: PublicPaymentOptions; orderIds: string[]; cartId?: string; totalPesewas: number; authorizationUrl?: string } | null>(null);
   const [paymentResolved, setPaymentResolved] = useState<Order | null>(null);
+  const [licenceAgreed, setLicenceAgreed] = useState(false);
+  const restrictedSoftware = items.filter((item) => item.product.kind === 'product' && item.product.showSingleLicenceDisclaimer === true);
 
   const total = items.reduce((sum, item) => sum + linePesewas(item), 0);
   const closeForm = useBackDismiss(true, onClose);
@@ -99,6 +101,20 @@ export function CheckoutModal({ items, mode, paymentOptions, onClose, onPaymentR
   const lead = mode === 'cart'
     ? STORE_COPY.cart.checkoutLead(items.length)
     : 'Enter your details to continue directly to secure payment. This item will not be added to your cart.';
+
+  // Gate the shared checkout, so card purchases, selected versions and cart
+  // purchases all require agreement before customer details are rendered.
+  if (restrictedSoftware.length > 0 && !licenceAgreed) {
+    return <div className="hk-overlay-enter fixed inset-0 z-[90] flex items-center justify-center bg-[#001f1f]/75 p-4" role="dialog" aria-modal="true" aria-labelledby="licence-disclaimer-title" aria-describedby="licence-disclaimer-text" onKeyDown={(event) => { if (event.key === 'Escape') closeForm(); }}>
+      <div className="hk-modal-enter relative max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
+        <button type="button" onClick={closeForm} className="absolute right-4 top-4 rounded-full p-2 text-slate-500 hover:bg-slate-100" aria-label="Close licence disclaimer"><X className="h-5 w-5" /></button>
+        <h2 id="licence-disclaimer-title" className="pr-10 text-2xl font-black text-[#014040]">Before installation</h2>
+        <p className="mt-3 text-sm font-bold text-[#014040]">{[...new Set(restrictedSoftware.map(item => item.product.name))].join(', ')}</p>
+        <p id="licence-disclaimer-text" className="mt-4 rounded-2xl border-l-4 border-[#e0a800] bg-[#fffaf0] p-4 text-sm leading-7 text-[#8a5b00]">{STORE_COPY.deviceLock.before}</p>
+        <button type="button" autoFocus onClick={() => setLicenceAgreed(true)} className="hk-pressable mt-6 w-full rounded-xl bg-[#05ef28] px-5 py-3.5 text-sm font-black text-[#014040]">Agree</button>
+      </div>
+    </div>;
+  }
 
   return <div className="hk-overlay-enter fixed inset-0 z-[90] flex items-center justify-center bg-[#001f1f]/75 p-4" role="dialog" aria-modal="true" aria-label={eyebrow}>
     <form onSubmit={submit} className="hk-modal-enter relative max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
