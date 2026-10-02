@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { CatalogueItem, Category } from "../../shared/types";
+import { formatPesewas } from "../../shared/money";
+import { STORE_COPY } from "../config/storeCopy";
 import {
   emptyLaptopFilters,
   filterLaptops,
@@ -220,6 +222,11 @@ export function LaptopSection({
                   {item.name}
                 </span>
                 <span className="block font-normal">{item.laptop?.model}</span>
+                <span data-testid="laptop-comparison-price" className="mt-2 block break-words text-base font-black text-[#014040] sm:text-lg">
+                  {item.pricePesewas !== undefined && item.pricePesewas > 0
+                    ? formatPesewas(item.pricePesewas)
+                    : STORE_COPY.product.askForPrice}
+                </span>
               </th>
             ))}
           </tr>
