@@ -7,6 +7,7 @@ import {
   LicencePoolEntry,
   Order,
   Product,
+  Variant,
   Service,
   Laptop,
   LandingSettings,
@@ -695,7 +696,7 @@ export async function deleteUnpaidOrder(orderId: string): Promise<void> {
   await ref.delete();
 }
 
-export async function saveProductConfiguration(productId: string, input: Product): Promise<Product> {
+export function normalizeProductConfiguration(productId: string, input: Product): Product {
   if (!input.productName?.trim()) throw new Error('Product name is required.');
   const product: Product = {
     ...input,
@@ -716,7 +717,22 @@ export async function saveProductConfiguration(productId: string, input: Product
       deliveryCodeType: variant.deliveryCodeType || 'licence'
     }))
   };
-  await getFirestore().collection(COLLECTIONS.products).doc(productId).set(product);
+  return product;
+}
+
+export async function saveProductConfiguration(productId: string, input: Product, db = getFirestore()): Promise<Product> {
+  const product = normalizeProductConfiguration(productId, input);
+  await db.runTransaction(async tx => {
+    const ref = db.collection(COLLECTIONS.products).doc(productId);
+    const current = await tx.get(ref);
+    if (!current.exists) throw new Error('Software not found. Use Add a software to create it.');
+    const savedIds = (current.data()?.variants || []).map((variant: Variant) => variant.variantId).sort();
+    const incomingIds = product.variants.map(variant => variant.variantId).sort();
+    if (savedIds.length !== incomingIds.length || savedIds.some((id: string, index: number) => id !== incomingIds[index])) {
+      throw new Error('The saved versions differ from this form. Reload before saving. Use Add version for new versions; existing version IDs cannot be renamed or removed.');
+    }
+    tx.set(ref, product);
+  });
   invalidateCatalogueCache();
   return product;
 }

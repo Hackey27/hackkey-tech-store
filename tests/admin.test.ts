@@ -34,6 +34,24 @@ test('bearer token parsing refuses missing and malformed authorization', () => {
   assert.equal(bearerToken('Bearer token-value'), 'token-value');
 });
 
+test('software and version creation/edit routes require administrator authentication', async () => {
+  const app = express();
+  app.use(express.json());
+  app.use('/api/admin', createAdminRouter());
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise<void>(resolve => server.once('listening', resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === 'object');
+    for (const [method, path] of [['POST', '/products'], ['POST', '/products/AMOS/versions'], ['PUT', '/products/AMOS/versions/AMOS01']]) {
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/admin${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      assert.equal(response.status, 401, `${method} ${path}`);
+    }
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+});
+
 test('assigned-value corrections require a recent verified sign-in', () => {
   const now = 1_800_000_000;
   assert.equal(hasRecentAdminAuth({ uid: 'admin-1', authTime: now - 60 }, now), true);
