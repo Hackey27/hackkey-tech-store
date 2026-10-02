@@ -12,6 +12,7 @@ interface ProductCardProps {
   onBuyNowClick: (product: CatalogueItem) => void;
   onAddToCart?: (product: CatalogueItem) => void;
   onInterestClick?: (product: CatalogueItem) => void;
+  onCompare?: (product: CatalogueItem) => void;
   showCategoryLabel?: boolean;
 }
 
@@ -21,6 +22,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onBuyNowClick,
   onAddToCart,
   onInterestClick,
+  onCompare,
   showCategoryLabel = true
 }) => {
   const versionCount = new Set((product.variants || []).filter((variant) => variant.available).map((variant) => variant.versionOrPlan)).size;
@@ -138,6 +140,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       {/* Footer: Price in GHS & Primary Action Button */}
       <div className={`px-5 sm:px-6 py-4 border-t flex flex-wrap items-center justify-between gap-3 ${product.kind === 'product' ? 'border-[#025656] bg-[#014040]' : 'border-[#e2ecea] bg-[#f8fbfa]'}`}>
         {/* Price in GHS only */}
+        {product.kind === 'laptop' && onCompare && <button type="button" onClick={event => { event.stopPropagation(); onCompare(product); }} className="rounded-xl border border-[#014040] px-3 py-2.5 text-xs font-black text-[#014040]">Compare laptop</button>}
         {product.kind !== 'laptop' && <div className={product.kind === 'product' ? 'min-w-0' : undefined}>
           <span className={`text-[10px] uppercase tracking-wider font-bold block ${product.kind === 'product' ? 'text-white/70' : 'text-slate-500'}`}>
             {STORE_COPY.product.priceLabel}

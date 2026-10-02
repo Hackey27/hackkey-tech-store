@@ -42,7 +42,7 @@ export const STORE_COPY = {
     },
     laptops: {
       label: 'Laptops on sale',
-      caption: 'Browse laptops in the main catalogue for now',
+      caption: 'Browse, filter and compare laptops',
     },
     preorder: {
       label: 'Pre-order',

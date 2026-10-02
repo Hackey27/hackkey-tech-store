@@ -1,20 +1,7 @@
 import { Boxes, CalendarClock, Laptop, Sparkles, Wrench } from 'lucide-react';
 import { STORE_COPY } from './storeCopy';
 
-/**
- * The store's top-level sections, as listed in the hamburger panel.
- *
- * Only Software and Services and Pre-order are built. The other three render
- * as disabled tabs with a coming-soon state rather than dead links, because a
- * tab that navigates nowhere reads as a broken site while a tab that says
- * "coming soon" reads as a roadmap.
- *
- * Laptops deliberately stays a placeholder even though laptops are already
- * purchasable: they live under the Software and Services catalogue at
- * /category/{laptopsCategoryId} until the Laptops brief moves them here.
- * Pointing the tab at an empty section before then would hide stock that is
- * currently selling.
- */
+/** Top-level storefront sections in the hamburger menu. */
 
 export type SectionId = 'software' | 'laptops' | 'preorder' | 'hacks' | 'technicians';
 
@@ -43,7 +30,7 @@ export const SECTION_TABS: SectionTab[] = [
     label: STORE_COPY.sections.laptops.label,
     caption: STORE_COPY.sections.laptops.caption,
     icon: Laptop,
-    live: false,
+    live: true,
   },
   {
     id: 'preorder',

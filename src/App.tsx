@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
 import { CategoryCard } from './components/CategoryCard';
+import { LaptopSection } from './components/LaptopSection';
 import { CategoryPage } from './components/CategoryPage';
 import { ProductCard } from './components/ProductCard';
 import { CurvedNav, PREORDER_NAV_ITEMS } from './components/CurvedNav';
@@ -156,10 +157,10 @@ export const App: React.FC = () => {
      half-covered on the first look. Keyed on entering the section, so a panel
      the reader opens by hand afterwards stays open. */
   useEffect(() => {
-    if (inPreorder) shell.close();
+    if (inPreorder || (route.view === 'section' && route.section === 'laptops')) shell.close();
     // `shell.close` is stable and the route object is rebuilt on every
     // navigation, so this keys on the section rather than the object.
-  }, [inPreorder]);
+  }, [inPreorder, route.view === 'section' ? route.section : '']);
 
   // Fetch catalog from Phase 1 backend endpoint /api/catalog
   const fetchCatalogData = async () => {
@@ -229,7 +230,8 @@ export const App: React.FC = () => {
   // Category click handler
   const handleCategorySelect = (catId: string) => {
     setSearchQuery('');
-    navigate(`/category/${encodeURIComponent(catId)}`);
+    const laptopCategory = catalog?.products.some(item => item.kind === 'laptop' && item.categoryId === catId);
+    navigate(laptopCategory ? '/laptops' : `/category/${encodeURIComponent(catId)}`);
   };
 
   // Add to cart handler. A service line carries its chosen option and the
@@ -323,7 +325,7 @@ export const App: React.FC = () => {
     setBuyNowItem(item);
   };
 
-  const openProduct = (product: CatalogueItem) => navigate(`/product/${encodeURIComponent(product.itemId)}`);
+  const openProduct = (product: CatalogueItem) => navigate(`${product.kind === 'laptop' ? '/laptops' : '/product'}/${encodeURIComponent(product.itemId)}`);
 
   // Featured software filtering logic
   const allProducts = catalog?.products || [];
@@ -554,7 +556,16 @@ export const App: React.FC = () => {
           />
         )}
 
-        {route.view === 'section' && (
+        {route.view === 'section' && route.section === 'laptops' && (
+          isLoading ? <p className="py-16 text-center">Loading laptops…</p> : error ? <div className="py-16 text-center"><p>{error}</p><button onClick={() => fetchCatalogData()}>Retry</button></div> : <LaptopSection
+            items={(catalog?.products || []).filter(item => item.kind === 'laptop')}
+            category={catalog?.categories.find(category => (catalog.products || []).some(item => item.kind === 'laptop' && item.categoryId === category.categoryId))}
+            productId={window.location.pathname.split('/')[2] ? decodeURIComponent(window.location.pathname.split('/')[2]) : undefined}
+            onOpen={openProduct} onBack={() => navigate('/laptops')}
+          />
+        )}
+
+        {route.view === 'section' && route.section !== 'laptops' && (
           <SectionPlaceholder
             tab={SECTION_TABS.find((tab) => tab.id === route.section)!}
             onBack={() => navigateBack('/')}

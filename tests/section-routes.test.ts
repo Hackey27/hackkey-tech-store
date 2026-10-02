@@ -50,11 +50,11 @@ test('an unknown path falls back to software rather than throwing', () => {
 
 test('only the built sections are live', () => {
   const live = SECTION_TABS.filter((tab) => tab.live).map((tab) => tab.id);
-  assert.deepEqual(live, ['software', 'preorder']);
+  assert.deepEqual(live, ['software', 'laptops', 'preorder']);
 });
 
-test('laptops is present but not live, so stock keeps selling in the catalogue', () => {
+test('laptops is live in its own section', () => {
   const laptops = SECTION_TABS.find((tab) => tab.id === 'laptops');
   assert.ok(laptops, 'the laptops tab should exist');
-  assert.equal(laptops.live, false);
+  assert.equal(laptops.live, true);
 });

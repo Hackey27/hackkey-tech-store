@@ -1,0 +1,543 @@
+import React, { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
+import type { CatalogueItem, Category } from "../../shared/types";
+import {
+  emptyLaptopFilters,
+  filterLaptops,
+  LAPTOP_FACETS,
+  LaptopFacet,
+  LaptopFilters,
+  laptopOptions,
+} from "../utils/laptopFilters";
+import { ProductCard } from "./ProductCard";
+import { ProductDetailView } from "./ProductDetailView";
+import { ImageLightbox } from "./ImageLightbox";
+import { renderableProductImageUrl } from "./ProductImage";
+import { QuoteRequestForm } from "./QuoteRequestForm";
+import { useBackDismiss } from "../utils/useBackDismiss";
+
+const button =
+  "rounded-xl border border-[#b9d0cb] bg-white px-3 py-2 text-sm font-bold text-[#014040] hover:bg-[#edf5f3]";
+const input =
+  "w-full rounded-lg border border-[#b9d0cb] bg-white px-3 py-2 text-sm text-[#014040]";
+const specs = [
+  ["brand", "Brand"],
+  ["model", "Model"],
+  ["processor", "Processor"],
+  ["ram", "RAM"],
+  ["storage", "Storage"],
+  ["screen", "Screen size"],
+  ["graphics", "Graphics"],
+  ["graphicsDetails", "Graphics details"],
+  ["operatingSystem", "Operating system"],
+  ["colour", "Colour"],
+  ["ports", "Ports"],
+  ["freebies", "Freebies included"],
+  ["availability", "Availability"],
+] as const;
+
+function Dialog({
+  title,
+  close,
+  children,
+}: {
+  title: string;
+  close: () => void;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    ref.current?.focus();
+    return () => {
+      document.body.style.overflow = overflow;
+      previous?.focus();
+    };
+  }, []);
+  return (
+    <div
+      className="fixed inset-0 z-[70] overflow-y-auto bg-[#edf5f3] p-4 sm:p-8"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      tabIndex={-1}
+      ref={ref}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          close();
+        }
+        if (event.key === "Tab") {
+          const nodes = Array.from(
+            ref.current?.querySelectorAll<HTMLElement>(
+              "button, input, select, textarea, a[href]",
+            ) || [],
+          ).filter((node) => !node.hasAttribute("disabled"));
+          const first = nodes[0],
+            last = nodes[nodes.length - 1];
+          if (
+            event.shiftKey &&
+            (document.activeElement === first ||
+              document.activeElement === ref.current)
+          ) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }
+      }}
+    >
+      <div className="mx-auto max-w-6xl">
+        <header className="mb-6 flex items-center justify-between gap-4">
+          <h2 className="text-2xl font-black text-[#014040]">{title}</h2>
+          <button
+            className={button}
+            onClick={close}
+            aria-label={`Close ${title}`}
+          >
+            <X />
+          </button>
+        </header>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function LaptopSection({
+  items,
+  category,
+  productId,
+  onOpen,
+  onBack,
+}: {
+  items: CatalogueItem[];
+  category?: Category;
+  productId?: string;
+  onOpen: (item: CatalogueItem) => void;
+  onBack: () => void;
+}) {
+  const [filters, setFilters] = useState<LaptopFilters>(emptyLaptopFilters);
+  const [draft, setDraft] = useState<LaptopFilters>(emptyLaptopFilters);
+  const [advanced, setAdvanced] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [picking, setPicking] = useState(false);
+  const [gallery, setGallery] = useState<CatalogueItem | null>(null);
+  const [interest, setInterest] = useState<CatalogueItem | null>(null);
+  const [pastHeader, setPastHeader] = useState(false);
+  const header = useRef<HTMLElement>(null);
+  const closeAdvanced = useBackDismiss(advanced, () => setAdvanced(false));
+  const closeInterest = useBackDismiss(!!interest, () => setInterest(null));
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) =>
+        setPastHeader(
+          !entry.isIntersecting && entry.boundingClientRect.bottom < 120,
+        ),
+      { rootMargin: "-120px 0px 0px 0px" },
+    );
+    if (header.current) observer.observe(header.current);
+    return () => observer.disconnect();
+  }, [productId, selected.length, picking]);
+  const results = filterLaptops(items, filters);
+  const chosen = selected
+    .map((id) => items.find((item) => item.itemId === id))
+    .filter((item): item is CatalogueItem => !!item);
+  const toggle = (
+    state: LaptopFilters,
+    key: LaptopFacet,
+    value: string,
+  ): LaptopFilters => {
+    const old = state.selections[key] || [];
+    return {
+      ...state,
+      selections: {
+        ...state.selections,
+        [key]: old.includes(value)
+          ? old.filter((v) => v !== value)
+          : [...old, value],
+      },
+    };
+  };
+  const facet = (
+    key: LaptopFacet,
+    label: string,
+    state: LaptopFilters,
+    change: (state: LaptopFilters) => void,
+  ) => (
+    <fieldset
+      key={key}
+      className="min-w-0 rounded-xl border border-[#b9d0cb] bg-white p-3 text-[#014040]"
+    >
+      <legend className="px-1 text-xs font-black">{label}</legend>
+      <div className="max-h-48 space-y-2 overflow-y-auto">
+        {laptopOptions(items, key, state).map(({ value, count }) => (
+          <label key={value} className="flex items-start gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={state.selections[key]?.includes(value) || false}
+              onChange={() => change(toggle(state, key, value))}
+              className="mt-0.5 accent-[#014040]"
+            />
+            <span className="flex-1">{value}</span>
+            <span
+              aria-label={`${count} matching laptops`}
+              className="font-bold"
+            >
+              {count}
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+  const prices = (
+    state: LaptopFilters,
+    change: (state: LaptopFilters) => void,
+  ) => (
+    <fieldset className="col-span-2 min-w-0 xl:col-span-1">
+      <legend className="mb-1 text-xs font-bold">Price range (GH₵)</legend>
+      <div className="flex gap-2">
+        {(["from", "to"] as const).map((key) => (
+          <label key={key} className="min-w-0 flex-1 text-xs">
+            {key === "from" ? "From" : "To"}
+            <input
+              className={input}
+              type="number"
+              min="0"
+              value={state[key]}
+              onChange={(e) => change({ ...state, [key]: e.target.value })}
+            />
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+  const start = (item: CatalogueItem) => {
+    setSelected([item.itemId]);
+    setPicking(true);
+    window.scrollTo({ top: 0 });
+  };
+  const remove = (id: string) => {
+    const remaining = selected.filter((value) => value !== id);
+    setSelected(remaining);
+    if (remaining.length < 2) setPicking(remaining.length > 0);
+  };
+  const pick = (item: CatalogueItem) => {
+    setSelected((old) =>
+      old.includes(item.itemId) ? old : [...old, item.itemId],
+    );
+    setPicking(false);
+    window.scrollTo({ top: 0 });
+  };
+  const product = items.find((item) => item.itemId === productId);
+  const comparison = (
+    <div className="min-w-0 overflow-x-auto rounded-2xl border border-[#b9d0cb] bg-white">
+      <table
+        className="w-full table-fixed border-collapse text-xs sm:text-sm"
+        style={{
+          minWidth:
+            chosen.length > 2 ? `${chosen.length * 160 + 110}px` : undefined,
+        }}
+      >
+        <thead>
+          <tr>
+            {chosen.length > 2 && (
+              <th className="w-28 p-2 text-left">Specifications</th>
+            )}
+            {chosen.map((item) => (
+              <th
+                key={item.itemId}
+                className="relative border-l border-[#b9d0cb] p-2 pt-11 align-top"
+              >
+                <button
+                  className="absolute right-2 top-2 rounded-lg border p-1"
+                  aria-label={`Remove ${item.name} from comparison`}
+                  onClick={() => remove(item.itemId)}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                {renderableProductImageUrl(
+                  item.bannerImageUrl || item.imageUrl,
+                ) && (
+                  <img
+                    src={renderableProductImageUrl(
+                      item.bannerImageUrl || item.imageUrl,
+                    )}
+                    alt={item.name}
+                    className={`mb-2 aspect-video w-full rounded-lg object-cover ${chosen.length > 2 ? "hidden sm:block" : ""}`}
+                  />
+                )}
+                <span className="block break-words font-black">
+                  {item.name}
+                </span>
+                <span className="block font-normal">{item.laptop?.model}</span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {specs.map(([key, label]) => (
+            <tr key={key} className="border-t border-[#b9d0cb]">
+              {chosen.length > 2 && (
+                <th className="p-3 text-left font-bold">{label}</th>
+              )}
+              {chosen.map((item, index) => (
+                <td
+                  key={item.itemId}
+                  className="border-l border-[#b9d0cb] p-2 align-top"
+                >
+                  {chosen.length === 2 ? (
+                    <div
+                      className={`flex gap-2 ${index === 0 ? "" : "flex-row-reverse"}`}
+                    >
+                      <span className="w-2/5 break-words text-[10px] font-bold text-slate-500 sm:text-xs">
+                        {label}
+                      </span>
+                      <span
+                        className={`flex-1 break-words ${index === 0 ? "text-right" : "text-left"}`}
+                      >
+                        {item.laptop?.[key] || "—"}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      {chosen.length === 1 && (
+                        <span className="mr-2 font-bold">{label}</span>
+                      )}
+                      {item.laptop?.[key] || "—"}
+                    </div>
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+          <tr className="border-t border-[#b9d0cb]">
+            {chosen.length > 2 && <td />}
+            {chosen.map((item) => (
+              <td key={item.itemId} className="border-l border-[#b9d0cb] p-2">
+                <div className="flex flex-wrap justify-center gap-2">
+                  <button
+                    className={button}
+                    disabled={!item.screenshots?.length}
+                    onClick={() => setGallery(item)}
+                  >
+                    See pictures
+                  </button>
+                  <button className={button} onClick={() => setInterest(item)}>
+                    I am interested
+                  </button>
+                </div>
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+  const catalogue = (
+    <div className="min-w-0">
+      <header
+        ref={header}
+        className="hk-category-title hk-activation-gradient relative rounded-3xl p-6 text-white sm:p-9"
+      >
+        <h1 className="relative text-2xl font-black sm:text-4xl">
+          {category?.name || "Laptops on sale"}
+        </h1>
+        <p className="relative mt-3">
+          {category?.tagline || "Find a laptop that fits your needs."}
+        </p>
+        <p className="relative mt-3 text-sm">{items.length} laptops</p>
+      </header>
+      <div
+        className={`hk-activation-gradient z-30 mt-4 rounded-2xl p-4 text-white ${pastHeader ? "sticky top-[112px] md:top-[76px]" : ""}`}
+        data-testid="laptop-filter-strip"
+      >
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <label className="min-w-0 flex-1">
+            <span className="sr-only">Search laptops</span>
+            <input
+              className={input}
+              placeholder="Search laptops or specifications"
+              value={filters.query}
+              onChange={(e) =>
+                setFilters({ ...filters, query: e.target.value })
+              }
+            />
+          </label>
+          <span aria-live="polite" className="text-sm font-bold">
+            {results.length} results
+          </span>
+          <button
+            className={button}
+            onClick={() => {
+              setDraft(filters);
+              setAdvanced(true);
+            }}
+          >
+            Advanced
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+          {prices(filters, setFilters)}
+          {LAPTOP_FACETS.slice(0, 4).map(([key, label]) => (
+            <details key={key} className="relative min-w-0">
+              <summary className="cursor-pointer rounded-lg border border-white/30 p-2 text-xs font-bold">
+                {label}
+                {filters.selections[key]?.length
+                  ? ` (${filters.selections[key]!.length})`
+                  : ""}
+              </summary>
+              <div className="absolute left-0 right-0 top-full z-40 mt-1 min-w-40">
+                {facet(key, label, filters, setFilters)}
+              </div>
+            </details>
+          ))}
+        </div>
+      </div>
+      {picking && (
+        <p className="mt-4 font-bold text-[#014040]">
+          Choose a laptop to compare
+          {chosen.length ? " with your selection" : ""}.
+        </p>
+      )}
+      <div className="mt-6 grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr))]">
+        {results
+          .filter((item) => !picking || !selected.includes(item.itemId))
+          .map((item) => (
+            <ProductCard
+              key={item.itemId}
+              product={item}
+              onSelect={picking ? pick : onOpen}
+              onBuyNowClick={() => setInterest(item)}
+              onInterestClick={() => setInterest(item)}
+              onCompare={picking ? pick : start}
+              showCategoryLabel={false}
+            />
+          ))}
+      </div>
+      {results.length === 0 && (
+        <p className="py-12 text-center text-slate-600">
+          No laptops match your selection.{" "}
+          <button
+            className={button}
+            onClick={() => setFilters(emptyLaptopFilters())}
+          >
+            Reset selection
+          </button>
+        </p>
+      )}
+    </div>
+  );
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+      {product ? (
+        <>
+          <button
+            className={button}
+            onClick={() => {
+              onBack();
+              start(product);
+            }}
+          >
+            Compare laptop
+          </button>
+          <ProductDetailView product={product} onClose={onBack} />
+        </>
+      ) : (
+        <>
+          {chosen.length > 0 && (
+            <div className="mb-5 flex flex-wrap gap-3">
+              <h2 className="mr-auto text-xl font-black text-[#014040]">
+                Compare laptops
+              </h2>
+              <button
+                className={button}
+                onClick={() => {
+                  setPicking(true);
+                  window.scrollTo({ top: 0 });
+                }}
+              >
+                Add laptop
+              </button>
+              <button
+                className={button}
+                onClick={() => {
+                  setSelected([]);
+                  setPicking(false);
+                }}
+              >
+                End comparison
+              </button>
+            </div>
+          )}
+          {chosen.length ? (
+            picking ? (
+              <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                <div className="hidden lg:sticky lg:top-24 lg:block">
+                  {comparison}
+                </div>
+                {catalogue}
+              </div>
+            ) : (
+              comparison
+            )
+          ) : (
+            catalogue
+          )}
+        </>
+      )}
+      {advanced && (
+        <Dialog title="Advanced laptop filters" close={closeAdvanced}>
+          <div className="mb-5 flex flex-wrap items-end gap-4">
+            {prices(draft, setDraft)}
+            <p className="text-lg font-black text-[#014040]" aria-live="polite">
+              {filterLaptops(items, draft).length} results
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {LAPTOP_FACETS.map(([key, label]) =>
+              facet(key, label, draft, setDraft),
+            )}
+          </div>
+          <div className="sticky bottom-0 mt-6 flex flex-wrap gap-3 border-t border-[#b9d0cb] bg-[#edf5f3] py-4">
+            <button
+              className="rounded-xl bg-[#014040] px-5 py-3 font-bold text-white"
+              onClick={() => {
+                setFilters(draft);
+                closeAdvanced();
+              }}
+            >
+              Show results for selection ({filterLaptops(items, draft).length})
+            </button>
+            <button
+              className={button}
+              onClick={() => setDraft(emptyLaptopFilters())}
+            >
+              Reset selection
+            </button>
+          </div>
+        </Dialog>
+      )}
+      {interest && (
+        <Dialog title={interest.name} close={closeInterest}>
+          <div className="mx-auto max-w-lg rounded-2xl bg-white p-6">
+            <QuoteRequestForm key={interest.itemId} item={interest} />
+          </div>
+        </Dialog>
+      )}
+      <ImageLightbox
+        images={(gallery?.screenshots || [])
+          .map(renderableProductImageUrl)
+          .filter((url): url is string => !!url)}
+        openAt={gallery ? 0 : null}
+        onClose={() => setGallery(null)}
+        alt={(index) => `${gallery?.name} picture ${index + 1}`}
+      />
+    </div>
+  );
+}
