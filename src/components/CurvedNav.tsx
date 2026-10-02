@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { AnimatePresence, motion, useReducedMotion, useSpring, useTransform } from 'motion/react';
-import { Home, SearchCheck, HelpCircle, FilePlus2, PackagePlus, ShoppingBag, SlidersHorizontal } from 'lucide-react';
+import { Home, SearchCheck, HelpCircle, FilePlus2, PackagePlus, ShoppingBag, SlidersHorizontal, Layers } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 import { useHideOnScrollDown } from '../utils/useHideOnScrollDown';
 
-export type NavTab = 'home' | 'find-order' | 'help' | 'request' | 'cart' | 'filters';
+export type NavTab = 'home' | 'find-order' | 'help' | 'request' | 'cart' | 'filters' | 'categories';
 
 export interface NavItem {
   id: NavTab;
@@ -60,6 +60,11 @@ export const LAPTOP_NAV_ITEMS: NavItem[] = [
   { id: 'filters', label: 'Advanced filter', icon: SlidersHorizontal },
   { id: 'home', label: STORE_COPY.navigation.home, icon: Home },
   { id: 'request', label: STORE_COPY.navigation.request, icon: FilePlus2 },
+];
+export const HACKS_NAV_ITEMS: NavItem[] = [
+  { id: 'request', label: 'Submit an issue', icon: FilePlus2 },
+  { id: 'home', label: 'All Hacks', icon: Home },
+  { id: 'categories', label: 'Categories', icon: Layers },
 ];
 /* Wider and deeper than the bubble's 24px radius, so a rim of background shows
    all the way around it rather than the bubble meeting white on its flanks. */

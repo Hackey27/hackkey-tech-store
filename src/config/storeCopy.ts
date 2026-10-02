@@ -593,6 +593,7 @@ export const ADMIN_COPY = {
   preview: 'Preview',
   cancel: 'Cancel',
   sections: {
+    hacks: 'Hack-this',
     orders: 'Orders',
     requests: 'Requests',
     categories: 'Category setup',

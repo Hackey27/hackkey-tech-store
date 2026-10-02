@@ -63,10 +63,12 @@ test('suggested IDs describe version and OS, avoid collisions and never renumber
 test('latest recommendation moves for the same OS while historical identities and other OSs remain', () => {
   const old = software();
   const next = saveVariantInProduct(old, version('AMOS-V32-WINDOWS', '32'), true);
-  assert.deepEqual(next.variants.map(entry => entry.variantId), ['AMOS01', 'AMOS02', 'AMOSMAC', 'AMOS-V32-WINDOWS']);
-  assert.deepEqual(next.variants.map(entry => entry.latest), [false, false, true, true]);
-  assert.equal(next.variants[0].versionOrPlan, '31');
-  assert.equal(next.variants[0].priceGhs, 100);
+  const newer = saveVariantInProduct(next, version('AMOS-V33-WINDOWS', '33'), true);
+  assert.deepEqual(newer.variants.map(v => v.variantId), ['AMOS-V33-WINDOWS', 'AMOS-V32-WINDOWS', 'AMOS01', 'AMOS02', 'AMOSMAC']);
+  assert.deepEqual(next.variants.map(entry => entry.variantId), ['AMOS-V32-WINDOWS', 'AMOS01', 'AMOS02', 'AMOSMAC']);
+  assert.deepEqual(next.variants.map(entry => entry.latest), [true, false, false, true]);
+  assert.equal(next.variants[1].versionOrPlan, '31');
+  assert.equal(next.variants[1].priceGhs, 100);
   assert.equal(old.variants[0].latest, true);
   assert.equal(next.bannerImagePath, old.bannerImagePath);
 });
@@ -108,7 +110,7 @@ test('version creation refuses IDs already tied to software, historical orders, 
   assert.deepEqual((fixture.read('products', 'AMOS') as unknown as Product).variants.map(entry => entry.variantId), ['AMOS01', 'AMOS02', 'AMOSMAC']);
 });
 
-test('transactional append reads the current record and preserves existing versions, media, orders and stock', async () => {
+test('transactional creation prepends the version, reads the current record and preserves existing versions, media, orders and stock', async () => {
   const oldOrder = { id: 'order-1', productId: 'AMOS', variantId: 'AMOS01', versionOrPlan: '31' };
   const oldStock = { id: 'stock-1', variantId: 'AMOS01' };
   const fixture = database({ products: [{ id: 'AMOS', ...software() }], orders: [oldOrder], licencePool: [oldStock] });

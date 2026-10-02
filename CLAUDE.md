@@ -25,6 +25,7 @@ Collections (all camelCase, in Firestore and in TypeScript):
 
 | Collection | Contents |
 | --- | --- |
+| `hackThemes/{themeId}`, `hackPosts/{postId}` | Hack-this themes, posts, tutorial steps, links and view counts. See `docs/hack-this.md`. |
 | `categories/{categoryId}` | The five browsable departments. |
 | `products/{productId}` | Variants are **embedded** as `variants[]`; `imageUrl` is the icon, while `bannerImagePath` and `screenshots[]` hold product-page media. |
 | `bundles/{bundleId}` | Items embedded as `items[]`; `altGroup`/`altLabel` mean "choose one of these". |

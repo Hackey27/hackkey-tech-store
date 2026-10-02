@@ -15,6 +15,8 @@ import { Firestore, Settings } from '@google-cloud/firestore';
 export const COLLECTIONS = {
   categories: 'categories',
   products: 'products',
+  hackThemes: 'hackThemes',
+  hackPosts: 'hackPosts',
   bundles: 'bundles',
   services: 'services',
   laptops: 'laptops',

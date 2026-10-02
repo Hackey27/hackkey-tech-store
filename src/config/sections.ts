@@ -46,7 +46,7 @@ export const SECTION_TABS: SectionTab[] = [
     label: STORE_COPY.sections.hacks.label,
     caption: STORE_COPY.sections.hacks.caption,
     icon: Sparkles,
-    live: false,
+    live: true,
   },
   {
     id: 'technicians',

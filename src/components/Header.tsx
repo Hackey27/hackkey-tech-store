@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { PackagePlus, Search, ShoppingBag } from 'lucide-react';
+import type { NavItem, NavTab } from './CurvedNav';
 import { BrandLogo } from './BrandLogo';
 import { STORE_COPY } from '../config/storeCopy';
 import { CartItem } from './CartView';
@@ -35,8 +36,10 @@ interface HeaderProps {
   searchPlaceholder?: string;
   searchQuery: string;
   onSearchChange: (q: string) => void;
-  activeTab: 'home' | 'find-order' | 'help' | 'request' | 'cart';
-  onSelectTab: (tab: 'home' | 'find-order' | 'help' | 'request' | 'cart') => void;
+  activeTab: NavTab;
+  onSelectTab: (tab: NavTab) => void;
+  navItems?: NavItem[];
+  hideCart?: boolean;
   cartCount?: number;
   cartItems: CartItem[];
   onRemoveCartItem: (id: string) => void;
@@ -76,6 +79,8 @@ export const Header: React.FC<HeaderProps> = ({
   preorderCart,
   searchPlaceholder = STORE_COPY.brand.searchPlaceholder,
   showFindOrder = true,
+  navItems,
+  hideCart = false,
 }) => {
   const cartButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -161,6 +166,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Desktop Nav Controls */}
           <div className="flex items-center gap-2 sm:gap-2.5">
+            {navItems ? navItems.map(item => <button key={item.id} onClick={() => onSelectTab(item.id)} className={`hidden md:inline-flex whitespace-nowrap px-3 py-2 rounded-xl text-xs font-semibold ${activeTab === item.id ? 'bg-[#05ef28] text-[#014040]' : 'text-white hover:bg-white/10'}`}>{item.label}</button>) : <>
             <button
               onClick={() => onSelectTab('home')}
               className={`hidden md:inline-flex px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
@@ -205,6 +211,7 @@ export const Header: React.FC<HeaderProps> = ({
               {STORE_COPY.navigation.request}
             </button>
 
+            </>}
             {/* Support, on phones only. The cart moved to the bottom
                 navigation, so this corner is free for the thing people reach
                 for when something has gone wrong. */}
@@ -222,7 +229,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Cart Button. Desktop only: there is no bottom navigation above
                 md, so this stays the way in. */}
-            <button
+            {!hideCart && <button
               ref={cartButtonRef}
               id={preorderCart ? 'header-preorder-cart-btn' : 'header-cart-btn'}
               data-testid={preorderCart ? 'header-preorder-cart-btn' : 'header-cart-btn'}
@@ -246,7 +253,7 @@ export const Header: React.FC<HeaderProps> = ({
                   {preorderCart ? preorderCart.count : cartCount}
                 </span>
               )}
-            </button>
+            </button>}
           </div>
         </div>
 
@@ -278,7 +285,7 @@ export const Header: React.FC<HeaderProps> = ({
           software cart keeps whatever is in it while the customer browses
           pre-orders — leaving the section must not cost them their basket. */}
       <CartFlyout
-        open={cartOpen && !preorderCart}
+        open={cartOpen && !preorderCart && !hideCart}
         items={cartItems}
         triggerRef={cartButtonRef}
         onClose={() => onCartOpenChange(false)}

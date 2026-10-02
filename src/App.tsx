@@ -5,7 +5,7 @@ import { CategoryCard } from './components/CategoryCard';
 import { LaptopSection } from './components/LaptopSection';
 import { CategoryPage } from './components/CategoryPage';
 import { ProductCard } from './components/ProductCard';
-import { CurvedNav, PREORDER_NAV_ITEMS, LAPTOP_NAV_ITEMS } from './components/CurvedNav';
+import { CurvedNav, PREORDER_NAV_ITEMS, LAPTOP_NAV_ITEMS, HACKS_NAV_ITEMS } from './components/CurvedNav';
 import { useScrollReveal } from './utils/useScrollReveal';
 import { FindOrderView } from './components/FindOrderView';
 import { HelpHubView } from './components/HelpHubView';
@@ -36,6 +36,7 @@ import { cartDeliveryNotice } from './utils/cartDeliveryNotice';
 import { DeliveryWindowGate } from './components/DeliveryWindowGate';
 import { CardSoftwareChoice, CardChoiceRequest, availableCardChoices } from './components/CardSoftwareChoice';
 import { SectionNav } from './components/SectionNav';
+import { HacksSection } from './components/HacksSection';
 import { SectionPlaceholder } from './components/SectionPlaceholder';
 import { SECTION_TABS, SectionId, sectionForPath } from './config/sections';
 import { useSectionShell } from './utils/useSectionShell';
@@ -102,6 +103,9 @@ export const App: React.FC = () => {
     route.view === 'preorder-request' ||
     route.view === 'preorder-compare' || (route.view === 'section-help' && route.section === 'preorder');
   const inLaptops = route.view === 'laptop-request' || ((route.view === 'section' || route.view === 'section-help') && route.section === 'laptops');
+  const inHacks = route.view === 'section' && route.section === 'hacks';
+  const [hackBrowseRevision, setHackBrowseRevision] = useState(0);
+  const hackNavTab = window.location.pathname === '/hacks/categories' ? 'categories' : window.location.pathname === '/hacks/issue' ? 'request' : 'home';
   const productDetailOpen = (route.view === 'preorder' && !!route.productId) ||
     (route.view === 'section' && route.section === 'laptops' && !!window.location.pathname.split('/')[2]);
   const [laptopAdvancedOpen, setLaptopAdvancedOpen] = useState(false);
@@ -167,10 +171,11 @@ export const App: React.FC = () => {
      half-covered on the first look. Keyed on entering the section, so a panel
      the reader opens by hand afterwards stays open. */
   useEffect(() => {
-    if (inPreorder || inLaptops) shell.close();
+    if (inPreorder || inLaptops || inHacks) shell.close();
+    if (inHacks) setCartOpen(false);
     // `shell.close` is stable and the route object is rebuilt on every
     // navigation, so this keys on the section rather than the object.
-  }, [inPreorder, inLaptops]);
+  }, [inPreorder, inLaptops, inHacks]);
 
   // Fetch catalog from Phase 1 backend endpoint /api/catalog
   const fetchCatalogData = async () => {
@@ -429,29 +434,39 @@ export const App: React.FC = () => {
         onToggleSections={shell.toggle}
         sectionsExpanded={shell.expanded}
         searchQuery={searchQuery}
-        showFindOrder={!inLaptops && !inPreorder}
-        searchPlaceholder={inLaptops ? "Find laptop" : inPreorder ? "Search preorder products" : undefined}
+        showFindOrder={!inLaptops && !inPreorder && !inHacks}
+        navItems={inHacks ? HACKS_NAV_ITEMS : undefined}
+        hideCart={inHacks}
+        searchPlaceholder={inHacks ? "Search tips or steps" : inLaptops ? "Find laptop" : inPreorder ? "Search preorder products" : undefined}
         onSearchChange={(q) => {
           setSearchQuery(q);
+          if (inHacks && q.trim() && window.location.pathname !== '/hacks') navigate('/hacks');
           if (inLaptops && q.trim() && window.location.pathname !== '/laptops') navigate('/laptops');
           if (route.view === 'section-help' && inPreorder && q.trim()) navigate('/preorder');
           // In the pre-order section the same box searches pre-orders, so it
           // must not bounce the customer back to the software storefront.
-          if (q.trim() && !inPreorder && !inLaptops) {
+          if (q.trim() && !inPreorder && !inLaptops && !inHacks) {
             if (route.view !== 'home') navigate('/');
             setActiveTab('home');
             setShowAllSoftware(true);
           }
         }}
-        activeTab={inLaptops || inPreorder ? (route.view === 'section-help' ? 'help' : route.view === 'laptop-request' || route.view === 'preorder-request' ? 'request' : 'home') : route.view === 'order-access' ? 'find-order' : activeTab}
+        activeTab={inHacks ? hackNavTab : inLaptops || inPreorder ? (route.view === 'section-help' ? 'help' : route.view === 'laptop-request' || route.view === 'preorder-request' ? 'request' : 'home') : route.view === 'order-access' ? 'find-order' : activeTab}
         onSelectTab={(tab) => {
+          if (inHacks) {
+            setSearchQuery('');
+            if (tab === 'home') setHackBrowseRevision(revision => revision + 1);
+            navigate(tab === 'categories' ? '/hacks/categories' : tab === 'request' ? '/hacks/issue' : '/hacks');
+            return;
+          }
+
           if ((inLaptops || inPreorder) && tab === 'help') { setSearchQuery(''); navigate(inLaptops ? '/laptops/help' : '/preorder/help'); return; }
           if (inLaptops && (tab === 'home' || tab === 'request')) { if (tab === 'home') setLaptopBrowseRevision(revision => revision + 1); setSearchQuery(''); navigate(tab === 'home' ? '/laptops' : '/laptops/request'); return; }
           if (inPreorder && (tab === 'home' || tab === 'request')) { setSearchQuery(''); if (tab === 'home') preorderCompare.clear(); else setRequestedProductName(''); navigate(tab === 'home' ? '/preorder' : '/preorder/request'); return; }
           if (tab === 'cart') { setCartOpen(true); return; }
           if (route.view !== 'home') navigate('/');
           if (tab === 'request') setRequestLaunchMode(null);
-          setActiveTab(tab);
+          if (tab !== 'filters' && tab !== 'categories') setActiveTab(tab);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         cartCount={totalCartCount}
@@ -493,7 +508,7 @@ export const App: React.FC = () => {
             navigate('/preorder/request');
           }}
         />
-      ) : !inLaptops ? (
+      ) : !inLaptops && !inHacks ? (
       <SearchResultsOverlay
         query={searchQuery}
         items={searchResults}
@@ -595,7 +610,9 @@ export const App: React.FC = () => {
 
         {route.view === 'laptop-request' && <RequestView initialMode="laptop" onDismiss={() => navigate('/laptops')} />}
 
-        {route.view === 'section' && route.section !== 'laptops' && (
+        {inHacks && <HacksSection query={searchQuery} path={window.location.pathname} navigate={navigate} browseRevision={hackBrowseRevision} />}
+
+        {route.view === 'section' && route.section !== 'laptops' && route.section !== 'hacks' && (
           <SectionPlaceholder
             tab={SECTION_TABS.find((tab) => tab.id === route.section)!}
             onBack={() => navigateBack('/')}
@@ -805,14 +822,21 @@ export const App: React.FC = () => {
       {!productDetailOpen && <CurvedNav
         // The pre-order tab gets its own three-item bar; every other section
         // keeps the software one.
-        items={inLaptops ? LAPTOP_NAV_ITEMS : inPreorder ? PREORDER_NAV_ITEMS : undefined}
-        activeTab={inLaptops ? (route.view === 'laptop-request' ? 'request' : 'home') : route.view === 'order-access' ? 'find-order' : activeTab}
+        items={inHacks ? HACKS_NAV_ITEMS : inLaptops ? LAPTOP_NAV_ITEMS : inPreorder ? PREORDER_NAV_ITEMS : undefined}
+        activeTab={inHacks ? hackNavTab : inLaptops ? (route.view === 'laptop-request' ? 'request' : 'home') : route.view === 'order-access' ? 'find-order' : activeTab}
         cartSlot={inPreorder ? {
           label: STORE_COPY.preorder.title,
           count: preorderCart.count,
           onSelect: () => preorderCart.setOpen(true),
         } : undefined}
         onSelectTab={(tab) => {
+          if (inHacks) {
+            setSearchQuery('');
+            if (tab === 'home') setHackBrowseRevision(revision => revision + 1);
+            navigate(tab === 'categories' ? '/hacks/categories' : tab === 'request' ? '/hacks/issue' : '/hacks');
+            return;
+          }
+
           if (inLaptops) {
             if (tab === 'filters') { shell.close(); if (window.location.pathname !== '/laptops') navigate('/laptops'); setLaptopAdvancedOpen(true); return; }
             if (tab === 'home') { setSearchQuery(''); setLaptopBrowseRevision(revision => revision + 1); setLaptopAdvancedOpen(false); navigate('/laptops'); return; }
@@ -842,7 +866,7 @@ export const App: React.FC = () => {
           if (tab === 'request') setRequestLaunchMode(null);
           // 'filters' and 'cart' never become the active tab: they open a
           // panel rather than a page, and the bar falls back to Home.
-          if (tab !== 'filters') setActiveTab(tab);
+          if (tab !== 'filters' && tab !== 'categories') setActiveTab(tab);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
       />}
@@ -857,7 +881,7 @@ export const App: React.FC = () => {
             </div>
             <div className="space-y-3 md:justify-self-center">
               <span className="block text-[11px] font-bold uppercase tracking-wider text-[#05ef28]">Quick Navigation</span>
-              <ul className="space-y-2"><li><button onClick={() => { setSearchQuery(''); if (inLaptops) setLaptopBrowseRevision(revision => revision + 1); if (inPreorder) preorderCompare.clear(); navigate(inLaptops ? '/laptops' : inPreorder ? '/preorder' : '/'); setActiveTab('home'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.home}</button></li>{!inLaptops && !inPreorder && <li><button onClick={() => { navigate('/'); setActiveTab('find-order'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.findOrder}</button></li>}<li><button onClick={() => { setSearchQuery(''); navigate(inLaptops ? '/laptops/help' : inPreorder ? '/preorder/help' : '/'); setActiveTab('help'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.help}</button></li><li><button onClick={() => { setSearchQuery(''); navigate(inLaptops ? '/laptops/request' : inPreorder ? '/preorder/request' : '/'); setRequestLaunchMode(null); setActiveTab('request'); }} className="hover:text-[#05ef28]">{inLaptops || inPreorder ? STORE_COPY.navigation.request : STORE_COPY.requestPage.pageTitle}</button></li></ul>
+              {inHacks ? <ul className="space-y-2">{HACKS_NAV_ITEMS.map(item => <li key={item.id}><button className="hover:text-[#05ef28]" onClick={() => { setSearchQuery(''); if (item.id === 'home') setHackBrowseRevision(revision => revision + 1); navigate(item.id === 'categories' ? '/hacks/categories' : item.id === 'request' ? '/hacks/issue' : '/hacks'); }}>{item.label}</button></li>)}</ul> : <ul className="space-y-2"><li><button onClick={() => { setSearchQuery(''); if (inLaptops) setLaptopBrowseRevision(revision => revision + 1); if (inPreorder) preorderCompare.clear(); navigate(inLaptops ? '/laptops' : inPreorder ? '/preorder' : '/'); setActiveTab('home'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.home}</button></li>{!inLaptops && !inPreorder && <li><button onClick={() => { navigate('/'); setActiveTab('find-order'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.findOrder}</button></li>}<li><button onClick={() => { setSearchQuery(''); navigate(inLaptops ? '/laptops/help' : inPreorder ? '/preorder/help' : '/'); setActiveTab('help'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.help}</button></li><li><button onClick={() => { setSearchQuery(''); navigate(inLaptops ? '/laptops/request' : inPreorder ? '/preorder/request' : '/'); setRequestLaunchMode(null); setActiveTab('request'); }} className="hover:text-[#05ef28]">{inLaptops || inPreorder ? STORE_COPY.navigation.request : STORE_COPY.requestPage.pageTitle}</button></li></ul>}
             </div>
             <div className="space-y-5 md:justify-self-end">
               <div><span className="block text-[11px] font-bold uppercase tracking-wider text-[#05ef28]">About us</span><p className="mt-2 max-w-xs leading-5 text-white/65">More information coming soon.</p></div>

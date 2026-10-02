@@ -55,6 +55,7 @@ const PREORDER_PACKAGE_STATUSES: PreorderPackageStatus[] = [
 ];
 import { COLLECTIONS, getFirestore } from './firestore';
 import { createSoftwareProduct, saveSoftwareVariant } from './softwareSetupData';
+import { createAdminHacksRouter } from './hacksRoutes';
 import { MAX_CATALOGUE_IMAGE_BYTES, catalogueImageObjectPath, confirmUpload, createSignedDownload, createSignedReportUpload, deleteCatalogueImage, isCatalogueImagePath, isReportObjectPathForOrder, isRequestImagePath, safeDocumentLabel, safeOriginalFilename, saveCatalogueImage, validateCatalogueImage, validateUpload } from './storage';
 
 function actor(req: AdminRequest) {
@@ -107,6 +108,7 @@ export function createAdminRouter(): Router {
   // One gate for the whole subtree. Adding a route below cannot accidentally
   // bypass authentication by forgetting its own check.
   router.use(requireAdmin());
+  router.use('/hacks', createAdminHacksRouter());
 
   router.get('/data', async (_req, res) => {
     try {

@@ -630,6 +630,7 @@ export interface LicencePoolEntry {
 // ==========================================
 
 export type RequestKind =
+  | 'laptop-issue'
   | 'laptop-request'
   | 'laptop-enquiry'
   | 'custom-bundle'
@@ -682,7 +683,7 @@ export interface AdminAuditEntry {
   actorUid: string;
   actorEmail?: string;
   action: string;
-  targetType: 'order' | 'licence' | 'service' | 'announcement' | 'product' | 'bundle' | 'laptop' | 'category' | 'settings' | 'preorder-product' | 'preorder-category' | 'preorder' | 'preorder-package';
+  targetType: 'hack-theme' | 'hack-post' | 'order' | 'licence' | 'service' | 'announcement' | 'product' | 'bundle' | 'laptop' | 'category' | 'settings' | 'preorder-product' | 'preorder-category' | 'preorder' | 'preorder-package';
   targetId: string;
   orderId?: string;
   details?: Record<string, unknown>;

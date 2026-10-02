@@ -51,7 +51,7 @@ export function saveVariantInProduct(product: Product, variant: Variant, creatin
   const others = product.variants.filter(entry => entry.variantId !== variant.variantId).map(entry =>
     variant.latest && entry.os.trim().toLowerCase() === os ? { ...entry, latest: false } : entry
   );
-  const variants = creating ? [...others, variant] : product.variants.map(entry =>
+  const variants = creating ? [variant, ...others] : product.variants.map(entry =>
     entry.variantId === variant.variantId ? variant : others.find(other => other.variantId === entry.variantId)!
   );
   return { ...product, variants };

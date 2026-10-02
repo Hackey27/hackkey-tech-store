@@ -50,7 +50,7 @@ test('an unknown path falls back to software rather than throwing', () => {
 
 test('only the built sections are live', () => {
   const live = SECTION_TABS.filter((tab) => tab.live).map((tab) => tab.id);
-  assert.deepEqual(live, ['software', 'laptops', 'preorder']);
+  assert.deepEqual(live, ['software', 'laptops', 'preorder', 'hacks']);
 });
 
 test('laptops is live in its own section', () => {

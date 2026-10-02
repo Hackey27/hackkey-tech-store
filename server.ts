@@ -48,6 +48,7 @@ import {
   validateUpload
 } from './server/storage';
 import { createAdminRouter } from './server/adminRoutes';
+import { createHacksRouter, createLaptopIssueRouter } from './server/hacksRoutes';
 import { publicOrder, publicOrderWithCurrentGuide } from './server/publicOrder';
 import { turnitinDocumentUploadPolicy } from './server/documentUploadPolicy';
 import { renderProductSocialPreview } from './server/socialPreview';
@@ -166,6 +167,8 @@ async function startServer() {
   );
 
   app.use(express.json());
+  app.use('/api/hacks', createHacksRouter());
+  app.use('/api/requests/laptop-issue', createLaptopIssueRouter());
 
   // The admin URL is intentionally discoverable, but must never be indexed,
   // framed, or cached with authenticated content by an intermediary.

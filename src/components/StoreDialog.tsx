@@ -6,10 +6,12 @@ export function StoreDialog({
   title,
   close,
   children,
+  floating = false,
 }: {
   title: string;
   close: () => void;
   children: React.ReactNode;
+  floating?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -24,7 +26,7 @@ export function StoreDialog({
   }, []);
   return createPortal(
     <div
-      className="fixed inset-0 z-[70] overflow-y-auto bg-[#edf5f3] p-4 sm:p-8"
+      className={`fixed inset-0 z-[70] overflow-y-auto p-4 sm:p-8 ${floating ? 'flex items-center justify-center bg-[#002b2b]/65 backdrop-blur-sm' : 'bg-[#edf5f3]'}`}
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -57,7 +59,7 @@ export function StoreDialog({
         }
       }}
     >
-      <div className="mx-auto max-w-6xl">
+      <div className={floating ? 'max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl sm:p-7' : 'mx-auto max-w-6xl'}>
         <header className="mb-6 flex items-center justify-between gap-4">
           <h2 className="text-2xl font-black text-[#014040]">{title}</h2>
           <button
