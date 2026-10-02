@@ -77,7 +77,7 @@ export const PreorderCard: React.FC<PreorderCardProps> = ({
       }}
       className="hk-pressable group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-[#d8e7e4] bg-white text-left text-slate-900 hover:border-[#014040]/70 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#014040]"
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-[#edf5f3]">
+      <div className="relative aspect-square overflow-hidden bg-[#edf5f3] sm:aspect-[4/3]">
         {/* Hover reveals this on desktop; touch and keyboard users keep access. */}
         <button
           type="button"

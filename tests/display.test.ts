@@ -23,20 +23,20 @@ import { TURNITIN_SERVICE } from '../server/seed/turnitin';
 // ---------------------------------------------------------------------------
 
 test('the formatter renders pesewas as cedis', () => {
-  assert.equal(formatPesewas(35000), 'GHS 350.00');
-  assert.equal(formatPesewas(4750), 'GHS 47.50');
-  assert.equal(formatPesewas(0), 'GHS 0.00');
+  assert.equal(formatPesewas(35000), '₵350');
+  assert.equal(formatPesewas(4750), '₵47.5');
+  assert.equal(formatPesewas(0), '₵0');
 });
 
 test('the 100x defect: a raw pesewa integer is never the display string', () => {
   // 20000 pesewas is GHS 200.00. The card used to render "₵20,000" by building
   // the string by hand, which is exactly what this asserts against.
-  assert.equal(formatPesewas(20000), 'GHS 200.00');
-  assert.notEqual(formatPesewas(20000), 'GHS 20,000');
-  assert.equal(formatPesewas(39600), 'GHS 396.00');
-  assert.equal(formatPesewas(16900), 'GHS 169.00');
-  assert.equal(formatPesewas(8000), 'GHS 80.00');
-  assert.equal(formatPesewas(6200), 'GHS 62.00');
+  assert.equal(formatPesewas(20000), '₵200');
+  assert.notEqual(formatPesewas(20000), '₵20,000');
+  assert.equal(formatPesewas(39600), '₵396');
+  assert.equal(formatPesewas(16900), '₵169');
+  assert.equal(formatPesewas(8000), '₵80');
+  assert.equal(formatPesewas(6200), '₵62');
 });
 
 /**
@@ -103,7 +103,7 @@ test('a raw variant cedi price crosses the unit boundary before display', () => 
     quantity: 1
   });
   assert.equal(line.unitPesewas, 22000);
-  assert.equal(formatPesewas(line.unitPesewas), 'GHS 220.00');
+  assert.equal(formatPesewas(line.unitPesewas), '₵220');
 });
 
 test('bundles, services and laptops resolve a price without a variant', () => {
@@ -231,7 +231,7 @@ test('a product line still charges what it charged before this fix', () => {
     quantity: 1
   });
   assert.equal(line.totalPesewas, 22000);
-  assert.equal(formatPesewas(line.totalPesewas), 'GHS 220.00');
+  assert.equal(formatPesewas(line.totalPesewas), '₵220');
 });
 
 test('priceServiceLine is unchanged by the shared resolver', () => {
@@ -300,7 +300,7 @@ test('issue 1: a cart line total is not multiplied by quantity twice', () => {
     quantity: 2
   });
   assert.equal(line.totalPesewas, 1700000);
-  assert.equal(formatPesewas(line.totalPesewas), 'GHS 17,000.00');
+  assert.equal(formatPesewas(line.totalPesewas), '₵17,000');
   assert.notEqual(line.totalPesewas * 2, line.totalPesewas, 'rendering total*qty would double it');
 });
 
@@ -310,6 +310,6 @@ test('issue 3: a laptop resolves its own price with no variant present', () => {
     variant: undefined,
     quantity: 1
   });
-  assert.equal(formatPesewas(line.unitPesewas), 'GHS 8,500.00');
-  assert.notEqual(formatPesewas(line.unitPesewas), 'GHS 0.00');
+  assert.equal(formatPesewas(line.unitPesewas), '₵8,500');
+  assert.notEqual(formatPesewas(line.unitPesewas), '₵0');
 });

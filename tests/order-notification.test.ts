@@ -14,7 +14,7 @@ test('unpaid orders receive a payment reminder containing the secure order link 
   const current = order();
   assert.equal(notificationPurposeForOrder(current), 'payment-reminder');
   const content = buildOrderNotification(current, 'payment-reminder', 'https://store.example/order/token');
-  assert.match(content.message, /GHS 300\.00/);
+  assert.match(content.message, /₵300/);
   assert.match(content.message, /https:\/\/store\.example\/order\/token/);
 });
 

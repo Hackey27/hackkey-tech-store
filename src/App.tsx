@@ -62,11 +62,14 @@ type StoreRoute =
   | { view: 'preorder-request' }
   | { view: 'preorder-compare' }
   | { view: 'laptop-request' }
+  | { view: 'section-help'; section: 'laptops' | 'preorder' }
   /** A section with a tab but no content yet. Software and Services is never one. */
   | { view: 'section'; section: Exclude<SectionId, 'software'> };
 
 function currentRoute(): StoreRoute {
   const path = window.location.pathname;
+  const sectionHelp = path.match(/^\/(laptops|preorder)\/help\/?$/);
+  if (sectionHelp) return { view: 'section-help', section: sectionHelp[1] as 'laptops' | 'preorder' };
   if (path === '/payment/return') return { view: 'payment-return' };
   if (/^\/laptops\/request\/?$/.test(path)) return { view: 'laptop-request' };
   const section = sectionForPath(path);
@@ -97,8 +100,8 @@ export const App: React.FC = () => {
     route.view === 'preorder' ||
     route.view === 'preorder-checkout' ||
     route.view === 'preorder-request' ||
-    route.view === 'preorder-compare';
-  const inLaptops = route.view === 'laptop-request' || (route.view === 'section' && route.section === 'laptops');
+    route.view === 'preorder-compare' || (route.view === 'section-help' && route.section === 'preorder');
+  const inLaptops = route.view === 'laptop-request' || ((route.view === 'section' || route.view === 'section-help') && route.section === 'laptops');
   const productDetailOpen = (route.view === 'preorder' && !!route.productId) ||
     (route.view === 'section' && route.section === 'laptops' && !!window.location.pathname.split('/')[2]);
   const [laptopAdvancedOpen, setLaptopAdvancedOpen] = useState(false);
@@ -426,10 +429,12 @@ export const App: React.FC = () => {
         onToggleSections={shell.toggle}
         sectionsExpanded={shell.expanded}
         searchQuery={searchQuery}
+        showFindOrder={!inLaptops && !inPreorder}
         searchPlaceholder={inLaptops ? "Find laptop" : inPreorder ? "Search preorder products" : undefined}
         onSearchChange={(q) => {
           setSearchQuery(q);
           if (inLaptops && q.trim() && window.location.pathname !== '/laptops') navigate('/laptops');
+          if (route.view === 'section-help' && inPreorder && q.trim()) navigate('/preorder');
           // In the pre-order section the same box searches pre-orders, so it
           // must not bounce the customer back to the software storefront.
           if (q.trim() && !inPreorder && !inLaptops) {
@@ -438,9 +443,11 @@ export const App: React.FC = () => {
             setShowAllSoftware(true);
           }
         }}
-        activeTab={inLaptops ? (route.view === 'laptop-request' ? 'request' : 'home') : route.view === 'order-access' ? 'find-order' : activeTab}
+        activeTab={inLaptops || inPreorder ? (route.view === 'section-help' ? 'help' : route.view === 'laptop-request' || route.view === 'preorder-request' ? 'request' : 'home') : route.view === 'order-access' ? 'find-order' : activeTab}
         onSelectTab={(tab) => {
+          if ((inLaptops || inPreorder) && tab === 'help') { setSearchQuery(''); navigate(inLaptops ? '/laptops/help' : '/preorder/help'); return; }
           if (inLaptops && (tab === 'home' || tab === 'request')) { if (tab === 'home') setLaptopBrowseRevision(revision => revision + 1); setSearchQuery(''); navigate(tab === 'home' ? '/laptops' : '/laptops/request'); return; }
+          if (inPreorder && (tab === 'home' || tab === 'request')) { setSearchQuery(''); if (tab === 'home') preorderCompare.clear(); else setRequestedProductName(''); navigate(tab === 'home' ? '/preorder' : '/preorder/request'); return; }
           if (tab === 'cart') { setCartOpen(true); return; }
           if (route.view !== 'home') navigate('/');
           if (tab === 'request') setRequestLaunchMode(null);
@@ -500,6 +507,7 @@ export const App: React.FC = () => {
       {/* The panel overlays this rather than displacing it. Nothing on the page
           moves when it opens, closes or scrubs. */}
       <main className={`flex-1 ${productDetailOpen ? 'pb-6' : 'pb-20'} md:pb-12`}>
+        {route.view === 'section-help' && <HelpHubView />}
         {route.view === 'category' && (
           isLoading ? (
             <div className="mx-auto max-w-7xl px-4 py-16 text-center text-sm font-bold text-[#014040]">{STORE_COPY.catalog.loading}</div>
@@ -820,6 +828,8 @@ export const App: React.FC = () => {
               return;
             }
             if (tab === 'home') {
+              setSearchQuery('');
+              preorderCompare.clear();
               if (route.view !== 'preorder' || route.productId) navigate('/preorder');
               window.scrollTo({ top: 0, behavior: 'smooth' });
               return;
@@ -847,7 +857,7 @@ export const App: React.FC = () => {
             </div>
             <div className="space-y-3 md:justify-self-center">
               <span className="block text-[11px] font-bold uppercase tracking-wider text-[#05ef28]">Quick Navigation</span>
-              <ul className="space-y-2"><li><button onClick={() => { navigate('/'); setActiveTab('home'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.home}</button></li><li><button onClick={() => { navigate('/'); setActiveTab('find-order'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.findOrder}</button></li><li><button onClick={() => { navigate('/'); setActiveTab('help'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.help}</button></li><li><button onClick={() => { navigate('/'); setRequestLaunchMode(null); setActiveTab('request'); }} className="hover:text-[#05ef28]">{STORE_COPY.requestPage.pageTitle}</button></li></ul>
+              <ul className="space-y-2"><li><button onClick={() => { setSearchQuery(''); if (inLaptops) setLaptopBrowseRevision(revision => revision + 1); if (inPreorder) preorderCompare.clear(); navigate(inLaptops ? '/laptops' : inPreorder ? '/preorder' : '/'); setActiveTab('home'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.home}</button></li>{!inLaptops && !inPreorder && <li><button onClick={() => { navigate('/'); setActiveTab('find-order'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.findOrder}</button></li>}<li><button onClick={() => { setSearchQuery(''); navigate(inLaptops ? '/laptops/help' : inPreorder ? '/preorder/help' : '/'); setActiveTab('help'); }} className="hover:text-[#05ef28]">{STORE_COPY.navigation.help}</button></li><li><button onClick={() => { setSearchQuery(''); navigate(inLaptops ? '/laptops/request' : inPreorder ? '/preorder/request' : '/'); setRequestLaunchMode(null); setActiveTab('request'); }} className="hover:text-[#05ef28]">{inLaptops || inPreorder ? STORE_COPY.navigation.request : STORE_COPY.requestPage.pageTitle}</button></li></ul>
             </div>
             <div className="space-y-5 md:justify-self-end">
               <div><span className="block text-[11px] font-bold uppercase tracking-wider text-[#05ef28]">About us</span><p className="mt-2 max-w-xs leading-5 text-white/65">More information coming soon.</p></div>

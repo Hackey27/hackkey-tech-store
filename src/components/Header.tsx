@@ -31,6 +31,7 @@ export interface PreorderCartSlot {
 }
 
 interface HeaderProps {
+  showFindOrder?: boolean;
   searchPlaceholder?: string;
   searchQuery: string;
   onSearchChange: (q: string) => void;
@@ -74,6 +75,7 @@ export const Header: React.FC<HeaderProps> = ({
   sectionsExpanded,
   preorderCart,
   searchPlaceholder = STORE_COPY.brand.searchPlaceholder,
+  showFindOrder = true,
 }) => {
   const cartButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -170,7 +172,7 @@ export const Header: React.FC<HeaderProps> = ({
               {STORE_COPY.navigation.home}
             </button>
 
-            <button
+            {showFindOrder && <button
               onClick={() => onSelectTab('find-order')}
               className={`hidden md:inline-flex px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
                 activeTab === 'find-order'
@@ -179,7 +181,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               {STORE_COPY.navigation.findOrder}
-            </button>
+            </button>}
 
             <button
               onClick={() => onSelectTab('help')}

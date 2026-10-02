@@ -45,9 +45,9 @@ test('bulk price replaces the unit price for every unit, not just those above th
   assert.equal(priceServiceLine(PLAG_AI, 2).totalPesewas, 9500, 'qty 2 -> GHS 95.00');
   assert.equal(priceServiceLine(PLAG_AI, 3).totalPesewas, 14250, 'qty 3 -> GHS 142.50');
 
-  assert.equal(formatPesewas(priceServiceLine(PLAG_AI, 1).totalPesewas), 'GHS 50.00');
-  assert.equal(formatPesewas(priceServiceLine(PLAG_AI, 2).totalPesewas), 'GHS 95.00');
-  assert.equal(formatPesewas(priceServiceLine(PLAG_AI, 3).totalPesewas), 'GHS 142.50');
+  assert.equal(formatPesewas(priceServiceLine(PLAG_AI, 1).totalPesewas), '₵50');
+  assert.equal(formatPesewas(priceServiceLine(PLAG_AI, 2).totalPesewas), '₵95');
+  assert.equal(formatPesewas(priceServiceLine(PLAG_AI, 3).totalPesewas), '₵142.5');
 });
 
 test('a tiered calculation would overcharge, and is not what this does', () => {
@@ -160,12 +160,12 @@ test('cedisToPesewas absorbs float imprecision already present in stored data', 
   assert.equal(cedisToPesewas(142.50000000000003), 14250);
 });
 
-test('formatting always shows two decimals', () => {
-  assert.equal(formatPesewas(5000), 'GHS 50.00');
-  assert.equal(formatPesewas(4750), 'GHS 47.50');
-  assert.equal(formatPesewas(14250), 'GHS 142.50');
-  assert.equal(formatPesewas(123456789), 'GHS 1,234,567.89');
-  assert.equal(formatPesewas(0), 'GHS 0.00');
+test('formatting uses the cedi symbol and omits whole-cedi decimals', () => {
+  assert.equal(formatPesewas(5000), '₵50');
+  assert.equal(formatPesewas(4750), '₵47.5');
+  assert.equal(formatPesewas(14250), '₵142.5');
+  assert.equal(formatPesewas(123456789), '₵1,234,567.89');
+  assert.equal(formatPesewas(0), '₵0');
 });
 
 // ---------------------------------------------------------------------------
@@ -311,9 +311,9 @@ test('the seeded Turnitin service matches the spec', () => {
 
 test('the seeded options price to the figures in the definition of done', () => {
   const plagAi = TURNITIN_SERVICE.options!.find((o) => o.optionId === 'PLAG_AI')!;
-  assert.equal(formatPesewas(priceServiceLine(plagAi, 1).totalPesewas), 'GHS 50.00');
-  assert.equal(formatPesewas(priceServiceLine(plagAi, 2).totalPesewas), 'GHS 95.00');
-  assert.equal(formatPesewas(priceServiceLine(plagAi, 3).totalPesewas), 'GHS 142.50');
+  assert.equal(formatPesewas(priceServiceLine(plagAi, 1).totalPesewas), '₵50');
+  assert.equal(formatPesewas(priceServiceLine(plagAi, 2).totalPesewas), '₵95');
+  assert.equal(formatPesewas(priceServiceLine(plagAi, 3).totalPesewas), '₵142.5');
 });
 
 test('the disclaimer is stored verbatim', () => {

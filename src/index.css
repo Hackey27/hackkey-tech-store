@@ -86,7 +86,7 @@
 
 .hk-header-scrolled-pattern {
   --hk-pattern-size: 190px;
-  --hk-pattern-opacity: 0.32;
+  --hk-pattern-opacity: 0.42;
   --hk-pattern-blend: overlay;
 }
 
@@ -103,7 +103,7 @@
 
 .hk-footer-pattern {
   --hk-pattern-size: 155px;
-  --hk-pattern-opacity: 0.11;
+  --hk-pattern-opacity: 0.21;
 }
 
 .hk-category-title {
@@ -136,7 +136,7 @@
 }
 
 @media (max-width: 639px) {
-  .hk-header-scrolled-pattern { --hk-pattern-size: 140px; --hk-pattern-opacity: 0.26; }
+  .hk-header-scrolled-pattern { --hk-pattern-size: 140px; --hk-pattern-opacity: 0.36; }
   .hk-price-pattern { --hk-pattern-size: 130px; }
   .hk-licence-pattern { --hk-pattern-size: 120px; }
   .hk-footer-pattern { --hk-pattern-size: 110px; }

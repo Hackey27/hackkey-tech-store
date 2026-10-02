@@ -144,7 +144,7 @@ export function LaptopSection({
     change: (state: LaptopFilters) => void,
   ) => (
     <fieldset className="col-span-2 min-w-0 xl:col-span-1">
-      <legend className="mb-1 text-xs font-bold">Price range (GH₵)</legend>
+      <legend className="mb-1 text-xs font-bold">Price range (₵)</legend>
       <div className="flex gap-2">
         {(["from", "to"] as const).map((key) => (
           <label key={key} className="min-w-0 flex-1 text-xs">

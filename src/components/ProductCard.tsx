@@ -45,7 +45,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   ), [product.mobileBannerImageUrl, product.bannerImageUrl, product.imageUrl]);
   useEffect(() => setLaptopPreviewFailed(false), [laptopPreviewUrl]);
 
-  // Format GHS price string: Starts at ₵... or ₵...
+  // Format ₵ price string: Starts at ₵... or ₵...
   // One resolution for every kind, and one formatter — a card must never build
   // a currency string by hand, which is how pesewas came to render as cedis.
   const { unitPesewas: minPrice } = resolveLinePricePesewas({
@@ -137,9 +137,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         )}
       </div>
 
-      {/* Footer: Price in GHS & Primary Action Button */}
+      {/* Footer: Price in ₵ & Primary Action Button */}
       <div className={`px-5 sm:px-6 py-4 border-t ${product.kind === 'laptop' ? 'grid grid-cols-2 gap-2' : 'flex flex-wrap items-center justify-between gap-3'} ${product.kind === 'product' ? 'border-[#025656] bg-[#014040]' : 'border-[#e2ecea] bg-[#f8fbfa]'}`}>
-        {/* Price in GHS only */}
+        {/* Price in ₵ only */}
         {product.kind === 'laptop' && onCompare && <button type="button" onClick={event => { event.stopPropagation(); onCompare(product); }} className="hk-card-compare flex h-full min-h-10 items-center justify-center whitespace-nowrap rounded-xl border border-[#014040] px-2 py-2.5 text-[11px] font-black text-[#014040] sm:text-xs">Compare laptop</button>}
         {product.kind !== 'laptop' && <div className={product.kind === 'product' ? 'min-w-0' : undefined}>
           <span className={`text-[10px] uppercase tracking-wider font-bold block ${product.kind === 'product' ? 'text-white/70' : 'text-slate-500'}`}>

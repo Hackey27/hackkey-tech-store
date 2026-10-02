@@ -27,10 +27,10 @@ export function pesewasToCedis(pesewas: number): number {
   return Math.round(pesewas) / 100;
 }
 
-/** `GHS 1,200.00` — comma thousands separator, always two decimals. */
+/** `₵1,200` — whole-cedi prices omit decimals; retain any actual fractional amount. */
 export function formatPesewas(pesewas: number): string {
-  return `GHS ${pesewasToCedis(pesewas).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
+  return `₵${pesewasToCedis(pesewas).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
     maximumFractionDigits: 2
   })}`;
 }

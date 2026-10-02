@@ -356,7 +356,7 @@ function CombinationEditor({
             <td key={delivery} className="p-2 align-top">
               <label className="block">
                 <span className="mb-1 block text-[11px] font-bold text-slate-600 md:sr-only">
-                  {DELIVERY_LABELS[delivery]} GHS
+                  {DELIVERY_LABELS[delivery]} ₵
                 </span>
                 <input
                   className={inputClass}
@@ -466,7 +466,7 @@ function CombinationEditor({
           <div className="mt-3 flex flex-wrap items-end gap-3">
             {deliveries.map((delivery) => (
               <label key={delivery} className={`${labelClass} w-36`}>
-                {DELIVERY_LABELS[delivery]} GHS
+                {DELIVERY_LABELS[delivery]} ₵
                 <input
                   className={inputClass}
                   inputMode="decimal"
@@ -507,7 +507,7 @@ function CombinationEditor({
                 <th key={axis.name} className="p-2">{axis.name}</th>
               ))}
               {!uniform && deliveries.map((delivery) => (
-                <th key={delivery} className="p-2">{DELIVERY_LABELS[delivery]} GHS</th>
+                <th key={delivery} className="p-2">{DELIVERY_LABELS[delivery]} ₵</th>
               ))}
               <th className="p-2" />
             </tr>

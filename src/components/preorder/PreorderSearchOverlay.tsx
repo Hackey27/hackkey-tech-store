@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 import { Search, X } from "lucide-react";
 import { formatPesewas } from "../../../shared/money";
 import { STORE_COPY } from "../../config/storeCopy";
@@ -138,6 +138,8 @@ function ProductSearchResult({
       : { ...matches[0]?.combination?.selections },
   );
   const resolved = resolvePreorderSelection(product, selections);
+  const [variantsOpen, setVariantsOpen] = useState(false);
+  const variantsId = useId();
   const pricing = preorderSelectionPricing(product, selections);
   const image = resolved.imagePath;
   const chooseProduct = () =>
@@ -174,7 +176,7 @@ function ProductSearchResult({
           {product.name}
         </span>
       </button>
-      <div className="mt-3 space-y-3">
+      <div id={variantsId} hidden={!variantsOpen} className="mt-3 space-y-3">
         {resolved.axes
           .filter((axis) => axis.visible)
           .map((axis) => (
@@ -235,7 +237,8 @@ function ProductSearchResult({
             {STORE_COPY.preorder.askForPrice}
           </p>
         )}
-        {resolved.missingAxes.length > 0 &&
+        {variantsOpen &&
+          resolved.missingAxes.length > 0 &&
           Object.keys(selections).length > 0 && (
             <p className="mt-2 text-xs text-slate-500">
               Choose {resolved.missingAxes.join(" and ")} to complete your
@@ -243,13 +246,26 @@ function ProductSearchResult({
             </p>
           )}
       </div>
-      <button
-        type="button"
-        onClick={chooseProduct}
-        className="mt-3 rounded-xl bg-[#014040] px-4 py-2 text-xs font-black text-white hover:bg-[#025656]"
-      >
-        {selectingComparison ? "Compare product" : "View product"}
-      </button>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={chooseProduct}
+          className="rounded-xl bg-[#014040] px-4 py-2 text-xs font-black text-white hover:bg-[#025656]"
+        >
+          {selectingComparison ? "Compare product" : "View product"}
+        </button>
+        {product.variantAxes.length > 0 && (
+          <button
+            type="button"
+            aria-expanded={variantsOpen}
+            aria-controls={variantsId}
+            onClick={() => setVariantsOpen((open) => !open)}
+            className="rounded-xl border border-[#014040] px-4 py-2 text-xs font-black text-[#014040] hover:bg-[#edf5f3]"
+          >
+            {variantsOpen ? "Hide variants" : "View variants"}
+          </button>
+        )}
+      </div>
     </article>
   );
 }
