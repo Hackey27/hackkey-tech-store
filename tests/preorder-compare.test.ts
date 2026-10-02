@@ -8,14 +8,14 @@ import { cedisToPesewas } from '../shared/money';
 /**
  * Choosing what to compare, and the one place the comparison can sell.
  *
- * The cap is the interesting part: silently ignoring a fourth pick would leave
+ * The cap is the interesting part: silently ignoring a sixth pick would leave
  * a customer tapping a control that appears to do nothing.
  */
 
-test('the cap is three', () => {
+test('the cap is five', () => {
   // Stated here so a change to it is a deliberate edit to a test, not a
   // number quietly raised in a component.
-  assert.equal(MAX_COMPARED, 3);
+  assert.equal(MAX_COMPARED, 5);
 });
 
 test('picking adds, and picking again removes', () => {
@@ -35,22 +35,26 @@ test('the session starts from one product and goes looking for the next', () => 
   assert.deepEqual(togglePreorderCompare([], 'a'), ['a']);
 });
 
-test('a fourth pick is refused rather than pushing one out', () => {
+test('a sixth pick is refused rather than pushing one out', () => {
   // Dropping the oldest would take away something the customer chose without
   // saying so. The control is disabled at this point; this is the backstop.
-  const full = ['a', 'b', 'c'];
-  assert.deepEqual(togglePreorderCompare(full, 'd'), full);
+  const full = ['a', 'b', 'c', 'd', 'e'];
+  assert.deepEqual(togglePreorderCompare(full, 'f'), full);
 });
 
 test('removing one makes room again', () => {
-  const full = ['a', 'b', 'c'];
+  const full = ['a', 'b', 'c', 'd', 'e'];
   const freed = togglePreorderCompare(full, 'b');
-  assert.deepEqual(freed, ['a', 'c']);
-  assert.deepEqual(togglePreorderCompare(freed, 'd'), ['a', 'c', 'd']);
+  assert.deepEqual(freed, ['a', 'c', 'd', 'e']);
+  assert.deepEqual(togglePreorderCompare(freed, 'f'), ['a', 'c', 'd', 'e', 'f']);
 });
 
 test('an already-compared product can still be removed when full', () => {
-  assert.deepEqual(togglePreorderCompare(['a', 'b', 'c'], 'c'), ['a', 'b']);
+  assert.deepEqual(togglePreorderCompare(['a', 'b', 'c', 'd', 'e'], 'c'), ['a', 'b', 'd', 'e']);
+});
+
+test('the fifth product is accepted', () => {
+  assert.deepEqual(togglePreorderCompare(['a', 'b', 'c', 'd'], 'e'), ['a', 'b', 'c', 'd', 'e']);
 });
 
 /* -- the comparison's add button ------------------------------------------ */

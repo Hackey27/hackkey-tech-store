@@ -4,6 +4,7 @@ import {
   groupPreorderResults,
   preorderResultHref,
   searchPreorder,
+  preorderSelectionPricing,
 } from '../src/utils/preorderSearch';
 import { PreorderProduct } from '../shared/types';
 import { cedisToPesewas } from '../shared/money';
@@ -57,6 +58,28 @@ const belt: PreorderProduct = {
 
 const keys = (query: string, products = [bag, belt]) =>
   searchPreorder(products, query).map((result) => result.key);
+
+test('search groups a product and variant matches into one product', () => {
+  assert.equal(groupPreorderResults(searchPreorder([bag], 'canvas')).length, 1);
+  assert.equal(groupPreorderResults(searchPreorder([bag], 'black')).length, 1);
+});
+
+test('search variant prices change with the most specific selection', () => {
+  assert.deepEqual(preorderSelectionPricing(bag, {}), [{ delivery: 'express', pricePesewas: 12000, uniform: false }]);
+  assert.deepEqual(preorderSelectionPricing(bag, { Colour: 'Black' }), [{ delivery: 'express', pricePesewas: 12000, uniform: true }]);
+  assert.deepEqual(preorderSelectionPricing(bag, { Colour: 'Black', Size: 'XL' }), [{ delivery: 'express', pricePesewas: 14500, uniform: true }]);
+});
+
+test('incomplete variant selections only use compatible prices', () => {
+  assert.deepEqual(preorderSelectionPricing(bag, { Size: 'XL' }), [{ delivery: 'express', pricePesewas: 12000, uniform: false }]);
+  assert.deepEqual(preorderSelectionPricing(bag, { Colour: 'Navy' }), [{ delivery: 'express', pricePesewas: 12000, uniform: true }]);
+});
+
+test('search selections respect offered deliveries and never invent a zero price', () => {
+  assert.deepEqual(preorderSelectionPricing(belt, {}), [{ delivery: 'two-months', pricePesewas: 3000, uniform: true }]);
+  assert.deepEqual(preorderSelectionPricing({ ...bag, combinations: bag.combinations.map(c => ({ ...c, priceExpressPesewas: undefined })) }, { Colour: 'Black' }), []);
+  assert.deepEqual(preorderSelectionPricing(bag, { Colour: 'Red' }), []);
+});
 
 test('an empty query returns nothing rather than everything', () => {
   // The overlay only opens on a typed query; returning the catalogue here

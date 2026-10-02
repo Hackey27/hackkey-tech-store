@@ -7,6 +7,8 @@ import {
   preorderCardPricing,
   readableSelections,
   resolvePreorderSelection,
+  PreorderSelections,
+  PreorderDeliveryPrice,
 } from '../../shared/preorderCombinations';
 
 /**
@@ -16,9 +18,8 @@ import {
  * does it, so the two behave alike: every token must appear somewhere, in any
  * order, accents folded.
  *
- * COMBINATIONS ARE RESULTS IN THEIR OWN RIGHT. The data model gave them ids
- * for exactly this, and "black XL bag" has to be able to land on that one
- * variant rather than on a product page the customer then has to re-navigate.
+ * Combination matches carry the selection for queries such as "black XL bag".
+ * The overlay groups these matches into one product with selectable variants.
  *
  * A product's own haystack deliberately EXCLUDES its variant options. If it
  * included them, "black" would match the product itself and every product with
@@ -162,4 +163,26 @@ export function groupPreorderResults(
     groups.set(result.product.productId, group);
   }
   return [...groups.values()];
+}
+
+/** Exact prices once a combination resolves; otherwise starting prices among
+ * the combinations compatible with the customer's current variant choices. */
+export function preorderSelectionPricing(
+  product: PreorderProduct,
+  selections: PreorderSelections
+): PreorderDeliveryPrice[] {
+  if (!Object.keys(selections).length) return preorderCardPricing(product);
+  const resolved = resolvePreorderSelection(product, selections);
+  if (resolved.combination) {
+    return product.deliveryOptions.flatMap(delivery => {
+      const price = delivery === 'express' ? resolved.priceExpressPesewas : resolved.priceTwoMonthsPesewas;
+      return price === null ? [] : [{ delivery, pricePesewas: price, uniform: true }];
+    });
+  }
+  const combinations = product.combinations.filter(combination =>
+    Object.entries(combination.selections).every(([axis, value]) =>
+      selections[axis] === undefined || selections[axis] === value
+    )
+  );
+  return preorderCardPricing({ ...product, combinations });
 }

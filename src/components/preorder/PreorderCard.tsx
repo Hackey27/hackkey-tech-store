@@ -5,6 +5,7 @@ import { PreorderProduct } from '../../../shared/types';
 import { preorderCardPricing } from '../../../shared/preorderCombinations';
 import { formatPesewas } from '../../../shared/money';
 import { STORE_COPY } from '../../config/storeCopy';
+import { MAX_COMPARISON_PRODUCTS } from '../../utils/comparison';
 
 interface PreorderCardProps {
   product: PreorderProduct;
@@ -83,7 +84,7 @@ export const PreorderCard: React.FC<PreorderCardProps> = ({
           data-testid={`preorder-compare-toggle-${product.productId}`}
           aria-pressed={comparing}
           disabled={!comparing && !canCompare}
-          title={!comparing && !canCompare ? STORE_COPY.preorder.compare.full(3) : undefined}
+          title={!comparing && !canCompare ? STORE_COPY.preorder.compare.full(MAX_COMPARISON_PRODUCTS) : undefined}
           onClick={(event) => { event.stopPropagation(); onToggleCompare(product); }}
           className={`hk-card-compare hk-pressable absolute right-2 top-2 z-10 rounded-lg px-2 py-1 text-[10px] font-black shadow-sm ${
             comparing
@@ -115,11 +116,6 @@ export const PreorderCard: React.FC<PreorderCardProps> = ({
         <h3 className="text-sm font-bold leading-snug tracking-tight text-[#014040] sm:text-base lg:text-lg">
           {product.name}
         </h3>
-        {product.description && (
-          <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-600 sm:text-xs sm:leading-5">
-            {product.description}
-          </p>
-        )}
 
         <div className="mt-auto pt-3">
           {pricing.length > 0 && <p className="mb-1.5 text-[10px] font-bold text-[#014040]">Delivery time</p>}

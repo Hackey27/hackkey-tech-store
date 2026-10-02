@@ -99,6 +99,8 @@ export const App: React.FC = () => {
     route.view === 'preorder-request' ||
     route.view === 'preorder-compare';
   const inLaptops = route.view === 'laptop-request' || (route.view === 'section' && route.section === 'laptops');
+  const productDetailOpen = (route.view === 'preorder' && !!route.productId) ||
+    (route.view === 'section' && route.section === 'laptops' && !!window.location.pathname.split('/')[2]);
   const [laptopAdvancedOpen, setLaptopAdvancedOpen] = useState(false);
   const [laptopBrowseRevision, setLaptopBrowseRevision] = useState(0);
   const shell = useSectionShell();
@@ -117,6 +119,7 @@ export const App: React.FC = () => {
   // neither basket may empty or price the other.
   const preorderCart = usePreorderCart();
   const preorderCompare = usePreorderCompare();
+  const pickingPreorder = route.view === 'preorder-compare' && (preorderCompare.picking || preorderCompare.productIds.length < 2);
   /* Starting or reopening a comparison is a navigation as well as a state
      change, so the two are kept together rather than left to each caller. */
   const compareSession = {
@@ -423,7 +426,7 @@ export const App: React.FC = () => {
         onToggleSections={shell.toggle}
         sectionsExpanded={shell.expanded}
         searchQuery={searchQuery}
-        searchPlaceholder={inLaptops ? "Find laptop" : undefined}
+        searchPlaceholder={inLaptops ? "Find laptop" : inPreorder ? "Search preorder products" : undefined}
         onSearchChange={(q) => {
           setSearchQuery(q);
           if (inLaptops && q.trim() && window.location.pathname !== '/laptops') navigate('/laptops');
@@ -468,10 +471,15 @@ export const App: React.FC = () => {
       {inPreorder ? (
         <PreorderSearchOverlay
           query={searchQuery}
-          results={preorderResults}
+          results={preorderResults.filter(result => !pickingPreorder || !preorderCompare.has(result.product.productId))}
+          selectingComparison={pickingPreorder}
           loading={false}
           onClose={() => setSearchQuery('')}
-          onSelect={(result) => { setSearchQuery(''); navigate(preorderResultHref(result)); }}
+          onSelect={(result) => {
+            setSearchQuery('');
+            if (pickingPreorder) compareSession.pick(result.product.productId);
+            else navigate(preorderResultHref(result));
+          }}
           onRequestProduct={() => {
             setRequestedProductName(searchQuery.trim());
             setSearchQuery('');
@@ -491,7 +499,7 @@ export const App: React.FC = () => {
       {/* Main Content Area */}
       {/* The panel overlays this rather than displacing it. Nothing on the page
           moves when it opens, closes or scrubs. */}
-      <main className="flex-1 pb-20 md:pb-12">
+      <main className={`flex-1 ${productDetailOpen ? 'pb-6' : 'pb-20'} md:pb-12`}>
         {route.view === 'category' && (
           isLoading ? (
             <div className="mx-auto max-w-7xl px-4 py-16 text-center text-sm font-bold text-[#014040]">{STORE_COPY.catalog.loading}</div>
@@ -573,6 +581,7 @@ export const App: React.FC = () => {
             productId={window.location.pathname.split('/')[2] ? decodeURIComponent(window.location.pathname.split('/')[2]) : undefined}
             onOpen={openProduct} onBack={() => navigate('/laptops')}
             searchQuery={searchQuery} advancedOpen={laptopAdvancedOpen} onAdvancedOpenChange={setLaptopAdvancedOpen}
+            onSearchClose={() => setSearchQuery('')}
           />
         )}
 
@@ -785,7 +794,7 @@ export const App: React.FC = () => {
       {cardChoice && <CardSoftwareChoice request={cardChoice} onClose={() => setCardChoice(null)} onChoose={(variant, os) => { if (cardChoice.mode === 'add') handleAddToCart(cardChoice.product, variant, os); else handleBuyNow(cardChoice.product, variant, os); }} />}
 
       {/* Mobile Fixed Bottom Navigation */}
-      <CurvedNav
+      {!productDetailOpen && <CurvedNav
         // The pre-order tab gets its own three-item bar; every other section
         // keeps the software one.
         items={inLaptops ? LAPTOP_NAV_ITEMS : inPreorder ? PREORDER_NAV_ITEMS : undefined}
@@ -826,7 +835,7 @@ export const App: React.FC = () => {
           if (tab !== 'filters') setActiveTab(tab);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
-      />
+      />}
 
       {/* Storefront footer */}
       <footer className={`${route.view === 'home' && activeTab === 'home' ? '' : 'hidden md:block'} hk-brand-pattern hk-pattern-outline hk-footer-pattern relative border-t border-[#025656] bg-[#014040] pb-24 pt-9 text-xs text-white md:pb-8`}>

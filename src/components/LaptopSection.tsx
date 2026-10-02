@@ -18,6 +18,8 @@ import { ImageLightbox } from "./ImageLightbox";
 import { renderableProductImageUrl } from "./ProductImage";
 import { QuoteRequestForm } from "./QuoteRequestForm";
 import { useBackDismiss } from "../utils/useBackDismiss";
+import { SearchResultsOverlay } from "./SearchResultsOverlay";
+import { addComparisonProduct, MAX_COMPARISON_PRODUCTS } from "../utils/comparison";
 
 const button =
   "rounded-xl border border-[#b9d0cb] bg-white px-3 py-2 text-sm font-bold text-[#014040] hover:bg-[#edf5f3]";
@@ -46,6 +48,7 @@ export function LaptopSection({
   onOpen,
   onBack,
   searchQuery,
+  onSearchClose,
   advancedOpen,
   onAdvancedOpenChange,
 }: {
@@ -55,6 +58,7 @@ export function LaptopSection({
   onOpen: (item: CatalogueItem) => void;
   onBack: () => void;
   searchQuery: string;
+  onSearchClose: () => void;
   advancedOpen: boolean;
   onAdvancedOpenChange: (open: boolean) => void;
 }) {
@@ -169,7 +173,7 @@ export function LaptopSection({
   };
   const pick = (item: CatalogueItem) => {
     setSelected((old) =>
-      old.includes(item.itemId) ? old : [...old, item.itemId],
+      addComparisonProduct(old, item.itemId),
     );
     setPicking(false);
     window.scrollTo({ top: 0 });
@@ -353,7 +357,9 @@ export function LaptopSection({
                 Scroll left and right to see comparison products
               </h2>
               <button
-                className={button}
+                className={`${button} disabled:cursor-not-allowed disabled:opacity-50`}
+                disabled={selected.length >= MAX_COMPARISON_PRODUCTS}
+                title={selected.length >= MAX_COMPARISON_PRODUCTS ? "Compare up to 5 laptops. Remove one to choose another." : undefined}
                 onClick={() => {
                   setPicking(true);
                   window.scrollTo({ top: 0 });
@@ -388,6 +394,13 @@ export function LaptopSection({
           )}
         </>
       )}
+      <SearchResultsOverlay
+        query={searchQuery}
+        items={results.filter((item) => !picking || !selected.includes(item.itemId))}
+        loading={false}
+        onClose={onSearchClose}
+        onSelect={(item) => { onSearchClose(); (picking ? pick : onOpen)(item); }}
+      />
       {advanced && (
         <Dialog title="Advanced laptop filters" close={closeAdvanced}>
           <div className="mb-5 flex flex-wrap items-end gap-4">

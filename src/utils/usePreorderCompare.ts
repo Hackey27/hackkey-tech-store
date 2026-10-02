@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react';
+import { addComparisonProduct, MAX_COMPARISON_PRODUCTS } from './comparison';
 
 /** A session keeps product ids in selection order and opens the catalogue
  * to pick another. Cards expose Compare on desktop hover and on touch screens.
- * Columns scroll horizontally, with up to three preorders per session. */
-export const MAX_COMPARED = 3;
+ * Columns scroll horizontally, with up to five preorders per session. */
+export const MAX_COMPARED = MAX_COMPARISON_PRODUCTS;
 
 export interface PreorderCompare {
   /** In pick order. The first is pinned leftmost. */
@@ -28,8 +29,7 @@ export interface PreorderCompare {
  *  expected to have disabled the control by then. */
 export function togglePreorderCompare(productIds: string[], productId: string): string[] {
   if (productIds.includes(productId)) return productIds.filter((entry) => entry !== productId);
-  if (productIds.length >= MAX_COMPARED) return productIds;
-  return [...productIds, productId];
+  return addComparisonProduct(productIds, productId);
 }
 
 export function usePreorderCompare(): PreorderCompare {
