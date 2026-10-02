@@ -5,6 +5,7 @@ import {
   emptyLaptopFilters,
   filterLaptops,
   laptopOptions,
+  sortLaptops,
 } from "../src/utils/laptopFilters";
 
 const items = [
@@ -79,4 +80,11 @@ test("search combines words across laptop specs", () => {
     }).map((item) => item.itemId),
     ["0"],
   );
+});
+
+
+test('laptop price sorting puts quote-only entries last in either direction', () => {
+  assert.deepEqual(sortLaptops(items, 'price-asc').map(item => item.itemId), ['1', '0', '2', '3']);
+  assert.deepEqual(sortLaptops(items, 'price-desc').map(item => item.itemId), ['2', '0', '1', '3']);
+  assert.deepEqual(items.map(item => item.itemId), ['0', '1', '2', '3']);
 });

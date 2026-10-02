@@ -1,3 +1,4 @@
+import { PreorderDeliveryLabel } from './PreorderDeliveryLabel';
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Loader2, PackageCheck } from 'lucide-react';
 import { PreorderDelivery } from '../../../shared/types';
@@ -166,9 +167,7 @@ export const PreorderCheckoutView: React.FC<PreorderCheckoutViewProps> = ({
             >
               <div className="flex items-center justify-between gap-3 border-b border-[#e2ecea] bg-[#f8fbfa] px-4 py-3">
                 <h2 className="text-sm font-black text-[#014040]">
-                  {group.delivery === 'express'
-                    ? STORE_COPY.preorder.delivery.express
-                    : STORE_COPY.preorder.delivery.twoMonths}
+                  <PreorderDeliveryLabel delivery={group.delivery} />
                 </h2>
                 <span className="text-[11px] font-bold text-[#025656]">
                   {group.delivery === 'express'

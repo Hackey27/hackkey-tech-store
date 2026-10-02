@@ -205,8 +205,8 @@ export async function sendSellerPreorderAlert(preorder: Preorder): Promise<MailR
       `Email: ${preorder.customer.email}`,
       `Location: ${preorder.customer.location}`,
       `Total: ${formatPesewas(total)}`,
-      ...group('express', 'Express'),
-      ...group('two-months', 'Two months'),
+      ...group('express', '2-3 weeks'),
+      ...group('two-months', '6-8 Weeks'),
     ],
   });
 }

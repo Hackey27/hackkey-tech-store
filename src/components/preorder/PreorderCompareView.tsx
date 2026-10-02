@@ -1,3 +1,4 @@
+import { PreorderDeliveryLabel } from './PreorderDeliveryLabel';
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, PackagePlus, Plus, SlidersHorizontal, X } from 'lucide-react';
 import { PreorderProduct } from '../../../shared/types';
@@ -139,9 +140,7 @@ export const PreorderCompareView: React.FC<PreorderCompareViewProps> = ({
                   pricing.map((entry) => (
                     <div key={entry.delivery} className="flex items-baseline justify-between gap-2">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                        {entry.delivery === 'express'
-                          ? STORE_COPY.preorder.delivery.express
-                          : STORE_COPY.preorder.delivery.twoMonths}
+                        <PreorderDeliveryLabel delivery={entry.delivery} />
                       </span>
                       <span className="text-sm font-black text-[#014040]">
                         {entry.uniform

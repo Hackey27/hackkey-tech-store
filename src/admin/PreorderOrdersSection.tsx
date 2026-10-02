@@ -324,7 +324,7 @@ export function PreorderOrdersSection({
                         {item.quantity} x {item.productName}
                       </p>
                       <p className="text-[11px] text-slate-500">
-                        {item.selectionLabel || 'No variants'} · {item.delivery === 'express' ? 'Express' : 'Two months'} ·{' '}
+                        {item.selectionLabel || 'No variants'} · {item.delivery === 'express' ? '2-3 weeks' : '6-8 Weeks'} ·{' '}
                         {formatPesewas(item.pricePesewas * item.quantity)}
                       </p>
                     </div>

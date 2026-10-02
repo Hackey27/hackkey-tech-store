@@ -19,12 +19,14 @@ export interface LaptopFilters {
   from: string;
   to: string;
   query: string;
+  sort?: 'default' | 'price-asc' | 'price-desc';
   selections: Partial<Record<LaptopFacet, string[]>>;
 }
 export const emptyLaptopFilters = (): LaptopFilters => ({
   from: "",
   to: "",
   query: "",
+  sort: 'default',
   selections: {},
 });
 export function laptopValue(laptop: Laptop, facet: LaptopFacet): string {
@@ -92,4 +94,14 @@ export function laptopOptions(
     count: eligible.filter((item) => laptopValue(item.laptop!, facet) === value)
       .length,
   }));
+}
+
+/** Unpriced laptops stay last in either direction. */
+export function sortLaptops(items: CatalogueItem[], sort: LaptopFilters['sort']): CatalogueItem[] {
+  if (!sort || sort === 'default') return items;
+  return [...items].sort((a, b) => {
+    if (a.pricePesewas === undefined) return b.pricePesewas === undefined ? 0 : 1;
+    if (b.pricePesewas === undefined) return -1;
+    return (a.pricePesewas - b.pricePesewas) * (sort === 'price-asc' ? 1 : -1);
+  });
 }

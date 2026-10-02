@@ -5,7 +5,7 @@ import { useBackDismiss } from '../utils/useBackDismiss';
 
 type RequestMode = 'software' | 'laptop';
 
-export const RequestView: React.FC<{ initialMode?: RequestMode | null }> = ({ initialMode = null }) => {
+export const RequestView: React.FC<{ initialMode?: RequestMode | null; onDismiss?: () => void }> = ({ initialMode = null, onDismiss }) => {
   /**
    * Requests open as a modal sheet, matching the pattern the help hub used to
    * carry. The tab itself only presents the two launchers.
@@ -45,6 +45,7 @@ export const RequestView: React.FC<{ initialMode?: RequestMode | null }> = ({ in
   const dismissModal = useBackDismiss(Boolean(modalMode), () => {
     setModalMode(null);
     setSubmitError(null);
+    onDismiss?.();
   });
 
   // Close on Escape and lock background scrolling while the sheet is open.

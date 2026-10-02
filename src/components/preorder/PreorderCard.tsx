@@ -1,3 +1,4 @@
+import { PreorderDeliveryLabel } from './PreorderDeliveryLabel';
 import React, { useEffect, useState } from 'react';
 import { ChevronRight, PackagePlus, SlidersHorizontal } from 'lucide-react';
 import { PreorderProduct } from '../../../shared/types';
@@ -126,19 +127,15 @@ export const PreorderCard: React.FC<PreorderCardProps> = ({
 
         <div className="mt-auto pt-3">
           {pricing.length ? (
-            <div data-testid="preorder-card-price" className="space-y-0.5">
+            <div data-testid="preorder-card-price" className="grid grid-cols-2 items-start gap-3">
               {pricing.map((entry) => (
                 <div
                   key={entry.delivery}
                   data-testid={`preorder-card-price-${entry.delivery}`}
-                  className="flex flex-wrap items-baseline justify-between gap-x-2"
+                  className="flex min-w-0 flex-col items-start gap-1.5"
                 >
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 sm:text-[10px]">
-                    {entry.delivery === 'express'
-                      ? STORE_COPY.preorder.delivery.express
-                      : STORE_COPY.preorder.delivery.twoMonths}
-                  </span>
-                  <span className="text-xs font-black text-[#014040] sm:text-sm lg:text-base">
+                  <PreorderDeliveryLabel delivery={entry.delivery} />
+                  <span className="break-words text-xs font-black text-[#047857] sm:text-sm lg:text-base">
                     {entry.uniform
                       ? formatPesewas(entry.pricePesewas)
                       : STORE_COPY.preorder.fromPrice(formatPesewas(entry.pricePesewas))}

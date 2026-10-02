@@ -31,6 +31,7 @@ export interface PreorderCartSlot {
 }
 
 interface HeaderProps {
+  searchPlaceholder?: string;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   activeTab: 'home' | 'find-order' | 'help' | 'request' | 'cart';
@@ -72,6 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleSections,
   sectionsExpanded,
   preorderCart,
+  searchPlaceholder = STORE_COPY.brand.searchPlaceholder,
 }) => {
   const cartButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -139,7 +141,8 @@ export const Header: React.FC<HeaderProps> = ({
                 type="search"
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
-                placeholder={STORE_COPY.brand.searchPlaceholder}
+                placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
                 autoComplete="off"
                 className="w-full pl-10 pr-8 py-2 bg-white/90 border border-white/60 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-500 focus:outline-none focus:border-[#05ef28] focus:ring-2 focus:ring-[#05ef28]/40 transition-colors"
               />
@@ -253,7 +256,8 @@ export const Header: React.FC<HeaderProps> = ({
               type="search"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder={STORE_COPY.brand.searchPlaceholder}
+              placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
               autoComplete="off"
               className="w-full pl-9 pr-8 py-2 bg-white/90 border border-white/60 rounded-xl text-xs text-slate-800 placeholder-slate-500 focus:outline-none focus:border-[#05ef28] focus:ring-1 focus:ring-[#05ef28]"
             />

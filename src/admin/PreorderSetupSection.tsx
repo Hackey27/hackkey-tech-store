@@ -33,8 +33,8 @@ const ghostButton =
 const ANY = '';
 
 const DELIVERY_LABELS: Record<PreorderDelivery, string> = {
-  express: 'Express',
-  'two-months': 'Two months',
+  express: '2-3 weeks',
+  'two-months': '6-8 Weeks',
 };
 
 function blankProduct(): PreorderProduct {

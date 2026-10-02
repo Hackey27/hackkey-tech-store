@@ -5,7 +5,7 @@ import { CategoryCard } from './components/CategoryCard';
 import { LaptopSection } from './components/LaptopSection';
 import { CategoryPage } from './components/CategoryPage';
 import { ProductCard } from './components/ProductCard';
-import { CurvedNav, PREORDER_NAV_ITEMS } from './components/CurvedNav';
+import { CurvedNav, PREORDER_NAV_ITEMS, LAPTOP_NAV_ITEMS } from './components/CurvedNav';
 import { useScrollReveal } from './utils/useScrollReveal';
 import { FindOrderView } from './components/FindOrderView';
 import { HelpHubView } from './components/HelpHubView';
@@ -61,12 +61,14 @@ type StoreRoute =
   | { view: 'preorder-checkout' }
   | { view: 'preorder-request' }
   | { view: 'preorder-compare' }
+  | { view: 'laptop-request' }
   /** A section with a tab but no content yet. Software and Services is never one. */
   | { view: 'section'; section: Exclude<SectionId, 'software'> };
 
 function currentRoute(): StoreRoute {
   const path = window.location.pathname;
   if (path === '/payment/return') return { view: 'payment-return' };
+  if (/^\/laptops\/request\/?$/.test(path)) return { view: 'laptop-request' };
   const section = sectionForPath(path);
   if (section.id === 'preorder') {
     if (/^\/preorder\/checkout\/?$/.test(path)) return { view: 'preorder-checkout' };
@@ -96,6 +98,9 @@ export const App: React.FC = () => {
     route.view === 'preorder-checkout' ||
     route.view === 'preorder-request' ||
     route.view === 'preorder-compare';
+  const inLaptops = route.view === 'laptop-request' || (route.view === 'section' && route.section === 'laptops');
+  const [laptopAdvancedOpen, setLaptopAdvancedOpen] = useState(false);
+  const [laptopBrowseRevision, setLaptopBrowseRevision] = useState(0);
   const shell = useSectionShell();
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -157,10 +162,10 @@ export const App: React.FC = () => {
      half-covered on the first look. Keyed on entering the section, so a panel
      the reader opens by hand afterwards stays open. */
   useEffect(() => {
-    if (inPreorder || (route.view === 'section' && route.section === 'laptops')) shell.close();
+    if (inPreorder || inLaptops) shell.close();
     // `shell.close` is stable and the route object is rebuilt on every
     // navigation, so this keys on the section rather than the object.
-  }, [inPreorder, route.view === 'section' ? route.section : '']);
+  }, [inPreorder, inLaptops]);
 
   // Fetch catalog from Phase 1 backend endpoint /api/catalog
   const fetchCatalogData = async () => {
@@ -390,7 +395,7 @@ export const App: React.FC = () => {
   const activeSection: SectionId =
     inPreorder
       ? 'preorder'
-      : route.view === 'section'
+      : inLaptops ? 'laptops' : route.view === 'section'
         ? route.section
         : 'software';
 
@@ -401,6 +406,8 @@ export const App: React.FC = () => {
         onSelectSection={(section) => {
           const tab = SECTION_TABS.find((candidate) => candidate.id === section);
           if (!tab) return;
+          setSearchQuery('');
+          if (tab.id === 'laptops') setLaptopBrowseRevision(revision => revision + 1);
           navigate(tab.path);
           if (tab.id === 'software') setActiveTab('home');
           // Picking a tab is the end of the panel's job. Leaving it open over
@@ -417,18 +424,21 @@ export const App: React.FC = () => {
         onToggleSections={shell.toggle}
         sectionsExpanded={shell.expanded}
         searchQuery={searchQuery}
+        searchPlaceholder={inLaptops ? "Find laptop" : undefined}
         onSearchChange={(q) => {
           setSearchQuery(q);
+          if (inLaptops && q.trim() && window.location.pathname !== '/laptops') navigate('/laptops');
           // In the pre-order section the same box searches pre-orders, so it
           // must not bounce the customer back to the software storefront.
-          if (q.trim() && !inPreorder) {
+          if (q.trim() && !inPreorder && !inLaptops) {
             if (route.view !== 'home') navigate('/');
             setActiveTab('home');
             setShowAllSoftware(true);
           }
         }}
-        activeTab={route.view === 'order-access' ? 'find-order' : activeTab}
+        activeTab={inLaptops ? (route.view === 'laptop-request' ? 'request' : 'home') : route.view === 'order-access' ? 'find-order' : activeTab}
         onSelectTab={(tab) => {
+          if (inLaptops && (tab === 'home' || tab === 'request')) { if (tab === 'home') setLaptopBrowseRevision(revision => revision + 1); setSearchQuery(''); navigate(tab === 'home' ? '/laptops' : '/laptops/request'); return; }
           if (tab === 'cart') { setCartOpen(true); return; }
           if (route.view !== 'home') navigate('/');
           if (tab === 'request') setRequestLaunchMode(null);
@@ -469,7 +479,7 @@ export const App: React.FC = () => {
             navigate('/preorder/request');
           }}
         />
-      ) : (
+      ) : !inLaptops ? (
       <SearchResultsOverlay
         query={searchQuery}
         items={searchResults}
@@ -477,7 +487,7 @@ export const App: React.FC = () => {
         onClose={() => setSearchQuery('')}
         onSelect={(item) => { setSearchQuery(''); openProduct(item); }}
       />
-      )}
+      ) : null}
 
       {/* Main Content Area */}
       {/* The panel overlays this rather than displacing it. Nothing on the page
@@ -558,12 +568,16 @@ export const App: React.FC = () => {
 
         {route.view === 'section' && route.section === 'laptops' && (
           isLoading ? <p className="py-16 text-center">Loading laptops…</p> : error ? <div className="py-16 text-center"><p>{error}</p><button onClick={() => fetchCatalogData()}>Retry</button></div> : <LaptopSection
+            key={laptopBrowseRevision}
             items={(catalog?.products || []).filter(item => item.kind === 'laptop')}
             category={catalog?.categories.find(category => (catalog.products || []).some(item => item.kind === 'laptop' && item.categoryId === category.categoryId))}
             productId={window.location.pathname.split('/')[2] ? decodeURIComponent(window.location.pathname.split('/')[2]) : undefined}
             onOpen={openProduct} onBack={() => navigate('/laptops')}
+            searchQuery={searchQuery} advancedOpen={laptopAdvancedOpen} onAdvancedOpenChange={setLaptopAdvancedOpen}
           />
         )}
+
+        {route.view === 'laptop-request' && <RequestView initialMode="laptop" onDismiss={() => navigate('/laptops')} />}
 
         {route.view === 'section' && route.section !== 'laptops' && (
           <SectionPlaceholder
@@ -605,7 +619,7 @@ export const App: React.FC = () => {
 
                 {/* Compact Rounded Category Cards (1-col mobile, 2-col tablet, 4-col desktop) */}
                 <div className="grid gap-3 sm:gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr))]">
-                  {catalog?.categories.map((cat) => (
+                  {catalog?.categories.filter(cat => !/laptop/i.test(`${cat.categoryId} ${cat.name}`) && !(catalog.products || []).some(item => item.kind === 'laptop' && item.categoryId === cat.categoryId)).map((cat) => (
                     <CategoryCard
                       key={cat.categoryId}
                       category={cat}
@@ -775,14 +789,19 @@ export const App: React.FC = () => {
       <CurvedNav
         // The pre-order tab gets its own three-item bar; every other section
         // keeps the software one.
-        items={inPreorder ? PREORDER_NAV_ITEMS : undefined}
-        activeTab={route.view === 'order-access' ? 'find-order' : activeTab}
+        items={inLaptops ? LAPTOP_NAV_ITEMS : inPreorder ? PREORDER_NAV_ITEMS : undefined}
+        activeTab={inLaptops ? (route.view === 'laptop-request' ? 'request' : 'home') : route.view === 'order-access' ? 'find-order' : activeTab}
         cartSlot={inPreorder ? {
           label: STORE_COPY.preorder.title,
           count: preorderCart.count,
           onSelect: () => preorderCart.setOpen(true),
         } : undefined}
         onSelectTab={(tab) => {
+          if (inLaptops) {
+            if (tab === 'filters') { shell.close(); if (window.location.pathname !== '/laptops') navigate('/laptops'); setLaptopAdvancedOpen(true); return; }
+            if (tab === 'home') { setSearchQuery(''); setLaptopBrowseRevision(revision => revision + 1); setLaptopAdvancedOpen(false); navigate('/laptops'); return; }
+            if (tab === 'request') { setSearchQuery(''); navigate('/laptops/request'); return; }
+          }
           if (inPreorder) {
             // Filters opens the strip; Home is the pre-order listing, not the
             // storefront — leaving the section from its own bar would be a

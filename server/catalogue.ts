@@ -1,4 +1,5 @@
 import { Firestore } from '@google-cloud/firestore';
+import { singleLicenceDisclaimerApplies } from '../shared/licenceDisclaimer';
 import {
   Announcement,
   Bundle,
@@ -151,7 +152,7 @@ function productToCatalogueItem(product: Product, config: PricingConfig): Catalo
     promoPercent: cheapest?.promoPercent,
     promoEndsAt: cheapest?.promoEndsAt,
     showDeliveryNotice: variants.some((variant) => variant.showDeliveryNotice),
-    showSingleLicenceDisclaimer: product.showSingleLicenceDisclaimer === true,
+    showSingleLicenceDisclaimer: product.showSingleLicenceDisclaimer,
     availabilitySentence: osSentence,
     osList: [...new Set(variants.flatMap((v) => v.osList || []))],
     machineCodeType: machineCodeType(variants),
@@ -365,6 +366,7 @@ async function buildCatalogue(): Promise<CatalogResponse> {
   const categoryNames = new Map(categories.map((c) => [c.categoryId, c.name]));
   items.forEach((item) => {
     item.categoryName = categoryNames.get(item.categoryId);
+    if (item.kind === 'product') item.showSingleLicenceDisclaimer = singleLicenceDisclaimerApplies(item);
   });
 
   const activeCategories = categories

@@ -56,6 +56,11 @@ export const PREORDER_NAV_ITEMS: NavItem[] = [
   { id: 'home', label: STORE_COPY.navigation.home, icon: Home },
   { id: 'cart', label: STORE_COPY.preorder.title, icon: PackagePlus }
 ];
+export const LAPTOP_NAV_ITEMS: NavItem[] = [
+  { id: 'filters', label: 'Filter', icon: SlidersHorizontal },
+  { id: 'home', label: STORE_COPY.navigation.home, icon: Home },
+  { id: 'request', label: STORE_COPY.navigation.request, icon: FilePlus2 },
+];
 /* Wider and deeper than the bubble's 24px radius, so a rim of background shows
    all the way around it rather than the bubble meeting white on its flanks. */
 const NOTCH_RX = 33;

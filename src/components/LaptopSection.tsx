@@ -8,7 +8,9 @@ import {
   LaptopFacet,
   LaptopFilters,
   laptopOptions,
+  sortLaptops,
 } from "../utils/laptopFilters";
+import { LaptopFilterStrip } from "./LaptopFilterStrip";
 import { ProductCard } from "./ProductCard";
 import { ProductDetailView } from "./ProductDetailView";
 import { ImageLightbox } from "./ImageLightbox";
@@ -114,16 +116,23 @@ export function LaptopSection({
   productId,
   onOpen,
   onBack,
+  searchQuery,
+  advancedOpen,
+  onAdvancedOpenChange,
 }: {
   items: CatalogueItem[];
   category?: Category;
   productId?: string;
   onOpen: (item: CatalogueItem) => void;
   onBack: () => void;
+  searchQuery: string;
+  advancedOpen: boolean;
+  onAdvancedOpenChange: (open: boolean) => void;
 }) {
   const [filters, setFilters] = useState<LaptopFilters>(emptyLaptopFilters);
   const [draft, setDraft] = useState<LaptopFilters>(emptyLaptopFilters);
-  const [advanced, setAdvanced] = useState(false);
+  const advanced = advancedOpen;
+  const setAdvanced = onAdvancedOpenChange;
   const [selected, setSelected] = useState<string[]>([]);
   const [picking, setPicking] = useState(false);
   const [gallery, setGallery] = useState<CatalogueItem | null>(null);
@@ -143,7 +152,9 @@ export function LaptopSection({
     if (header.current) observer.observe(header.current);
     return () => observer.disconnect();
   }, [productId, selected.length, picking]);
-  const results = filterLaptops(items, filters);
+  const activeFilters = { ...filters, query: searchQuery };
+  const results = sortLaptops(filterLaptops(items, activeFilters), filters.sort);
+  useEffect(() => { if (advanced) setDraft({ ...filters, query: searchQuery }); }, [advanced]);
   const chosen = selected
     .map((id) => items.find((item) => item.itemId === id))
     .filter((item): item is CatalogueItem => !!item);
@@ -204,7 +215,7 @@ export function LaptopSection({
       <div className="flex gap-2">
         {(["from", "to"] as const).map((key) => (
           <label key={key} className="min-w-0 flex-1 text-xs">
-            {key === "from" ? "From" : "To"}
+            {key === "from" ? "Minimum" : "Maximum"}
             <input
               className={input}
               type="number"
@@ -353,52 +364,8 @@ export function LaptopSection({
         </p>
         <p className="relative mt-3 text-sm">{items.length} laptops</p>
       </header>
-      <div
-        className={`hk-activation-gradient z-30 mt-4 rounded-2xl p-4 text-white ${pastHeader ? "sticky top-[112px] md:top-[76px]" : ""}`}
-        data-testid="laptop-filter-strip"
-      >
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <label className="min-w-0 flex-1">
-            <span className="sr-only">Search laptops</span>
-            <input
-              className={input}
-              placeholder="Search laptops or specifications"
-              value={filters.query}
-              onChange={(e) =>
-                setFilters({ ...filters, query: e.target.value })
-              }
-            />
-          </label>
-          <span aria-live="polite" className="text-sm font-bold">
-            {results.length} results
-          </span>
-          <button
-            className={button}
-            onClick={() => {
-              setDraft(filters);
-              setAdvanced(true);
-            }}
-          >
-            Advanced
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
-          {prices(filters, setFilters)}
-          {LAPTOP_FACETS.slice(0, 4).map(([key, label]) => (
-            <details key={key} className="relative min-w-0">
-              <summary className="cursor-pointer rounded-lg border border-white/30 p-2 text-xs font-bold">
-                {label}
-                {filters.selections[key]?.length
-                  ? ` (${filters.selections[key]!.length})`
-                  : ""}
-              </summary>
-              <div className="absolute left-0 right-0 top-full z-40 mt-1 min-w-40">
-                {facet(key, label, filters, setFilters)}
-              </div>
-            </details>
-          ))}
-        </div>
-      </div>
+      <LaptopFilterStrip items={items} filters={activeFilters} onChange={setFilters} sticky={pastHeader} onAdvanced={() => setAdvanced(true)} />
+      <p className="mt-3 text-xs font-bold text-[#014040]" aria-live="polite">{results.length} results</p>
       {picking && (
         <p className="mt-4 font-bold text-[#014040]">
           Choose a laptop to compare
@@ -516,7 +483,7 @@ export function LaptopSection({
             </button>
             <button
               className={button}
-              onClick={() => setDraft(emptyLaptopFilters())}
+              onClick={() => setDraft({ ...emptyLaptopFilters(), query: searchQuery })}
             >
               Reset selection
             </button>

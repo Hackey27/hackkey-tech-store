@@ -11,6 +11,7 @@ import { useBackDismiss } from '../utils/useBackDismiss';
 import { PaymentMethodPanel } from './PaymentMethodPanel';
 import { STORE_COPY } from '../config/storeCopy';
 import { OrderPaymentWatcher } from './OrderPaymentWatcher';
+import { singleLicenceDisclaimerApplies } from '../../shared/licenceDisclaimer';
 
 /**
  * The one checkout form, used by "Buy now" and by the cart alike.
@@ -48,7 +49,7 @@ export function CheckoutModal({ items, mode, paymentOptions, onClose, onPaymentR
   const [paymentResult, setPaymentResult] = useState<{ options: PublicPaymentOptions; orderIds: string[]; cartId?: string; totalPesewas: number; authorizationUrl?: string } | null>(null);
   const [paymentResolved, setPaymentResolved] = useState<Order | null>(null);
   const [licenceAgreed, setLicenceAgreed] = useState(false);
-  const restrictedSoftware = items.filter((item) => item.product.kind === 'product' && item.product.showSingleLicenceDisclaimer === true);
+  const restrictedSoftware = items.filter((item) => singleLicenceDisclaimerApplies(item.product));
 
   const total = items.reduce((sum, item) => sum + linePesewas(item), 0);
   const closeForm = useBackDismiss(true, onClose);
