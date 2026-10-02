@@ -122,12 +122,11 @@ export const App: React.FC = () => {
   const compareSession = {
     ...preorderCompare,
     start: (productId: string) => { preorderCompare.start(productId); navigate('/preorder/compare'); },
+    pick: (productId: string) => { preorderCompare.pick(productId); if (window.location.pathname !== '/preorder/compare') navigate('/preorder/compare'); },
     addAnother: () => { preorderCompare.addAnother(); navigate('/preorder/compare'); },
     clear: () => { preorderCompare.clear(); navigate('/preorder'); },
   };
-  /* The pre-order filter strip is always on screen above md; on a phone it is
-     behind the bottom bar's Filters button, which is the only reason this
-     lives up here rather than inside the listing. */
+  /* The bottom bar and listing share the advanced filter's open state. */
   const [preorderFiltersOpen, setPreorderFiltersOpen] = useState(false);
   /* Lifted so the header's search box can reach it. The section still owns the
      fetch; this is the same list, not a second copy. */
@@ -803,12 +802,11 @@ export const App: React.FC = () => {
             if (tab === 'request') { setSearchQuery(''); navigate('/laptops/request'); return; }
           }
           if (inPreorder) {
-            // Filters opens the strip; Home is the pre-order listing, not the
-            // storefront — leaving the section from its own bar would be a
-            // surprise.
+            // Advanced filters open over the preorder listing.
             if (tab === 'filters') {
               // Both want the same corner of a phone screen.
               shell.close();
+              if (route.view !== 'preorder' || route.productId) navigate('/preorder');
               setPreorderFiltersOpen(true);
               return;
             }

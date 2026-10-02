@@ -10,11 +10,11 @@ export function PreorderDeliveryLabel({
 }) {
   const Icon = delivery === "express" ? Plane : Ship;
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#d9ffe0] px-2.5 py-1 text-[10px] font-black text-[#014040] sm:text-xs">
+    <span className="inline-flex w-full flex-col items-center justify-center gap-1 rounded-xl bg-[#014040] px-1 py-1.5 text-[9px] font-black text-[#05ef28] sm:w-auto sm:flex-row sm:gap-1.5 sm:px-2.5 sm:text-xs">
       <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-      {delivery === "express"
+      <span className="whitespace-nowrap">{delivery === "express"
         ? STORE_COPY.preorder.delivery.express
-        : STORE_COPY.preorder.delivery.twoMonths}
+        : STORE_COPY.preorder.delivery.twoMonths}</span>
     </span>
   );
 }

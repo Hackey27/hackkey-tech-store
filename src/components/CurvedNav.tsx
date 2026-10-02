@@ -57,7 +57,7 @@ export const PREORDER_NAV_ITEMS: NavItem[] = [
   { id: 'cart', label: STORE_COPY.preorder.title, icon: PackagePlus }
 ];
 export const LAPTOP_NAV_ITEMS: NavItem[] = [
-  { id: 'filters', label: 'Filter', icon: SlidersHorizontal },
+  { id: 'filters', label: 'Advanced filter', icon: SlidersHorizontal },
   { id: 'home', label: STORE_COPY.navigation.home, icon: Home },
   { id: 'request', label: STORE_COPY.navigation.request, icon: FilePlus2 },
 ];
@@ -197,7 +197,7 @@ export const CurvedNav: React.FC<CurvedNavProps> = ({
                     </span>
                   )}
                 </span>
-                <span className={`text-[10px] leading-none tracking-tight ${isActive ? 'font-black' : 'font-medium'}`}>
+                <span className={`whitespace-nowrap text-[10px] leading-none tracking-tight ${isActive ? 'font-black' : 'font-medium'}`}>
                   {label}
                 </span>
               </button>

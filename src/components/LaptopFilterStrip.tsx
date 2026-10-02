@@ -96,7 +96,7 @@ export function LaptopFilterStrip({
       </div>
       <button
         type="button"
-        className={`${control} bg-white/10`}
+        className={`${control} hidden bg-white/10 md:flex`}
         onClick={() => {
           setOpen(null);
           onAdvanced();

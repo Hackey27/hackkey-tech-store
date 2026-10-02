@@ -16,7 +16,6 @@ interface PreorderListingViewProps {
   onAddProduct: (product: PreorderProduct) => void;
   comparedIds: string[];
   compareFull: boolean;
-  compareActive: boolean;
   onToggleCompare: (product: PreorderProduct) => void;
   /** The bottom bar's Filters button drives this on phones. */
   filtersOpen: boolean;
@@ -30,7 +29,6 @@ export const PreorderListingView: React.FC<PreorderListingViewProps> = ({
   onAddProduct,
   comparedIds,
   compareFull,
-  compareActive,
   onToggleCompare,
   filtersOpen,
   onFiltersOpenChange,
@@ -44,22 +42,23 @@ export const PreorderListingView: React.FC<PreorderListingViewProps> = ({
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
-      <header className="max-w-2xl">
-        <h1 className="text-2xl font-black tracking-tight text-[#014040] sm:text-4xl">
+      <header className="hk-category-title hk-activation-gradient rounded-3xl p-6 text-white sm:p-9">
+        <span className="hk-category-pattern-fade" aria-hidden="true"><span className="hk-category-solid-pattern" /></span>
+        <h1 className="relative text-2xl font-black tracking-tight sm:text-4xl">
           {STORE_COPY.preorder.title}
         </h1>
-        <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
+        <p className="relative mt-3 text-sm leading-6 sm:text-base">
           {STORE_COPY.preorder.lead}
         </p>
         {products.length > 0 && (
-          <p className="mt-4 text-xs font-bold text-[#025656]">
+          <p className="relative mt-4 text-xs font-bold">
             {STORE_COPY.preorder.itemCount(products.length)}
           </p>
         )}
       </header>
 
       {products.length > 0 && (
-        <div className="mt-6">
+        <div className="sticky top-[112px] z-40 mt-4 md:top-[76px]">
           <PreorderFilterStrip
             categories={categories}
             products={products}
@@ -85,7 +84,6 @@ export const PreorderListingView: React.FC<PreorderListingViewProps> = ({
               onAdd={onAddProduct}
               comparing={comparedIds.includes(product.productId)}
               canCompare={!compareFull}
-              compareActive={compareActive}
               onToggleCompare={onToggleCompare}
             />
           ))}

@@ -50,10 +50,10 @@ export const PreorderAdvancedPanel: React.FC<PreorderAdvancedPanelProps> = ({
     (parentId ? filters.categoryIds.includes(parentId) : false);
 
   return (
-    <div data-testid="preorder-advanced-panel" className="mt-3 rounded-2xl bg-black/15 p-3">
+    <div data-testid="preorder-advanced-panel" className="mt-3 rounded-2xl border border-[#b9d0cb] bg-white p-4 text-[#014040]">
       <div className="grid gap-4 md:grid-cols-2">
         <section>
-          <h3 className="mb-2 text-[10px] font-black uppercase tracking-wider text-white/70">
+          <h3 className="mb-2 text-[10px] font-black uppercase tracking-wider text-[#014040]">
             {STORE_COPY.preorder.filters.categoryTree}
           </h3>
           <ul className="space-y-1">
@@ -72,7 +72,7 @@ export const PreorderAdvancedPanel: React.FC<PreorderAdvancedPanelProps> = ({
                         onClick={() =>
                           setExpanded((current) => ({ ...current, [parent.categoryId]: !current[parent.categoryId] }))
                         }
-                        className="hk-pressable rounded p-0.5 text-white/70 hover:text-white"
+                        className="hk-pressable rounded p-0.5 text-[#014040] hover:text-[#00d082]"
                       >
                         {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                       </button>
@@ -91,12 +91,12 @@ export const PreorderAdvancedPanel: React.FC<PreorderAdvancedPanelProps> = ({
                   </div>
 
                   {open && children.length > 0 && (
-                    <ul className="ml-5 mt-1 space-y-1 border-l border-white/20 pl-3">
+                    <ul className="ml-5 mt-1 space-y-1 border-l border-[#b9d0cb] pl-3">
                       {children.map((child) => (
                         <li key={child.categoryId}>
                           <label
                             className={`flex items-center gap-2 text-xs ${
-                              parentTicked ? 'cursor-default text-white/55' : 'cursor-pointer'
+                              parentTicked ? 'cursor-default text-slate-400' : 'cursor-pointer'
                             }`}
                           >
                             <input
@@ -122,11 +122,11 @@ export const PreorderAdvancedPanel: React.FC<PreorderAdvancedPanelProps> = ({
         </section>
 
         <section>
-          <h3 className="mb-2 text-[10px] font-black uppercase tracking-wider text-white/70">
+          <h3 className="mb-2 text-[10px] font-black uppercase tracking-wider text-[#014040]">
             {STORE_COPY.preorder.filters.attributes}
           </h3>
           {facets.length === 0 ? (
-            <p data-testid="preorder-no-facets" className="text-[11px] leading-4 text-white/60">
+            <p data-testid="preorder-no-facets" className="text-[11px] leading-4 text-slate-500">
               {STORE_COPY.preorder.filters.noAttributes}
             </p>
           ) : (
@@ -141,7 +141,7 @@ export const PreorderAdvancedPanel: React.FC<PreorderAdvancedPanelProps> = ({
                         data-testid={`preorder-facet-${facet.name}-${option.value}`}
                         data-count={option.count}
                         className={`flex cursor-pointer items-center gap-1.5 text-xs ${
-                          option.count === 0 ? 'text-white/40' : ''
+                          option.count === 0 ? 'text-slate-400' : ''
                         }`}
                       >
                         <input
@@ -152,7 +152,7 @@ export const PreorderAdvancedPanel: React.FC<PreorderAdvancedPanelProps> = ({
                           }
                         />
                         {option.value}
-                        <span className="text-[10px] font-bold text-white/60">({option.count})</span>
+                        <span className="text-[10px] font-bold text-slate-500">({option.count})</span>
                       </label>
                     ))}
                   </div>

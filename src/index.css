@@ -434,3 +434,9 @@
 @media (prefers-reduced-motion: reduce) {
   .hk-section-nav { transition: none; }
 }
+
+/* Keep card actions available to touch and keyboard users. */
+@media (min-width: 768px) and (hover: hover) and (pointer: fine) {
+  .hk-card-compare { opacity: 0; pointer-events: none; transition: opacity 150ms; }
+  .group:hover .hk-card-compare, .group:focus-within .hk-card-compare { opacity: 1; pointer-events: auto; }
+}

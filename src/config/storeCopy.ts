@@ -91,8 +91,7 @@ export const STORE_COPY = {
     addToCart: 'Add to pre-order',
     openImage: 'Open this image',
     compare: {
-      title: 'Side by side',
-      lead: 'Details stay under each product\u2019s own labels \u2014 these are described differently by design, and pretending otherwise would invent equivalences nobody stated.',
+      title: 'Scroll left and right to see comparison products',
       add: 'Compare',
       start: 'Compare with another',
       cancel: 'Stop comparing',
@@ -147,7 +146,7 @@ export const STORE_COPY = {
     chooseOptions: 'Choose options',
     filters: {
       title: 'Filter pre-orders',
-      open: 'Filters',
+      open: 'Advanced filter',
       close: 'Close filters',
       clear: 'Clear',
       category: 'Category',

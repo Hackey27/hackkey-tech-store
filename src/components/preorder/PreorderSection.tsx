@@ -64,6 +64,12 @@ export const PreorderSection: React.FC<PreorderSectionProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (mode !== 'compare') return;
+    const frame = requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    return () => cancelAnimationFrame(frame);
+  }, [mode, compare.productIds.join(','), compare.picking]);
+
   const load = async () => {
     setLoading(true);
     setError(null);
@@ -169,8 +175,7 @@ export const PreorderSection: React.FC<PreorderSectionProps> = ({
       onAddProduct={addSingleCombination}
       comparedIds={compare.productIds}
       compareFull={compare.full}
-      compareActive={compare.active}
-      onToggleCompare={(product) => compare.pick(product.productId)}
+      onToggleCompare={(product) => compare.active ? compare.pick(product.productId) : compare.start(product.productId)}
       filtersOpen={filtersOpen}
       onFiltersOpenChange={onFiltersOpenChange}
     />

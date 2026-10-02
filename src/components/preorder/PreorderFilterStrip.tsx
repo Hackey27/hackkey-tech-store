@@ -1,42 +1,109 @@
-import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
-import { PreorderCategory, PreorderDelivery, PreorderProduct } from '../../../shared/types';
-import { STORE_COPY } from '../../config/storeCopy';
+import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown, SlidersHorizontal } from "lucide-react";
+import {
+  PreorderCategory,
+  PreorderDelivery,
+  PreorderProduct,
+} from "../../../shared/types";
+import { STORE_COPY } from "../../config/storeCopy";
 import {
   EMPTY_PREORDER_FILTERS,
   PreorderFilterState,
-  isPreorderFilterActive,
-} from '../../utils/preorderFilters';
-import { PreorderAdvancedPanel } from './PreorderAdvancedPanel';
+  filterPreorderProducts,
+  toggleCategoryId,
+} from "../../utils/preorderFilters";
+import { PreorderAdvancedPanel } from "./PreorderAdvancedPanel";
+import { StoreDialog } from "../StoreDialog";
+import { useBackDismiss } from "../../utils/useBackDismiss";
 
 interface PreorderFilterStripProps {
   categories: PreorderCategory[];
-  /** Every product, so the Advanced panel can derive its facets. */
   products: PreorderProduct[];
   filters: PreorderFilterState;
   onChange: (filters: PreorderFilterState) => void;
   resultCount: number;
-  /** Phones collapse the strip behind the bottom bar's Filters button. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+const control =
+  "flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-white/30 px-3 text-xs font-bold text-white hover:bg-white/10";
+const field =
+  "mt-1 w-full rounded-lg border border-[#b9d0cb] bg-white px-2 py-2 text-sm text-[#014040]";
 
-const selectClass =
-  'w-full rounded-xl border border-white/25 bg-white/95 px-3 py-2 text-xs font-bold text-[#014040] outline-none focus:border-[#05ef28] focus:ring-2 focus:ring-[#05ef28]/30';
-const fieldLabel = 'block text-[10px] font-black uppercase tracking-wider text-white/70';
+function PriceControls({
+  filters,
+  onChange,
+}: {
+  filters: PreorderFilterState;
+  onChange: (filters: PreorderFilterState) => void;
+}) {
+  const set = (patch: Partial<PreorderFilterState>) =>
+    onChange({ ...filters, ...patch });
+  return (
+    <div className="space-y-3">
+      <label className="block text-xs font-bold">
+        Price shown for
+        <select
+          className={field}
+          value={filters.priceBasis}
+          onChange={(event) =>
+            set({ priceBasis: event.target.value as PreorderDelivery })
+          }
+        >
+          <option value="express">
+            {STORE_COPY.preorder.delivery.express}
+          </option>
+          <option value="two-months">
+            {STORE_COPY.preorder.delivery.twoMonths}
+          </option>
+        </select>
+      </label>
+      {(
+        [
+          ["price-asc", "Low to high"],
+          ["price-desc", "High to low"],
+          ["default", "Range"],
+        ] as const
+      ).map(([value, label]) => (
+        <label
+          key={value}
+          className="flex items-center gap-2 text-sm font-bold"
+        >
+          <input
+            type="radio"
+            name="preorder-price-sort"
+            checked={filters.sort === value}
+            onChange={() =>
+              set({
+                sort: value,
+                ...(value === "default" ? {} : { minCedis: "", maxCedis: "" }),
+              })
+            }
+          />
+          {label}
+        </label>
+      ))}
+      {filters.sort === "default" && (
+        <div className="grid grid-cols-2 gap-2">
+          {(["minCedis", "maxCedis"] as const).map((key) => (
+            <label key={key} className="text-xs font-bold">
+              {key === "minCedis" ? "Minimum" : "Maximum"}
+              <input
+                type="number"
+                min="0"
+                className={field}
+                value={filters[key]}
+                onChange={(event) => set({ [key]: event.target.value })}
+              />
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
-/**
- * The listing page's filter strip.
- *
- * On the category bar's gradient, because it is the same kind of thing: a band
- * across the top of a listing that says what the listing is showing.
- *
- * Price is deliberately two controls and not one. A sort and a range are
- * different questions, but both have to say WHICH price they mean — a product
- * can be 120 Express and 85 Two months, and a "cheapest first" list that
- * silently picked one of those would reorder itself for no visible reason when
- * the customer changed delivery.
- */
 export const PreorderFilterStrip: React.FC<PreorderFilterStripProps> = ({
   categories,
   products,
@@ -46,201 +113,212 @@ export const PreorderFilterStrip: React.FC<PreorderFilterStripProps> = ({
   open,
   onOpenChange,
 }) => {
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const parents = categories.filter((category) => !category.parentId);
-  const active = isPreorderFilterActive(filters);
-  const set = (patch: Partial<PreorderFilterState>) => onChange({ ...filters, ...patch });
-
-  /* The quick dropdowns are a one-category shortcut into the same list the
-     Advanced tree edits. Once the tree holds more than one they can no longer
-     represent it, so they say so rather than showing one of the selections and
-     quietly misreporting the rest. */
-  const singleSelection = filters.categoryIds.length === 1 ? filters.categoryIds[0] : '';
-  const selectedIsChild = categories.find(
-    (category) => category.categoryId === singleSelection && category.parentId
+  const [menuName, setMenuName] = useState<
+    "price" | "category" | "delivery" | null
+  >(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [draft, setDraft] = useState(filters);
+  const strip = useRef<HTMLDivElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const closeAdvanced = useBackDismiss(open, () => onOpenChange(false));
+  useEffect(() => {
+    if (open) {
+      setDraft(filters);
+      setMenuName(null);
+    }
+  }, [open]);
+  useEffect(() => {
+    if (!menuName) return;
+    const dismiss = (event: Event) => {
+      if (menu.current?.contains(event.target as Node)) return;
+      if (
+        event.type === "pointerdown" &&
+        strip.current?.contains(event.target as Node)
+      )
+        return;
+      setMenuName(null);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuName(null);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("resize", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", dismiss);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [menuName]);
+  const toggle = (name: typeof menuName, button: HTMLButtonElement) => {
+    const rect = button.getBoundingClientRect();
+    setPosition({
+      top: rect.bottom + 6,
+      left: Math.max(12, Math.min(rect.left, window.innerWidth - 300)),
+    });
+    setMenuName((current) => (current === name ? null : name));
+  };
+  const deliveryOptions = (
+    state: PreorderFilterState,
+    update: (filters: PreorderFilterState) => void,
+  ) => (
+    <div className="space-y-3">
+      {(["all", "express", "two-months"] as const).map((value) => (
+        <label key={value} className="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            name="preorder-delivery-filter"
+            checked={state.delivery === value}
+            onChange={() => update({ ...state, delivery: value })}
+          />
+          {value === "all"
+            ? "All deliveries"
+            : value === "express"
+              ? STORE_COPY.preorder.delivery.express
+              : STORE_COPY.preorder.delivery.twoMonths}
+        </label>
+      ))}
+    </div>
   );
-  const quickParent = selectedIsChild ? selectedIsChild.parentId || '' : singleSelection;
-  const quickChildren = categories.filter((category) => category.parentId === quickParent);
-  const multiple = filters.categoryIds.length > 1;
-
+  const count = filterPreorderProducts(products, categories, draft).length;
   return (
-    <div
-      id="preorder-filters"
-      data-testid="preorder-filter-strip"
-      data-open={open ? 'true' : 'false'}
-      className={`hk-activation-gradient relative overflow-hidden rounded-3xl p-4 text-white shadow-sm sm:p-5 ${
-        open ? '' : 'hidden md:block'
-      }`}
-    >
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <SlidersHorizontal className="h-4 w-4 text-[#05ef28]" />
-          <h2 className="text-sm font-black">{STORE_COPY.preorder.filters.title}</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <span data-testid="preorder-result-count" className="text-[11px] font-bold text-[#d9ffe0]">
-            {STORE_COPY.preorder.filters.resultCount(resultCount)}
-          </span>
-          {active && (
-            <button
-              type="button"
-              data-testid="preorder-filters-clear"
-              onClick={() => onChange(EMPTY_PREORDER_FILTERS)}
-              className="hk-pressable rounded-lg border border-white/30 px-2.5 py-1 text-[11px] font-bold hover:bg-white/10"
-            >
-              {STORE_COPY.preorder.filters.clear}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            aria-label={STORE_COPY.preorder.filters.close}
-            className="hk-pressable rounded-lg border border-white/30 p-1.5 md:hidden"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Category, revealing its children once one is chosen. */}
-        <label className="space-y-1">
-          <span className={fieldLabel}>{STORE_COPY.preorder.filters.category}</span>
-          <select
-            data-testid="preorder-filter-category"
-            className={selectClass}
-            value={multiple ? '__multiple__' : quickParent}
-            onChange={(event) =>
-              set({ categoryIds: event.target.value ? [event.target.value] : [] })
-            }
-          >
-            {multiple && <option value="__multiple__">{STORE_COPY.preorder.filters.multiple(filters.categoryIds.length)}</option>}
-            <option value="">{STORE_COPY.preorder.allCategories}</option>
-            {parents.map((category) => (
-              <option key={category.categoryId} value={category.categoryId}>{category.name}</option>
-            ))}
-          </select>
-        </label>
-
-        {!multiple && quickChildren.length > 0 ? (
-          <label className="space-y-1">
-            <span className={fieldLabel}>{STORE_COPY.preorder.filters.subcategory}</span>
-            <select
-              data-testid="preorder-filter-subcategory"
-              className={selectClass}
-              value={selectedIsChild ? singleSelection : ''}
-              onChange={(event) =>
-                // Narrowing replaces the parent selection rather than adding to
-                // it; widening again falls back to the parent.
-                set({ categoryIds: [event.target.value || quickParent].filter(Boolean) })
-              }
-            >
-              <option value="">{STORE_COPY.preorder.filters.allOf}</option>
-              {quickChildren.map((category) => (
-                <option key={category.categoryId} value={category.categoryId}>{category.name}</option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <div className="hidden sm:block" aria-hidden="true" />
-        )}
-
-        {/* Delivery. */}
-        <label className="space-y-1">
-          <span className={fieldLabel}>{STORE_COPY.preorder.delivery.label}</span>
-          <select
-            data-testid="preorder-filter-delivery"
-            className={selectClass}
-            value={filters.delivery}
-            onChange={(event) => set({ delivery: event.target.value as PreorderDelivery | 'all' })}
-          >
-            <option value="all">{STORE_COPY.preorder.filters.allDeliveries}</option>
-            <option value="express">{STORE_COPY.preorder.delivery.express}</option>
-            <option value="two-months">{STORE_COPY.preorder.delivery.twoMonths}</option>
-          </select>
-        </label>
-
-        {/* Sort, and which price it reads. */}
-        <label className="space-y-1">
-          <span className={fieldLabel}>{STORE_COPY.preorder.filters.sort}</span>
-          <select
-            data-testid="preorder-filter-sort"
-            className={selectClass}
-            value={filters.sort}
-            onChange={(event) => set({ sort: event.target.value as PreorderFilterState['sort'] })}
-          >
-            <option value="default">{STORE_COPY.preorder.filters.sortDefault}</option>
-            <option value="price-asc">{STORE_COPY.preorder.filters.sortAsc}</option>
-            <option value="price-desc">{STORE_COPY.preorder.filters.sortDesc}</option>
-          </select>
-        </label>
-      </div>
-
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="space-y-1">
-          <span className={fieldLabel}>{STORE_COPY.preorder.filters.priceBasis}</span>
-          <select
-            data-testid="preorder-filter-basis"
-            className={selectClass}
-            value={filters.priceBasis}
-            onChange={(event) => set({ priceBasis: event.target.value as PreorderDelivery })}
-          >
-            <option value="express">{STORE_COPY.preorder.delivery.express}</option>
-            <option value="two-months">{STORE_COPY.preorder.delivery.twoMonths}</option>
-          </select>
-        </label>
-
-        <label className="space-y-1">
-          <span className={fieldLabel}>{STORE_COPY.preorder.filters.minPrice}</span>
-          <input
-            data-testid="preorder-filter-min"
-            className={selectClass}
-            inputMode="decimal"
-            placeholder="0"
-            value={filters.minCedis}
-            onChange={(event) => set({ minCedis: event.target.value })}
-          />
-        </label>
-
-        <label className="space-y-1">
-          <span className={fieldLabel}>{STORE_COPY.preorder.filters.maxPrice}</span>
-          <input
-            data-testid="preorder-filter-max"
-            className={selectClass}
-            inputMode="decimal"
-            placeholder={STORE_COPY.preorder.filters.noMax}
-            value={filters.maxCedis}
-            onChange={(event) => set({ maxCedis: event.target.value })}
-          />
-        </label>
-
-        <p className="self-end text-[11px] leading-4 text-white/70">
-          {STORE_COPY.preorder.filters.priceNote}
-        </p>
-      </div>
-
-      <button
-        type="button"
-        data-testid="preorder-advanced-toggle"
-        aria-expanded={advancedOpen}
-        aria-controls="preorder-advanced-panel"
-        onClick={() => setAdvancedOpen((current) => !current)}
-        className="hk-pressable mt-3 inline-flex items-center gap-1.5 rounded-lg border border-white/30 px-2.5 py-1.5 text-[11px] font-black hover:bg-white/10"
+    <>
+      <div
+        ref={strip}
+        id="preorder-filters"
+        data-testid="preorder-filter-strip"
+        className="hk-activation-gradient relative flex items-center gap-2 rounded-xl p-2 text-white"
       >
-        {advancedOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        {STORE_COPY.preorder.filters.advanced}
-      </button>
-
-      {advancedOpen && (
-        <div id="preorder-advanced-panel">
+        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {(
+            [
+              ["price", "Price filter"],
+              ["category", "Category"],
+              ["delivery", "Delivery time"],
+            ] as const
+          ).map(([name, label]) => (
+            <button
+              key={name}
+              type="button"
+              className={control}
+              aria-expanded={menuName === name}
+              onClick={(event) => toggle(name, event.currentTarget)}
+            >
+              {label}
+              {name === "category" && filters.categoryIds.length > 0
+                ? ` (${filters.categoryIds.length})`
+                : ""}
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className={`${control} hidden bg-white/10 md:flex`}
+          onClick={() => onOpenChange(true)}
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Advanced
+        </button>
+      </div>
+      <p
+        data-testid="preorder-result-count"
+        className="mt-2 text-xs font-bold text-[#014040]"
+        aria-live="polite"
+      >
+        {STORE_COPY.preorder.filters.resultCount(resultCount)}
+      </p>
+      {menuName &&
+        createPortal(
+          <div
+            ref={menu}
+            role="dialog"
+            aria-label={`${menuName} filter options`}
+            style={position}
+            className="fixed z-[60] max-h-[50vh] w-72 overflow-y-auto rounded-xl border border-[#b9d0cb] bg-white p-4 text-[#014040] shadow-xl"
+          >
+            {menuName === "price" ? (
+              <PriceControls filters={filters} onChange={onChange} />
+            ) : menuName === "delivery" ? (
+              deliveryOptions(filters, onChange)
+            ) : (
+              <div className="space-y-3">
+                {categories.map((category) => (
+                  <label
+                    key={category.categoryId}
+                    className={`flex items-center gap-2 text-sm ${category.parentId ? "pl-4" : "font-bold"}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={filters.categoryIds.includes(
+                        category.categoryId,
+                      )}
+                      onChange={() =>
+                        onChange({
+                          ...filters,
+                          categoryIds: toggleCategoryId(
+                            filters.categoryIds,
+                            category.categoryId,
+                          ),
+                        })
+                      }
+                    />
+                    {category.name}
+                  </label>
+                ))}
+                <button
+                  className="text-xs font-bold underline"
+                  onClick={() => onChange({ ...filters, categoryIds: [] })}
+                >
+                  All categories
+                </button>
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
+      {open && (
+        <StoreDialog title="Advanced pre-order filters" close={closeAdvanced}>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <section className="rounded-xl border border-[#b9d0cb] bg-white p-4">
+              <h3 className="mb-3 font-bold">Price filter</h3>
+              <PriceControls filters={draft} onChange={setDraft} />
+            </section>
+            <section className="rounded-xl border border-[#b9d0cb] bg-white p-4">
+              <h3 className="mb-3 font-bold">Delivery time</h3>
+              {deliveryOptions(draft, setDraft)}
+            </section>
+            <p className="text-lg font-black text-[#014040]" aria-live="polite">
+              {count} results
+            </p>
+          </div>
           <PreorderAdvancedPanel
             categories={categories}
             products={products}
-            filters={filters}
-            onChange={onChange}
+            filters={draft}
+            onChange={setDraft}
           />
-        </div>
+          <div className="sticky bottom-0 mt-6 flex flex-wrap gap-3 border-t border-[#b9d0cb] bg-[#edf5f3] py-4">
+            <button
+              className="rounded-xl bg-[#014040] px-5 py-3 font-bold text-white"
+              onClick={() => {
+                onChange(draft);
+                closeAdvanced();
+              }}
+            >
+              Show results for selection ({count})
+            </button>
+            <button
+              className="rounded-xl border border-[#b9d0cb] bg-white px-5 py-3 font-bold text-[#014040]"
+              onClick={() => setDraft(EMPTY_PREORDER_FILTERS)}
+            >
+              Reset selection
+            </button>
+          </div>
+        </StoreDialog>
       )}
-    </div>
+    </>
   );
 };

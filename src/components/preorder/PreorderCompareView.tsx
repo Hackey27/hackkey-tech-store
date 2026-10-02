@@ -30,9 +30,8 @@ interface PreorderCompareViewProps {
  * equivalences the seller never stated. Each column therefore labels its own
  * details, and the reader does the comparing.
  *
- * The galleries sit at the bottom and get the room, because pictures are what
- * this screen is actually for: these are goods being sourced from photographs,
- * and two of them side by side says more than any spec row.
+ * Subgrid shares section heights across columns, so every gallery begins on
+ * the same line even when details and picture counts differ.
  */
 export const PreorderCompareView: React.FC<PreorderCompareViewProps> = ({
   products,
@@ -92,33 +91,36 @@ export const PreorderCompareView: React.FC<PreorderCompareViewProps> = ({
       <h1 className="text-2xl font-black tracking-tight text-[#014040] sm:text-3xl">
         {STORE_COPY.preorder.compare.title}
       </h1>
-      <p className="mt-2 text-sm text-slate-600">{STORE_COPY.preorder.compare.lead}</p>
 
-      {canAddAnother && (
-        <button
-          type="button"
-          data-testid="preorder-compare-add-another"
-          onClick={onAddAnother}
-          className="hk-pressable mt-4 inline-flex items-center gap-2 rounded-xl border border-[#014040] px-4 py-2 text-xs font-black text-[#014040] hover:bg-[#edf5f3]"
-        >
-          <Plus className="h-4 w-4" />
-          {STORE_COPY.preorder.compare.addAnother}
-        </button>
-      )}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {canAddAnother && (
+          <button
+            type="button"
+            data-testid="preorder-compare-add-another"
+            onClick={onAddAnother}
+            className="hk-pressable inline-flex items-center gap-2 rounded-xl border border-[#014040] px-4 py-2 text-xs font-black text-[#014040] hover:bg-[#edf5f3]"
+          >
+            <Plus className="h-4 w-4" />
+            {STORE_COPY.preorder.compare.addAnother}
+          </button>
+        )}
+
+        <button type="button" onClick={onBrowse} className="hk-pressable rounded-xl border border-[#014040] px-4 py-2 text-xs font-black text-[#014040] hover:bg-[#edf5f3]">End Comparison</button>
+      </div>
 
       {/* Columns scroll sideways on a phone rather than shrinking to slivers. */}
-      <div className="mt-6 overflow-x-auto pb-3">
+      <div className="mt-6 overflow-x-auto pb-3" tabIndex={0} aria-label="Comparison products">
         <div
           data-testid="preorder-compare-grid"
-          className="grid min-w-[640px] gap-4 sm:min-w-0"
-          style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}
+          className="grid gap-x-4"
+          style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(280px, 1fr))` }}
         >
           {columns.map(({ product, pricing, directlyAddable, gallery }) => (
             <section
               key={product.productId}
               data-testid="preorder-compare-column"
               data-product={product.productId}
-              className="flex flex-col overflow-hidden rounded-2xl border border-[#d8e7e4] bg-white"
+              className="row-span-5 grid grid-rows-subgrid overflow-hidden rounded-2xl border border-[#d8e7e4] bg-white"
             >
               {/* Name, and the control that swaps this column out. */}
               <header className="flex items-start justify-between gap-2 border-b border-[#e2ecea] p-3">
@@ -135,23 +137,26 @@ export const PreorderCompareView: React.FC<PreorderCompareViewProps> = ({
               </header>
 
               {/* Both prices. */}
-              <div className="space-y-0.5 border-b border-[#edf4f3] p-3">
-                {pricing.length ? (
-                  pricing.map((entry) => (
-                    <div key={entry.delivery} className="flex items-baseline justify-between gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                        <PreorderDeliveryLabel delivery={entry.delivery} />
-                      </span>
-                      <span className="text-sm font-black text-[#014040]">
-                        {entry.uniform
-                          ? formatPesewas(entry.pricePesewas)
-                          : STORE_COPY.preorder.fromPrice(formatPesewas(entry.pricePesewas))}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <span className="text-xs font-black text-[#025656]">{STORE_COPY.preorder.askForPrice}</span>
-                )}
+              <div className="border-b border-[#edf4f3] p-3">
+                <p className="mb-2 text-[10px] font-bold text-[#014040]">Delivery time</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {pricing.length ? (
+                    pricing.map((entry) => (
+                      <div key={entry.delivery} className="flex min-w-0 flex-col items-stretch gap-1.5">
+                        <span className="text-[10px] font-bold text-slate-500">
+                          <PreorderDeliveryLabel delivery={entry.delivery} />
+                        </span>
+                        <span className="text-sm font-black text-[#014040]">
+                          {entry.uniform
+                            ? formatPesewas(entry.pricePesewas)
+                            : STORE_COPY.preorder.fromPrice(formatPesewas(entry.pricePesewas))}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <span className="text-xs font-black text-[#025656]">{STORE_COPY.preorder.askForPrice}</span>
+                  )}
+                </div>
               </div>
 
               {/* Then the way to buy it. */}
@@ -193,7 +198,7 @@ export const PreorderCompareView: React.FC<PreorderCompareViewProps> = ({
               </div>
 
               {/* And the gallery last, with the room it deserves. */}
-              <div className="mt-auto p-3">
+              <div className="p-3">
                 <h3 className="text-[10px] font-black uppercase tracking-wider text-slate-500">
                   {STORE_COPY.preorder.compare.gallery}
                 </h3>

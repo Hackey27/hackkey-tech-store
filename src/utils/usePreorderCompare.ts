@@ -1,32 +1,14 @@
 import { useCallback, useState } from 'react';
 
-/**
- * A comparison session.
- *
- * THREE AT A TIME. The screen leads with each product's gallery, and a fourth
- * column takes those pictures below the width where they are worth looking at
- * on a laptop — which would defeat the point of it. Three also survives a
- * phone, where the columns scroll sideways rather than shrinking to slivers.
- *
- * A COMPARISON IS A SESSION, not a basket of ticks. It begins on a product
- * page, because a customer has to have opened something before comparing it is
- * a meaningful thing to want. While it is running, the listing doubles as the
- * picker for the next product and its cards grow a compare control; outside a
- * session those cards carry nothing, so ordinary browsing is not cluttered by
- * a feature almost nobody is using at that moment.
- *
- * The first product picked stays leftmost and the picker opens to its right.
- * That direction is the laptops brief's too, so the layout can be shared.
- *
- * Selection is a list of ids rather than products, so a catalogue refresh
- * cannot leave the session holding a stale copy of something repriced since.
- */
+/** A session keeps product ids in selection order and opens the catalogue
+ * to pick another. Cards expose Compare on desktop hover and on touch screens.
+ * Columns scroll horizontally, with up to three preorders per session. */
 export const MAX_COMPARED = 3;
 
 export interface PreorderCompare {
   /** In pick order. The first is pinned leftmost. */
   productIds: string[];
-  /** A session is running: cards show their compare control. */
+  /** A session is running. */
   active: boolean;
   /** Looking for the next product, so the picker is showing. */
   picking: boolean;

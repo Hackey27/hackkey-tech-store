@@ -404,8 +404,8 @@ export const PreorderProductView: React.FC<PreorderProductViewProps> = ({
           className="sticky top-[112px] z-30 row-start-1 rounded-2xl border border-[#d8e7e4] bg-white/95 p-3 shadow-sm backdrop-blur-sm md:top-[76px] lg:col-start-2 lg:p-5"
         >
           <fieldset data-testid="preorder-delivery">
-            <legend className="mb-2 hidden text-xs font-black uppercase tracking-wider text-[#025656] lg:block">
-              {STORE_COPY.preorder.delivery.label}
+            <legend className="mb-2 text-[10px] font-black uppercase tracking-wider text-[#014040]">
+              Delivery time
             </legend>
             <div className="grid grid-cols-2 gap-2">
               {product.deliveryOptions.map((option) => {
@@ -431,7 +431,7 @@ export const PreorderProductView: React.FC<PreorderProductViewProps> = ({
                     }
                   >
                     <PreorderDeliveryLabel delivery={option} />
-                    <span className="break-words text-sm font-black text-[#047857] sm:text-base">
+                    <span className="break-words text-sm font-black text-[#014040] sm:text-base">
                       {actual !== null
                         ? formatPesewas(actual)
                         : starting
@@ -455,7 +455,7 @@ export const PreorderProductView: React.FC<PreorderProductViewProps> = ({
               <p
                 key={pricePesewas}
                 data-testid="preorder-price"
-                className="hk-price-change mt-4 text-2xl font-black text-[#047857]"
+                className="hk-price-change mt-4 text-2xl font-black text-[#014040]"
               >
                 {formatPesewas(pricePesewas)}
               </p>

@@ -10,6 +10,7 @@ import {
   laptopOptions,
   sortLaptops,
 } from "../utils/laptopFilters";
+import { StoreDialog as Dialog } from "./StoreDialog";
 import { LaptopFilterStrip } from "./LaptopFilterStrip";
 import { ProductCard } from "./ProductCard";
 import { ProductDetailView } from "./ProductDetailView";
@@ -37,78 +38,6 @@ const specs = [
   ["freebies", "Freebies included"],
   ["availability", "Availability"],
 ] as const;
-
-function Dialog({
-  title,
-  close,
-  children,
-}: {
-  title: string;
-  close: () => void;
-  children: React.ReactNode;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    ref.current?.focus();
-    return () => {
-      document.body.style.overflow = overflow;
-      previous?.focus();
-    };
-  }, []);
-  return (
-    <div
-      className="fixed inset-0 z-[70] overflow-y-auto bg-[#edf5f3] p-4 sm:p-8"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      tabIndex={-1}
-      ref={ref}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.stopPropagation();
-          close();
-        }
-        if (event.key === "Tab") {
-          const nodes = Array.from(
-            ref.current?.querySelectorAll<HTMLElement>(
-              "button, input, select, textarea, a[href]",
-            ) || [],
-          ).filter((node) => !node.hasAttribute("disabled"));
-          const first = nodes[0],
-            last = nodes[nodes.length - 1];
-          if (
-            event.shiftKey &&
-            (document.activeElement === first ||
-              document.activeElement === ref.current)
-          ) {
-            event.preventDefault();
-            last?.focus();
-          } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first?.focus();
-          }
-        }
-      }}
-    >
-      <div className="mx-auto max-w-6xl">
-        <header className="mb-6 flex items-center justify-between gap-4">
-          <h2 className="text-2xl font-black text-[#014040]">{title}</h2>
-          <button
-            className={button}
-            onClick={close}
-            aria-label={`Close ${title}`}
-          >
-            <X />
-          </button>
-        </header>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 export function LaptopSection({
   items,
@@ -247,12 +176,12 @@ export function LaptopSection({
   };
   const product = items.find((item) => item.itemId === productId);
   const comparison = (
-    <div className="min-w-0 overflow-x-auto rounded-2xl border border-[#b9d0cb] bg-white">
+    <div className="min-w-0 overflow-x-auto rounded-2xl border border-[#b9d0cb] bg-white" tabIndex={0} aria-label="Comparison laptops">
       <table
         className="w-full table-fixed border-collapse text-xs sm:text-sm"
         style={{
           minWidth:
-            chosen.length > 2 ? `${chosen.length * 160 + 110}px` : undefined,
+            chosen.length > 2 ? `${chosen.length * 280 + 110}px` : undefined,
         }}
       >
         <thead>
@@ -280,7 +209,7 @@ export function LaptopSection({
                       item.bannerImageUrl || item.imageUrl,
                     )}
                     alt={item.name}
-                    className={`mb-2 aspect-video w-full rounded-lg object-cover ${chosen.length > 2 ? "hidden sm:block" : ""}`}
+                    className="mb-2 aspect-video w-full rounded-lg object-cover"
                   />
                 )}
                 <span className="block break-words font-black">
@@ -356,6 +285,7 @@ export function LaptopSection({
         ref={header}
         className="hk-category-title hk-activation-gradient relative rounded-3xl p-6 text-white sm:p-9"
       >
+        <span className="hk-category-pattern-fade" aria-hidden="true"><span className="hk-category-solid-pattern" /></span>
         <h1 className="relative text-2xl font-black sm:text-4xl">
           {category?.name || "Laptops on sale"}
         </h1>
@@ -420,7 +350,7 @@ export function LaptopSection({
           {chosen.length > 0 && (
             <div className="mb-5 flex flex-wrap gap-3">
               <h2 className="mr-auto text-xl font-black text-[#014040]">
-                Compare laptops
+                Scroll left and right to see comparison products
               </h2>
               <button
                 className={button}
