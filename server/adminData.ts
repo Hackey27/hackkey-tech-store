@@ -734,6 +734,10 @@ export async function saveProductConfiguration(productId: string, input: Product
     if (savedIds.length !== incomingIds.length || savedIds.some((id: string, index: number) => id !== incomingIds[index])) {
       throw new Error('The saved versions differ from this form. Reload before saving. Use Add version for new versions; existing version IDs cannot be renamed or removed.');
     }
+    // Product forms edit version settings too, but position is managed by the
+    // dedicated reorder action. An older open form must not undo that action.
+    const incomingById = new Map(product.variants.map(variant => [variant.variantId, variant]));
+    product.variants = (current.data()?.variants || []).map((variant: Variant) => incomingById.get(variant.variantId)!);
     tx.set(ref, product);
   });
   invalidateCatalogueCache();

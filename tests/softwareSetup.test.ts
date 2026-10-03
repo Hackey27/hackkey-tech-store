@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Firestore } from '@google-cloud/firestore';
 import { Product, Variant } from '../shared/types';
-import { newSoftwareProduct, newSoftwareVariant, saveVariantInProduct, suggestSoftwareVariantId } from '../shared/softwareSetup';
-import { createSoftwareProduct, saveSoftwareVariant } from '../server/softwareSetupData';
+import { newSoftwareProduct, newSoftwareVariant, reorderSoftwareVariants, saveVariantInProduct, suggestSoftwareVariantId } from '../shared/softwareSetup';
+import { createSoftwareProduct, saveSoftwareVariant, saveSoftwareVersionOrder } from '../server/softwareSetupData';
 import { saveProductConfiguration } from '../server/adminData';
 
 const base = newSoftwareProduct('analysis');
@@ -135,4 +135,62 @@ test('an older software form cannot remove new versions, rename IDs or bypass ve
   await saveSoftwareVariant('AMOS', version('AMOS-V32-WINDOWS', '32'), true, fixture.db);
   await assert.rejects(saveProductConfiguration('AMOS', original, fixture.db), /Reload before saving/);
   assert.equal((fixture.read('products', 'AMOS') as unknown as Product).variants.length, 4);
+});
+
+
+test('version ordering supports top, bottom and intermediate positions without changing fields', () => {
+  const product = saveVariantInProduct(software(), version('AMOS32', '32'), true);
+  const ids = product.variants.map(v => v.variantId);
+  const olderFirst = reorderSoftwareVariants(product, ['AMOS02', 'AMOS01', 'AMOS32', 'AMOSMAC'], ids);
+  const top = reorderSoftwareVariants(olderFirst, ['AMOS32', 'AMOS02', 'AMOS01', 'AMOSMAC'], olderFirst.variants.map(v => v.variantId));
+  const bottom = reorderSoftwareVariants(top, ['AMOS32', 'AMOS01', 'AMOSMAC', 'AMOS02'], top.variants.map(v => v.variantId));
+  assert.deepEqual(bottom.variants.map(v => v.versionOrPlan), ['32', '31', '31', '30']);
+  for (const variant of bottom.variants) assert.deepEqual(variant, product.variants.find(v => v.variantId === variant.variantId));
+  assert.deepEqual(product.variants.map(v => v.variantId), ids);
+});
+
+test('invalid and stale version orders are rejected instead of losing versions or another saved move', () => {
+  const product = software();
+  const ids = product.variants.map(v => v.variantId);
+  for (const order of [undefined, 'AMOS01', ids.slice(1), [...ids, 'NEW'], ['AMOS01', 'AMOS01', 'AMOSMAC'], ['RENAMED', 'AMOS02', 'AMOSMAC'], [null, 'AMOS02', 'AMOSMAC']]) {
+    assert.throws(() => reorderSoftwareVariants(product, order, ids), /every saved version ID/);
+  }
+  for (const expected of [undefined, [], [...ids].reverse()]) assert.throws(() => reorderSoftwareVariants(product, ids, expected), /Reload before moving/);
+});
+
+test('transactional moves preserve current prices, recommendations, orders, stock and bundles', async () => {
+  const original = software();
+  const order = { id: 'order-1', variantId: 'AMOS01', amountPesewas: 10000 };
+  const stock = { id: 'stock-1', variantId: 'AMOS01' };
+  const bundle = { id: 'bundle-1', items: [{ variantId: 'AMOS01' }] };
+  const fixture = database({ products: [{ id: 'AMOS', ...original }], orders: [order], licencePool: [stock], bundles: [bundle] });
+  const ids = original.variants.map(v => v.variantId);
+  await saveSoftwareVariant('AMOS', { ...original.variants[1], priceGhs: 175 }, false, fixture.db);
+  const result = await saveSoftwareVersionOrder('AMOS', [...ids].reverse(), ids, fixture.db);
+  assert.deepEqual(result.variants.map(v => v.variantId), [...ids].reverse());
+  assert.equal(result.variants.find(v => v.variantId === 'AMOS02')!.priceGhs, 175);
+  assert.equal(result.variants.find(v => v.variantId === 'AMOS01')!.latest, true);
+  assert.equal(result.bannerImagePath, original.bannerImagePath);
+  assert.deepEqual(fixture.read('orders', 'order-1'), order);
+  assert.deepEqual(fixture.read('licencePool', 'stock-1'), stock);
+  assert.deepEqual(fixture.read('bundles', 'bundle-1'), bundle);
+  await assert.rejects(saveSoftwareVersionOrder('AMOS', ids, ids, fixture.db), /Reload before moving/);
+  await assert.rejects(saveSoftwareVersionOrder('missing', [], [], fixture.db), /Software not found/);
+  await saveSoftwareVariant('AMOS', version('AMOS28', '28', 'Windows', false), true, fixture.db);
+  await assert.rejects(saveSoftwareVersionOrder('AMOS', ids, result.variants.map(v => v.variantId), fixture.db), /Reload before moving/);
+  const current = (fixture.read('products', 'AMOS') as unknown as Product).variants.map(v => v.variantId);
+  const movedOlder = await saveSoftwareVersionOrder('AMOS', [...current.slice(1), 'AMOS28'], current, fixture.db);
+  assert.equal(movedOlder.variants.at(-1)!.versionOrPlan, '28');
+});
+
+test('saving an already open software form preserves the chosen storefront order', async () => {
+  const original = software();
+  const fixture = database({ products: [{ id: 'AMOS', ...original }] });
+  const ids = original.variants.map(v => v.variantId);
+  await saveSoftwareVersionOrder('AMOS', [...ids].reverse(), ids, fixture.db);
+  const saved = await saveProductConfiguration('AMOS', { ...original, description: 'Edited description', variants: original.variants.map(v => ({ ...v, showDeliveryNotice: true })) }, fixture.db);
+  assert.deepEqual(saved.variants.map(v => v.variantId), [...ids].reverse());
+  assert.equal(saved.description, 'Edited description');
+  assert.ok(saved.variants.every(v => v.showDeliveryNotice));
+  assert.deepEqual((fixture.read('products', 'AMOS') as unknown as Product).variants.map(v => v.variantId), [...ids].reverse());
 });

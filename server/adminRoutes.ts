@@ -56,7 +56,7 @@ const PREORDER_PACKAGE_STATUSES: PreorderPackageStatus[] = [
   'received-in-ghana',
 ];
 import { COLLECTIONS, getFirestore } from './firestore';
-import { createSoftwareProduct, saveSoftwareVariant } from './softwareSetupData';
+import { createSoftwareProduct, saveSoftwareVariant, saveSoftwareVersionOrder } from './softwareSetupData';
 import { createAdminHacksRouter } from './hacksRoutes';
 import { MAX_CATALOGUE_IMAGE_BYTES, catalogueImageObjectPath, confirmUpload, createSignedDownload, createSignedReportUpload, deleteCatalogueImage, isCatalogueImagePath, isReportObjectPathForOrder, isRequestImagePath, safeDocumentLabel, safeOriginalFilename, saveCatalogueImage, validateCatalogueImage, validateUpload } from './storage';
 
@@ -678,6 +678,13 @@ export function createAdminRouter(): Router {
       await writeAdminAudit(actor(req), { action: 'product.create', targetType: 'product', targetId: product.productId });
       res.status(201).json({ product });
     } catch (err) { routeError(res, err, 'Failed to create software.'); }
+  });
+  router.put('/products/:productId/version-order', async (req: AdminRequest, res) => {
+    try {
+      const product = await saveSoftwareVersionOrder(String(req.params.productId), req.body?.orderedIds, req.body?.expectedIds);
+      await writeAdminAudit(actor(req), { action: 'product.version-reorder', targetType: 'product', targetId: product.productId, details: { orderedIds: product.variants.map(variant => variant.variantId) } });
+      res.json({ product });
+    } catch (err) { routeError(res, err, 'Failed to save version order.'); }
   });
   router.post('/products/:productId/versions', async (req: AdminRequest, res) => {
     try {

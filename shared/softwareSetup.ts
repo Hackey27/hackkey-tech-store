@@ -56,3 +56,16 @@ export function saveVariantInProduct(product: Product, variant: Variant, creatin
   );
   return { ...product, variants };
 }
+
+/** Reorder permanent identities without changing version fields or recommendations. */
+export function reorderSoftwareVariants(product: Product, orderedIds: unknown, expectedIds: unknown): Product {
+  const currentIds = product.variants.map(variant => variant.variantId);
+  if (!Array.isArray(expectedIds) || expectedIds.length !== currentIds.length || expectedIds.some((id, index) => id !== currentIds[index])) {
+    throw new Error('The version list has changed. Reload before moving versions.');
+  }
+  if (!Array.isArray(orderedIds) || orderedIds.length !== currentIds.length || new Set(orderedIds).size !== currentIds.length || orderedIds.some(id => typeof id !== 'string' || !currentIds.includes(id))) {
+    throw new Error('Version order must contain every saved version ID exactly once.');
+  }
+  const byId = new Map(product.variants.map(variant => [variant.variantId, variant]));
+  return { ...product, variants: orderedIds.map(id => byId.get(id)!) };
+}

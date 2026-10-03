@@ -43,7 +43,7 @@ test('software and version creation/edit routes require administrator authentica
   try {
     const address = server.address();
     assert.ok(address && typeof address === 'object');
-    for (const [method, path] of [['POST', '/products'], ['POST', '/products/AMOS/versions'], ['PUT', '/products/AMOS/versions/AMOS01']]) {
+    for (const [method, path] of [['POST', '/products'], ['POST', '/products/AMOS/versions'], ['PUT', '/products/AMOS/versions/AMOS01'], ['PUT', '/products/AMOS/version-order']]) {
       const response = await fetch(`http://127.0.0.1:${address.port}/api/admin${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: '{}' });
       assert.equal(response.status, 401, `${method} ${path}`);
     }

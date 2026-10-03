@@ -1,6 +1,6 @@
 import { Firestore } from '@google-cloud/firestore';
 import { Product, Variant } from '../shared/types';
-import { saveVariantInProduct, validateSoftwareVariant } from '../shared/softwareSetup';
+import { reorderSoftwareVariants, saveVariantInProduct, validateSoftwareVariant } from '../shared/softwareSetup';
 import { normalizeProductConfiguration } from './adminData';
 import { COLLECTIONS, getFirestore } from './firestore';
 import { invalidateCatalogueCache } from './catalogue';
@@ -46,6 +46,20 @@ export async function saveSoftwareVariant(productId: string, input: Variant, cre
       if (used || !orders.empty || !licences.empty) throw new Error('Version ID is already used by software, orders, stock or a bundle. Choose a new permanent ID.');
     }
     const next = normalizeProductConfiguration(productId, saveVariantInProduct(current, input, creating));
+    tx.update(ref, { variants: next.variants });
+    return next;
+  });
+  invalidateCatalogueCache();
+  return product;
+}
+
+export async function saveSoftwareVersionOrder(productId: string, orderedIds: unknown, expectedIds: unknown, db: Firestore = getFirestore()): Promise<Product> {
+  const product = await db.runTransaction(async tx => {
+    const ref = db.collection(COLLECTIONS.products).doc(productId);
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new Error('Software not found.');
+    const next = reorderSoftwareVariants(snap.data() as Product, orderedIds, expectedIds);
+    // Read fresh fields inside the transaction; only array position changes.
     tx.update(ref, { variants: next.variants });
     return next;
   });
