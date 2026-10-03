@@ -11,6 +11,8 @@ import { formatPesewas } from "../../../shared/money";
 import { STORE_COPY } from "../../config/storeCopy";
 import { PreorderCartAddition } from "../../utils/usePreorderCart";
 import { ImageLightbox } from "../ImageLightbox";
+import { ProductShareButton } from "../ProductShareButton";
+import { preorderSharePath } from "../../utils/productSharing";
 import { PreorderDeliveryLabel } from "./PreorderDeliveryLabel";
 
 interface PreorderProductViewProps {
@@ -133,7 +135,7 @@ function ZoomableImage({
         className="absolute inset-0 cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-[#014040]"
       />
       {fine && !origin && (
-        <span className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-[#014040]/75 px-2.5 py-1 text-[10px] font-bold text-white">
+        <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-[#014040]/75 px-2.5 py-1 text-[10px] font-bold text-white">
           {STORE_COPY.preorder.hoverToZoom}
         </span>
       )}
@@ -323,27 +325,31 @@ export const PreorderProductView: React.FC<PreorderProductViewProps> = ({
       </h1>
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="min-w-0">
-          {resolved.imagePath && !imageFailed ? (
-            <ZoomableImage
-              src={resolved.imagePath}
-              alt={product.name}
-              onOpen={() =>
-                setOpenAt(
-                  Math.max(0, lightboxImages.indexOf(resolved.imagePath!)),
-                )
-              }
-              onError={() => setImageFailed(true)}
-            />
-          ) : (
-            <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl border border-[#d8e7e4] bg-[#edf5f3]">
-              <div
-                data-testid="preorder-product-image"
-                className="flex h-full items-center justify-center px-6 text-center text-xl font-black text-[#014040]/40"
-              >
-                {product.name}
+          <div className="relative">
+            {resolved.imagePath && !imageFailed ? (
+              <ZoomableImage
+                src={resolved.imagePath}
+                alt={product.name}
+                onOpen={() =>
+                  setOpenAt(
+                    Math.max(0, lightboxImages.indexOf(resolved.imagePath!)),
+                  )
+                }
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl border border-[#d8e7e4] bg-[#edf5f3]">
+                <div
+                  data-testid="preorder-product-image"
+                  className="flex h-full items-center justify-center px-6 text-center text-xl font-black text-[#014040]/40"
+                >
+                  {product.name}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            <ProductShareButton name={product.name} path={preorderSharePath(product.productId, resolved.combination?.combinationId)} />
+          </div>
 
           <div className="lg:hidden" data-testid="preorder-mobile-variants">
             {variantSelectors}
