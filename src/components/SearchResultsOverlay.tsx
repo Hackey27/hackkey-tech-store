@@ -30,11 +30,21 @@ export function SearchResultsOverlay({ query, items, loading, onClose, onSelect 
           <div className="grid gap-2 sm:grid-cols-2">
             {!loading && items.map((item) => {
               const price = resolveLinePricePesewas({ item, quantity: 1 }).unitPesewas;
-              const laptopBanner = item.kind === 'laptop' ? renderableProductImageUrl(item.bannerImageUrl || item.mobileBannerImageUrl || item.imageUrl) : undefined;
-              const laptopMobileBanner = item.kind === 'laptop' ? renderableProductImageUrl(item.mobileBannerImageUrl || item.bannerImageUrl || item.imageUrl) : undefined;
+              const laptopBanner = item.kind === 'laptop' ? renderableProductImageUrl(item.bannerImageUrl || item.cardImageUrl || item.mobileBannerImageUrl || item.screenshots?.[0] || item.imageUrl) : undefined;
+              const laptopMobileBanner = item.kind === 'laptop' ? renderableProductImageUrl(item.mobileBannerImageUrl || laptopBanner) : undefined;
+              const name = item.kind === 'laptop' ? [item.laptop?.brand, item.laptop?.model].filter(Boolean).join(' ') || item.name : item.name;
               return <button key={`${item.kind}:${item.itemId}`} type="button" onClick={() => onSelect(item)} className="group flex min-w-0 items-center gap-3 rounded-2xl border border-[#d8e7e4] bg-white p-3 text-left transition hover:border-[#014040] hover:bg-[#f6fbfa]">
                 {laptopBanner ? <span className="h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-[#edf5f3]"><picture><source media="(max-width: 639px)" srcSet={laptopMobileBanner || laptopBanner} /><img src={laptopBanner} alt="" className="h-full w-full object-cover" /></picture></span> : <ProductImage name={item.name} itemId={item.itemId} imageUrl={item.imageUrl} kind={item.kind} size="md" />}
-                <span className="min-w-0 flex-1"><span className="font-heading block truncate text-sm font-black text-[#014040]">{item.name}</span><span className="mt-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.categoryName || item.kind}</span><span className="mt-1 block text-sm font-black text-[#025656]">{price > 0 ? formatPesewas(price) : 'Ask for price'}</span></span>
+                <span className="min-w-0 flex-1">
+                  <span className="font-heading block truncate text-sm font-black text-[#014040]">{name}</span>
+                  {item.kind === 'laptop' ? <>
+                    <span className="mt-1 block space-y-0.5 text-[10px] leading-tight text-slate-600">
+                      <span className="block" title={item.laptopVariant?.cpu || item.laptop?.processor}><b>CPU:</b> {item.laptopVariant?.cpu || item.laptop?.processor || '—'}</span>
+                      <span className="flex flex-wrap gap-x-2"><span><b>RAM:</b> {item.laptopVariant?.ram || item.laptop?.ram || '—'}</span><span><b>Storage:</b> {item.laptopVariant?.storage || item.laptop?.storage || '—'}</span></span>
+                    </span>
+                    {item.preorderPricesPesewas ? <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] font-black leading-tight text-[#025656]">{(item.laptop?.preorderDeliveryOptions || ['express', 'two-months']).map(delivery => <span key={delivery}>{delivery === 'express' ? '2–3 weeks' : '6–8 weeks'} · {item.preorderPricesPesewas?.[delivery] === undefined ? 'Price unavailable' : formatPesewas(item.preorderPricesPesewas[delivery]!)}</span>)}</span> : <span className="mt-1 block text-sm font-black text-[#025656]">{price > 0 ? formatPesewas(price) : 'Ask for price'}</span>}
+                  </> : <><span className="mt-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.categoryName || item.kind}</span><span className="mt-1 block text-sm font-black text-[#025656]">{price > 0 ? formatPesewas(price) : 'Ask for price'}</span></>}
+                </span>
               </button>;
             })}
           </div>

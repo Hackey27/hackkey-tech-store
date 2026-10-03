@@ -56,6 +56,7 @@ export function LaptopSection({
   onAddToCart,
   onOpen,
   onBack,
+  onBrowse,
   searchQuery,
   onSearchClose,
   advancedOpen,
@@ -68,6 +69,7 @@ export function LaptopSection({
   onAddToCart?: (item: CatalogueItem) => void;
   onOpen: (item: CatalogueItem) => void;
   onBack: () => void;
+  onBrowse?: () => void;
   searchQuery: string;
   onSearchClose: () => void;
   advancedOpen: boolean;
@@ -297,7 +299,7 @@ export function LaptopSection({
                   >
                     See pictures
                   </button>
-                  <button className={button} onClick={() => setInterest(item)}>
+                  <button className="hk-activation-gradient rounded-xl px-3 py-2 text-sm font-bold text-white" onClick={() => setInterest(item)}>
                     I am interested
                   </button>
                 </div>
@@ -363,16 +365,7 @@ export function LaptopSection({
     <div className="mx-auto w-full min-w-0 max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       {product ? (
         <>
-          <button
-            className={button}
-            onClick={() => {
-              onBack();
-              start(product);
-            }}
-          >
-            Compare laptop
-          </button>
-          <ProductDetailView product={product} onClose={onBack} onLaptopVariantChange={changeVariant} onAddToCart={onAddToCart} />
+          <ProductDetailView product={product} onClose={onBack} onLaptopVariantChange={changeVariant} onAddToCart={onAddToCart} onCompare={() => { (onBrowse || onBack)(); start(product); }} />
         </>
       ) : (
         <>
@@ -459,7 +452,7 @@ export function LaptopSection({
         </Dialog>
       )}
       {interest && (
-        <Dialog title={interest.name} close={closeInterest}>
+        <Dialog floating title={interest.name} close={closeInterest}>
           <div className="mx-auto max-w-lg rounded-2xl bg-white p-6">
             <QuoteRequestForm key={interest.itemId} item={interest} />
           </div>

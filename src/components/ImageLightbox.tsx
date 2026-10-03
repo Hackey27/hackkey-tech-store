@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, RotateCcw, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
+import { useBackDismiss } from '../utils/useBackDismiss';
 
 interface ImageLightboxProps {
   /** Already-renderable URLs. The caller owns filtering and error handling. */
@@ -75,6 +76,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ images, openAt, on
   const transformRef = useRef<ViewportTransform>({ zoom: 1, x: 0, y: 0 });
   const pendingTransform = useRef<ViewportTransform>({ zoom: 1, x: 0, y: 0 });
   const onCloseRef = useRef(onClose);
+  const dismissGallery = useBackDismiss(active != null && images.length > 0, () => resetAndClose());
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -125,13 +127,16 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ images, openAt, on
     else if (active >= images.length) setActive(images.length - 1);
   }, [active, images.length]);
 
+  useEffect(() => { if (active != null) resetViewport(); }, [active]);
+
   useEffect(() => {
     if (active == null) return;
-    resetViewport();
     const previousOverflow = document.body.style.overflow;
+    const previousFocus = document.activeElement as HTMLElement | null;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previousOverflow; };
-  }, [active]);
+    lightboxRef.current?.focus({ preventScroll: true });
+    return () => { document.body.style.overflow = previousOverflow; previousFocus?.focus({ preventScroll: true }); };
+  }, [active != null]);
 
   const finishTransition = (direction: number) => {
     window.clearTimeout(transitionTimer.current);
@@ -166,7 +171,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ images, openAt, on
     finishTransition(direction);
   };
 
-  const close = () => {
+  const resetAndClose = () => {
     window.clearTimeout(transitionTimer.current);
     window.clearTimeout(wheelEndTimer.current);
     window.clearTimeout(wheelUnlockTimer.current);
@@ -188,6 +193,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ images, openAt, on
     setActive(null);
     onCloseRef.current();
   };
+  const close = dismissGallery;
 
   const handleImageTap = (event: React.MouseEvent<HTMLImageElement>) => {
     event.stopPropagation();
@@ -333,6 +339,8 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ images, openAt, on
       role="dialog"
       aria-modal="true"
       aria-label={STORE_COPY.gallery.lightboxLabel}
+      tabIndex={-1}
+      onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } }}
       onClick={(event) => {
         if (event.target === event.currentTarget && !dragged.current) close();
         dragged.current = false;

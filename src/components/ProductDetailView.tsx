@@ -2,6 +2,8 @@ import { laptopItemUrl } from '../../shared/laptopVariants';
 import { LaptopVariantPurchasePanel } from './LaptopVariantPurchasePanel';
 import { laptopTwoInOneStatus } from '../../shared/laptopTouchSpecs';
 import { LaptopDeliveryPrices } from './LaptopDeliveryPrices';
+import { LaptopActions } from './LaptopActions';
+import { StoreDialog } from './StoreDialog';
 import type { PreorderDelivery } from '../../shared/types';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, AlertCircle, Check, CreditCard, Monitor, Phone, Share2, ShoppingCart } from 'lucide-react';
@@ -22,6 +24,7 @@ interface ProductDetailViewProps {
   onClose: () => void;
   initialInterestForm?: boolean;
   onLaptopVariantChange?: (rowId: string) => void;
+  onCompare?: () => void;
   onAddToCart?: (
     product: CatalogueItem,
     variant?: Variant,
@@ -80,7 +83,7 @@ const LaptopSpecs: React.FC<{ laptop: LaptopDetails }> = ({ laptop }) => {
   );
 };
 
-export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose, initialInterestForm = false, onAddToCart, onBuyNow, onLaptopVariantChange }) => {
+export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose, initialInterestForm = false, onAddToCart, onBuyNow, onLaptopVariantChange, onCompare }) => {
   // Keep the no-variants value referentially stable. A fresh [] on every
   // service-option render retriggered the product reset effect and restored
   // the first Turnitin option before the banner could show the new price.
@@ -95,7 +98,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   const [galleryOpenRequest, setGalleryOpenRequest] = useState(0);
   const [shareStatus, setShareStatus] = useState('');
   const [selectedServiceOption, setSelectedServiceOption] = useState<ServiceOption | undefined>(product.options?.[0]);
-  useBackDismiss(showInterestForm, () => setShowInterestForm(false));
+  const closeInterest = useBackDismiss(showInterestForm, () => setShowInterestForm(false));
   const productName = product.name || STORE_COPY.product.softwareFallback;
   const recommendedId = variants.find((variant) => variant.latest)?.variantId;
   const latestVariant = variants.find((variant) => variant.latest && variant.available) || variants.find((variant) => variant.available);
@@ -291,9 +294,15 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
         <aside className={product.kind === 'laptop' ? 'lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1' : `relative rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-24 ${isQuoteOnly ? '' : 'hk-brand-pattern hk-pattern-outline hk-price-pattern'}`}>
           {isQuoteOnly ? (
             product.kind === 'laptop'
-              ? <div className="space-y-5"><div className="rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6">{!showInterestForm && product.laptopVariant && <LaptopVariantPurchasePanel item={product} delivery={laptopDelivery} onDeliveryChange={setLaptopDelivery} onChange={onLaptopVariantChange} onInterest={() => setShowInterestForm(true)} />}{!showInterestForm && !product.laptopVariant && <LaptopDeliveryPrices item={product} selected={laptopDelivery} onSelect={setLaptopDelivery} />}{!showInterestForm
-                ? <div className={product.laptopVariant ? "mt-3 flex justify-end gap-2" : "mt-5 grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2"}>{!product.laptopVariant && <button type="button" onClick={() => setShowInterestForm(true)} className="rounded-xl bg-[#014040] px-5 py-3.5 text-sm font-black text-white">I am interested</button>}<a href={`tel:${STORE_COPY.brand.phoneRaw}`} className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#014040] bg-white text-[#014040]" aria-label={`Call ${STORE_COPY.brand.phone}`}><Phone className="h-5 w-5" /></a><a href={STORE_COPY.brand.whatsAppUrl} target="_blank" rel="noreferrer" className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#05ef28] text-[#014040]" aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}><WhatsAppIcon className="h-5 w-5" /></a></div>
-                : <QuoteRequestForm item={product} submitLabel="Submit details" delivery={laptopDelivery} onDeliveryChange={setLaptopDelivery} />}</div>{product.laptop && <div className="hidden px-1 lg:block"><LaptopSpecs laptop={product.laptop} /></div>}</div>
+              ? <div className="space-y-5">
+                <div className="rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6">
+                  {product.laptopVariant
+                    ? <LaptopVariantPurchasePanel item={product} delivery={laptopDelivery} onDeliveryChange={setLaptopDelivery} onChange={onLaptopVariantChange} onInterest={() => setShowInterestForm(true)} onCompare={onCompare} />
+                    : <><LaptopDeliveryPrices item={product} selected={laptopDelivery} onSelect={setLaptopDelivery} /><LaptopActions onInterest={() => setShowInterestForm(true)} onCompare={onCompare} /></>}
+                  <div className="mt-3 flex justify-end gap-2"><a href={`tel:${STORE_COPY.brand.phoneRaw}`} className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#014040] bg-white text-[#014040]" aria-label={`Call ${STORE_COPY.brand.phone}`}><Phone className="h-5 w-5" /></a><a href={STORE_COPY.brand.whatsAppUrl} target="_blank" rel="noreferrer" className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#05ef28] text-[#014040]" aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}><WhatsAppIcon className="h-5 w-5" /></a></div>
+                </div>
+                {product.laptop && <div className="hidden px-1 lg:block"><LaptopSpecs laptop={product.laptop} /></div>}
+              </div>
               : <QuoteRequestForm item={product} submitLabel="Submit details" />
           ) : isPurchasableService ? (
             <ServicePurchasePanel item={product} onAddToCart={handleServiceAdd} onBuyNow={handleServiceBuy} onOptionChange={setSelectedServiceOption} />
@@ -366,6 +375,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
 
         {isParallelsProduct && <section className="max-w-3xl rounded-2xl border border-amber-200 bg-[#fffaf0] p-4"><h2 className="text-base font-black text-[#014040]">Before installing Parallels</h2><p className="mt-2 text-sm leading-6 text-slate-700">You will need approximately <strong>8GB of data</strong> to download the required files and about <strong>50GB of free storage</strong> on your MacBook for the installation.</p></section>}
 
+        {product.kind === 'laptop' && showInterestForm && <StoreDialog floating title={`I am interested in ${product.laptop?.brand || ''} ${product.laptop?.model || productName}`.trim()} close={closeInterest}><QuoteRequestForm key={product.itemId} item={product} submitLabel="Submit details" delivery={laptopDelivery} onDeliveryChange={setLaptopDelivery} /></StoreDialog>}
         <ProductGallery images={product.screenshots || []} productName={productName} kind={product.kind} openRequest={galleryOpenRequest} />
       </div>
     </div>

@@ -636,7 +636,7 @@ export const App: React.FC = () => {
             category={catalog?.categories.find(category => (catalog.products || []).some(item => item.kind === 'laptop' && item.categoryId === category.categoryId))}
             productId={window.location.pathname.split('/')[2] ? decodeURIComponent(window.location.pathname.split('/')[2]) : undefined}
             variantRowId={new URLSearchParams(window.location.search).get('variant')} onAddToCart={handleAddToCart}
-            onOpen={openProduct} onBack={() => navigate('/laptops')}
+            onOpen={openProduct} onBack={() => navigateBack('/laptops')} onBrowse={() => navigate('/laptops')}
             searchQuery={searchQuery} advancedOpen={laptopAdvancedOpen} onAdvancedOpenChange={setLaptopAdvancedOpen}
             onSearchClose={() => setSearchQuery('')}
           />

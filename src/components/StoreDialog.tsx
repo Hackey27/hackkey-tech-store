@@ -18,10 +18,10 @@ export function StoreDialog({
     const previous = document.activeElement as HTMLElement | null;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    ref.current?.focus();
+    ref.current?.focus({ preventScroll: true });
     return () => {
       document.body.style.overflow = overflow;
-      previous?.focus();
+      previous?.focus({ preventScroll: true });
     };
   }, []);
   return createPortal(

@@ -4,8 +4,9 @@ import { cpuLabel, switchLaptopVariant } from '../../shared/laptopVariants';
 import { formatPesewas } from '../../shared/money';
 import { LaptopVariantChip } from './LaptopVariantChip';
 import { LaptopDeliveryPrices } from './LaptopDeliveryPrices';
+import { LaptopActions } from './LaptopActions';
 
-export function LaptopVariantPurchasePanel({ item, delivery, onDeliveryChange, onChange, onInterest }: { item: CatalogueItem; delivery?: PreorderDelivery; onDeliveryChange: (delivery: PreorderDelivery) => void; onChange?: (rowId: string) => void; onInterest?: () => void }) {
+export function LaptopVariantPurchasePanel({ item, delivery, onDeliveryChange, onChange, onInterest, onCompare }: { item: CatalogueItem; delivery?: PreorderDelivery; onDeliveryChange: (delivery: PreorderDelivery) => void; onChange?: (rowId: string) => void; onInterest?: () => void; onCompare?: () => void }) {
   const selection = item.laptopVariant!;
   const options = item.laptopVariantOptions || [];
   const current = options.find(row => row.rowId === selection.rowId);
@@ -19,7 +20,7 @@ export function LaptopVariantPurchasePanel({ item, delivery, onDeliveryChange, o
       <h2 className="font-black">Your selection</h2>
       <div className="flex min-w-0 flex-wrap gap-[4.6px]">{[selection.cpu, selection.ram, selection.storage].map((value, index) => <LaptopVariantChip key={index} selected compact>{value}</LaptopVariantChip>)}</div>
       <p aria-live="polite" className="break-words text-base font-black">{price ? formatPesewas(price) : 'Price unavailable'}</p>
-      <button type="button" onClick={onInterest} className="w-full rounded-lg bg-[#014040] px-2 py-1.5 text-[10px] font-black text-[#05ef28]">I am interested</button>
+      <LaptopActions compact onInterest={onInterest} onCompare={onCompare} />
     </section>
     <section data-testid="other-laptop-variants" className="mt-3 min-w-0 space-y-2 border-t border-[#d8e7e4] pt-2 text-[8.5px]">
       <h2 className="font-black">Other variants for this model</h2>
