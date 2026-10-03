@@ -65,7 +65,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
   const autoOpenedGuide = useRef<string | null>(null);
   const installationSettingsFor = (order: Order) => order.showInstallationGuideFallback !== undefined
     ? order
-    : catalogItems.find((item) => item.itemId === order.productId || item.name === order.productName);
+    : catalogItems.find((item) => item.itemId === order.productId || item.name === order.productName || (item.laptopVariant?.laptopId === order.productId && item.laptopVariant?.rowId === order.laptopVariant?.rowId));
 
   // Copied states
   const [copiedKeys, setCopiedKeys] = useState<Record<string, boolean>>({});
@@ -287,7 +287,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
         <div className="space-y-6">
           {orders.length > 0 ? (
             <><div className="rounded-2xl bg-[#edf5f3] p-5"><h2 className="text-xl font-black text-[#014040]">{STORE_COPY.findOrder.resultsGreeting(orders[0].customerName)}</h2><p className="mt-1 text-sm text-slate-600">{sharedOrderId ? 'This secure link opens the selected order. You can still search with your submitted phone number above whenever you need to.' : 'Here are all the orders linked to this phone number.'}</p></div>{orders.map((order) => {
-              const catalogueItem = catalogItems.find((item) => item.itemId === order.productId || item.name === order.productName);
+              const catalogueItem = catalogItems.find((item) => item.itemId === order.productId || item.name === order.productName || (item.laptopVariant?.laptopId === order.productId && item.laptopVariant?.rowId === order.laptopVariant?.rowId));
               const installationProduct = installationSettingsFor(order);
               const inputType = order.customerInputType || 'Lock Code';
               const isHardwareId = inputType === 'Hardware ID';
@@ -330,7 +330,7 @@ export const FindOrderView: React.FC<{ catalogItems?: CatalogueItem[]; paymentOp
                           {order.productName}
                         </h3>
                         <span className="text-xs text-slate-600">
-                          {order.versionOrPlan}
+                          {order.versionOrPlan}{order.laptopVariant && <span className="mt-1 block text-xs">Variant: {order.laptopVariant.rowId} · {order.laptopVariant.currencyBasis === 'GHS' ? 'GHS direct' : 'RMB conversion'} · Unit price: {formatPesewas(order.laptopVariant.unitPricePesewas)}</span>}
                         </span>
                       </div>
                     </div>

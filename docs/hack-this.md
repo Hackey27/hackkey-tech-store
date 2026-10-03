@@ -25,3 +25,9 @@ require admin authentication and produce audit entries.
 New software versions are inserted at the start of their product's embedded
 version list. Version IDs remain permanent, preserving old order and licence
 references. Editing an existing version preserves its position.
+
+Guides now have a post-level `operatingSystem`: General, Windows, macOS or Android. Missing values default to General on read/save, so existing posts need no bulk migration. The filter strip includes All plus these four options.
+
+Each tutorial step optionally supports `copyText`, `actionLabel` and `actionUrl`. Copy text preserves its exact whitespace and line breaks; a labelled step link must use HTTPS. Search and tool-link filtering include these actions. Existing steps remain editable and reorderable. Add step stays below the step list.
+
+The last authored step automatically includes a store support message and links to every other hamburger section. Examples come from the current public catalogues, without changing saved guide steps. For technicians remains labelled Coming soon. Each post card and open post has a share action, using the device share sheet where available and a copy-link fallback otherwise.

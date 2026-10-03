@@ -1,6 +1,6 @@
 import type { CartItem } from '../components/CartView';
 
-type CartLine = Pick<CartItem, 'variant' | 'selectedOs' | 'serviceOption'>;
+type CartLine = Pick<CartItem, 'variant' | 'selectedOs' | 'serviceOption'> & Partial<Pick<CartItem, 'product'>>;
 
 /**
  * The one-line description shown under a cart entry's name.
@@ -13,6 +13,7 @@ type CartLine = Pick<CartItem, 'variant' | 'selectedOs' | 'serviceOption'>;
  * A service is described by its chosen option instead; it has no OS.
  */
 export function cartLineDetail(item: CartLine): string {
+  if (item.product?.laptopVariant) { const v = item.product.laptopVariant; return [v.cpu, v.ram, v.storage, v.currencyBasis === 'GHS' ? 'GHS direct' : 'RMB conversion', item.product.laptopDelivery === 'express' ? '2–3 weeks' : item.product.laptopDelivery === 'two-months' ? '6–8 weeks' : ''].filter(Boolean).join(' · '); }
   if (item.serviceOption) return item.serviceOption.name;
   const os = item.selectedOs || item.variant?.os;
   return [item.variant?.versionOrPlan, os].filter(Boolean).join(' · ');

@@ -1,3 +1,4 @@
+import { laptopListingId, laptopVariantOption } from '../shared/laptopVariants';
 import { getRmbPricingSettings } from './rmbPricingSettings';
 import { emptyRmbPricingSettings, isPreorderLaptop, priceRmbLaptop, publicRmbLaptop } from '../shared/rmbPricing';
 import type { RmbPricingSettings } from '../shared/types';
@@ -302,6 +303,20 @@ export function laptopToCatalogueItem(laptop: Laptop, config: PricingConfig, rmb
   };
 }
 
+/** Variant rows are independent public listings; private RMB costs never leave here. */
+export function laptopToCatalogueItems(laptop: Laptop, config: PricingConfig, rmbSettings: RmbPricingSettings = emptyRmbPricingSettings()): CatalogueItem[] {
+  if (!laptop.variantsEnabled) return [laptopToCatalogueItem(laptop, config, rmbSettings)];
+  const options = (laptop.variantConfig?.rows || []).flatMap(row => {
+    try { return [laptopVariantOption(laptop, row.id, rmbSettings)]; } catch { return []; }
+  });
+  return options.map(option => {
+    const row = laptop.variantConfig!.rows.find(row => row.id === option.rowId)!;
+    const derived = { ...laptop, processor: option.cpu, ram: option.ram, storage: option.storage, priceGhs: row.priceGhs, preorderCost: { ...laptop.preorderCost, rawCostRmb: row.priceRmb! } };
+    const item = laptopToCatalogueItem(derived, config, rmbSettings);
+    return { ...item, itemId: laptopListingId(laptop.laptopId, option.rowId), name: `${laptop.title} — ${option.cpu} · ${option.ram} · ${option.storage}`, pricePesewas: option.pricePesewas, preorderPricesPesewas: option.deliveryPrices, listPricePesewas: undefined, promoLabel: undefined, promoPercent: undefined, promoEndsAt: undefined, laptopVariant: { laptopId: laptop.laptopId, rowId: option.rowId, cpu: option.cpu, ram: option.ram, storage: option.storage, currencyBasis: option.currencyBasis }, laptopVariantOptions: options, laptopVariantProperties: { cpus: laptop.variantConfig!.cpus, ram: laptop.variantConfig!.ram, storage: laptop.variantConfig!.storage } };
+  });
+}
+
 /** Announcements are returned only while active and inside their window. */
 function selectAnnouncement(announcements: Announcement[], now: Date): Announcement | undefined {
   return announcements
@@ -320,7 +335,7 @@ function selectAnnouncement(announcements: Announcement[], now: Date): Announcem
     )[0];
 }
 
-function matchesSearch(item: CatalogueItem, query: string): boolean {
+export function matchesSearch(item: CatalogueItem, query: string): boolean {
   const haystack = [
     item.name,
     item.description,
@@ -368,7 +383,7 @@ async function buildCatalogue(): Promise<CatalogResponse> {
     ),
     ...activeBundles.map((bundle) => bundleToCatalogueItem(bundle, activeProducts, pricingConfig)),
     ...activeServices.map((service) => serviceToCatalogueItem(service, pricingConfig)),
-    ...activeLaptops.map((laptop) => laptopToCatalogueItem(laptop, pricingConfig))
+    ...activeLaptops.flatMap((laptop) => laptopToCatalogueItems(laptop, pricingConfig))
   ].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 
   const categoryNames = new Map(categories.map((c) => [c.categoryId, c.name]));
@@ -441,7 +456,7 @@ export async function getCatalogue(
     readCollection<Laptop>(getFirestore(), COLLECTIONS.laptops), getRmbPricingSettings(), getPricingConfig()
   ]);
   const visibleLaptops = liveLaptops.filter(laptop => laptop.active);
-  const laptopItems = visibleLaptops.map(laptop => laptopToCatalogueItem(laptop, pricingConfig, rmbSettings));
+  const laptopItems = visibleLaptops.flatMap(laptop => laptopToCatalogueItems(laptop, pricingConfig, rmbSettings));
   const base: CatalogResponse = { ...cache.response, laptops: visibleLaptops.map(publicRmbLaptop), products: [...cache.response.products.filter(item => item.kind !== 'laptop'), ...laptopItems].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)) };
   base.products.forEach(item => { if (item.kind === 'laptop') item.categoryName = base.categories.find(category => category.categoryId === item.categoryId)?.name; });
   base.totalProducts = base.products.length;
@@ -465,7 +480,7 @@ export async function getCatalogue(
     products: items,
     bundles: base.bundles.filter((b) => keptIds.has(b.bundleId)),
     services: base.services.filter((s) => keptIds.has(s.serviceId)),
-    laptops: base.laptops.filter((l) => keptIds.has(l.laptopId)),
+    laptops: base.laptops.filter((l) => keptIds.has(l.laptopId) || items.some(item => item.laptopVariant?.laptopId === l.laptopId)),
     totalProducts: items.length,
     timestamp: new Date().toISOString()
   };

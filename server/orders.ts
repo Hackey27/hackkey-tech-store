@@ -1,4 +1,5 @@
-import { isPreorderLaptop, laptopDeliveries, calculateRmbPrice } from '../shared/rmbPricing';
+import { pricedLaptopVariant, laptopListingId } from '../shared/laptopVariants';
+import { isPreorderLaptop, laptopDeliveries, calculateRmbPrice, emptyRmbPricingSettings } from '../shared/rmbPricing';
 import { getRmbPricingSettings } from './rmbPricingSettings';
 import type { PreorderDelivery } from '../shared/types';
 import { Firestore } from '@google-cloud/firestore';
@@ -116,6 +117,7 @@ export interface CheckoutItem {
   optionId?: string;
   bundleId?: string;
   laptopId?: string;
+  laptopVariantRowId?: string;
   delivery?: PreorderDelivery;
   expectedPricePesewas?: number;
   /** Maps an alternative group to the one variant the customer selected. */
@@ -345,29 +347,38 @@ async function createBundleOrders(
 }
 
 /** A laptop is a single manually-fulfilled line. */
-async function createLaptopOrder(
+export async function createLaptopOrder(
   request: CheckoutRequest,
   item: CheckoutItem,
-  cartId: string
+  cartId: string,
+  dependencies = { findLaptop, getPricingConfig, getRmbPricingSettings }
 ): Promise<Order> {
-  const laptop = await findLaptop(item.laptopId as string);
+  const laptop = await dependencies.findLaptop(item.laptopId as string);
   if (!laptop) throw new Error(`Unknown laptop: ${item.laptopId}`);
   if (!laptop.active) throw new Error(`Laptop ${laptop.laptopId} is not available.`);
   // A blank price means "ask for price"; it must never be sold as free.
-  if (!isPreorderLaptop(laptop) && (typeof laptop.priceGhs !== 'number' || laptop.priceGhs <= 0)) {
+  if (!laptop.variantsEnabled && !isPreorderLaptop(laptop) && (typeof laptop.priceGhs !== 'number' || laptop.priceGhs <= 0)) {
     throw new Error(`${laptop.title} is priced on enquiry and cannot be bought online.`);
   }
 
   const quantity = Math.max(1, Math.floor(item.quantity || 1) || 1);
-  const pricingConfig = await getPricingConfig();
   let applied;
-  if (isPreorderLaptop(laptop)) {
+  let variantSnapshot: Order['laptopVariant'];
+  if (laptop.variantsEnabled) {
+    if (!item.laptopVariantRowId) throw new Error('Choose a laptop combination before checkout.');
+    const { option, price } = pricedLaptopVariant(laptop, item.laptopVariantRowId, item.delivery, isPreorderLaptop(laptop) ? await dependencies.getRmbPricingSettings() : emptyRmbPricingSettings());
+    if (item.expectedPricePesewas !== undefined && item.expectedPricePesewas !== price) throw new Error('This laptop price has changed. Please review the current price.');
+    applied = { payablePesewas: price, listPesewas: price };
+    variantSnapshot = { laptopId: laptop.laptopId, rowId: option.rowId, cpu: option.cpu, ram: option.ram, storage: option.storage, currencyBasis: option.currencyBasis, unitPricePesewas: price, ...(option.currencyBasis === 'RMB' ? { delivery: item.delivery } : {}) };
+  } else if (item.laptopVariantRowId) {
+    throw new Error('Laptop variants are no longer enabled. Review the current listing.');
+  } else if (isPreorderLaptop(laptop)) {
     if (!item.delivery || !laptopDeliveries(laptop).includes(item.delivery)) throw new Error('Choose a valid preorder delivery option.');
-    const calculated = calculateRmbPrice(laptop.preorderCost, item.delivery, await getRmbPricingSettings());
+    const calculated = calculateRmbPrice(laptop.preorderCost, item.delivery, await dependencies.getRmbPricingSettings());
     if (item.expectedPricePesewas !== undefined && item.expectedPricePesewas !== calculated.pricePesewas) throw new Error('This laptop price has changed. Please review the current price.');
     applied = { payablePesewas: calculated.pricePesewas, listPesewas: calculated.pricePesewas };
   } else {
-    applied = applyPricingRules(cedisToPesewas(laptop.priceGhs!), [laptop.laptopId, `CATEGORY:${laptop.categoryId}`], pricingConfig);
+    applied = applyPricingRules(cedisToPesewas(laptop.priceGhs!), [laptop.laptopId, `CATEGORY:${laptop.categoryId}`], await dependencies.getPricingConfig());
   }
 
   return {
@@ -378,10 +389,11 @@ async function createLaptopOrder(
     customerName: request.customerName.trim(),
     phone: normalisePhone(request.phone),
     email: request.email.trim(),
-    variantId: laptop.laptopId,
+    ...(variantSnapshot ? { laptopVariant: variantSnapshot } : {}),
+    variantId: variantSnapshot ? laptopListingId(laptop.laptopId, variantSnapshot.rowId) : laptop.laptopId,
     productId: laptop.laptopId,
     productName: laptop.title,
-    versionOrPlan: [laptop.processor, laptop.ram, laptop.storage, isPreorderLaptop(laptop) ? (item.delivery === 'express' ? '2–3 weeks' : '6–8 weeks') : ''].filter(Boolean).join(' · ') || 'Laptop',
+    versionOrPlan: [variantSnapshot?.cpu || laptop.processor, variantSnapshot?.ram || laptop.ram, variantSnapshot?.storage || laptop.storage, isPreorderLaptop(laptop) ? (item.delivery === 'express' ? '2–3 weeks' : '6–8 weeks') : ''].filter(Boolean).join(' · ') || 'Laptop',
     quantity,
     deliveryOs: laptop.operatingSystem || '',
     amountPesewas: applied.payablePesewas * quantity,

@@ -271,6 +271,8 @@ export interface Service {
 // ==========================================
 
 export interface Laptop {
+  variantsEnabled?: boolean;
+  variantConfig?: LaptopVariantConfig;
   preorderCost?: RmbSourceCost;
   preorderDeliveryOptions?: PreorderDelivery[];
   laptopId: string;
@@ -306,6 +308,28 @@ export interface Laptop {
   screenshots?: string[];
 }
 
+export interface LaptopVariantConfig {
+  cpus: Array<{ id: string; prefix: string; model: string }>;
+  ram: Array<{ id: string; value: string }>;
+  storage: Array<{ id: string; value: string }>;
+  rows: Array<{ id: string; cpuId: string; ramId: string; storageId: string; priceGhs?: number; priceRmb?: number }>;
+}
+export interface LaptopVariantSelection {
+  rowId: string;
+  laptopId: string;
+  cpu: string;
+  ram: string;
+  storage: string;
+  currencyBasis: 'GHS' | 'RMB';
+}
+export interface LaptopVariantOption extends LaptopVariantSelection {
+  cpuId: string;
+  ramId: string;
+  storageId: string;
+  pricePesewas?: number;
+  deliveryPrices?: Partial<Record<PreorderDelivery, number>>;
+}
+
 export interface BundleContentOption {
   itemId: string;
   productId: string;
@@ -333,6 +357,11 @@ export interface LandingSettings {
  *  empty. `kind` tells the frontend how to render and what the CTA should do.
  *  The raw typed record is carried alongside for consumers that need it. */
 export interface CatalogueItem {
+  laptopVariant?: LaptopVariantSelection;
+  /** Selected delivery on a laptop cart snapshot. */
+  laptopDelivery?: PreorderDelivery;
+  laptopVariantOptions?: LaptopVariantOption[];
+  laptopVariantProperties?: Omit<LaptopVariantConfig, 'rows'>;
   preorderPricesPesewas?: Partial<Record<PreorderDelivery, number>>;
   kind: CatalogueItemKind;
   itemId: string;
@@ -494,6 +523,7 @@ export interface TurnitinReportDocument {
 }
 
 export interface Order {
+  laptopVariant?: LaptopVariantSelection & { unitPricePesewas: number; delivery?: PreorderDelivery };
   orderId: string;
   cartId: string;
   orderDate: string;

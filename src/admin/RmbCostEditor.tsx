@@ -6,7 +6,7 @@ import { formatPesewas, formatGhsCost } from '../../shared/money';
 
 const input = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#014040]';
 export const rmbDeliveryLabel = (delivery: PreorderDelivery) => delivery === 'express' ? '2–3 weeks' : '6–8 weeks';
-export function RmbCostEditor({ cost, deliveries, settings, onChange }: { cost?: RmbSourceCost; deliveries: PreorderDelivery[]; settings?: RmbPricingSettings; onChange: (value: RmbSourceCost) => void }) {
+export function RmbCostEditor({ cost, deliveries, settings, onChange, readOnlyInputs = false }: { cost?: RmbSourceCost; deliveries: PreorderDelivery[]; settings?: RmbPricingSettings; onChange: (value: RmbSourceCost) => void; readOnlyInputs?: boolean }) {
   const set = (key: keyof RmbSourceCost, text: string) => onChange({ ...cost, rawCostRmb: cost?.rawCostRmb ?? 0, [key]: text === '' ? undefined : Number(text) } as RmbSourceCost);
   const money = formatGhsCost;
   const quotes = deliveries.map(delivery => {
@@ -15,7 +15,7 @@ export function RmbCostEditor({ cost, deliveries, settings, onChange }: { cost?:
   });
   return <section className="space-y-4 rounded-xl border border-[#cbdcd9] bg-[#f8fbfa] p-4">
     <div><h4 className="font-black text-[#014040]">Live selling price</h4><p className="mt-1 text-xs text-slate-500">Updates as you type. Includes exchange conversion, transaction fee, bank charge, each delivery’s shipping and profit markup.</p></div>
-    <div className="grid gap-3 sm:grid-cols-3"><label className="space-y-1 text-xs font-bold">Raw product cost (¥ RMB)<input className={input} type="number" min="0.01" step="0.01" value={cost?.rawCostRmb ?? ''} onChange={event => set('rawCostRmb', event.target.value)} /></label>{deliveries.map(delivery => { const key = delivery === 'express' ? 'shippingExpressGhs' : 'shippingTwoMonthsGhs'; return <label key={delivery} className="space-y-1 text-xs font-bold">Shipping · {rmbDeliveryLabel(delivery)} (₵)<input className={input} type="number" min="0" step="0.01" value={cost?.[key] ?? ''} onChange={event => set(key, event.target.value)} /></label>; })}</div>
+    {!readOnlyInputs && <div className="grid gap-3 sm:grid-cols-3"><label className="space-y-1 text-xs font-bold">Raw product cost (¥ RMB)<input className={input} type="number" min="0.01" step="0.01" value={cost?.rawCostRmb ?? ''} onChange={event => set('rawCostRmb', event.target.value)} /></label>{deliveries.map(delivery => { const key = delivery === 'express' ? 'shippingExpressGhs' : 'shippingTwoMonthsGhs'; return <label key={delivery} className="space-y-1 text-xs font-bold">Shipping · {rmbDeliveryLabel(delivery)} (₵)<input className={input} type="number" min="0" step="0.01" value={cost?.[key] ?? ''} onChange={event => set(key, event.target.value)} /></label>; })}</div>}
     {!deliveries.length && <p className="text-xs font-bold text-amber-800">Choose a delivery option to preview its selling price.</p>}
     <div aria-live="polite" aria-atomic="true" className="grid gap-3 sm:grid-cols-2">{quotes.map(({ delivery, price, error }) => {
       const Icon = delivery === 'express' ? Plane : Ship;

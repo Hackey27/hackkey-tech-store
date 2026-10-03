@@ -1,3 +1,5 @@
+import { refreshLaptopCart } from './utils/laptopCart';
+import { laptopItemUrl } from '../shared/laptopVariants';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
@@ -164,13 +166,14 @@ export const App: React.FC = () => {
     return () => { active = false; clearInterval(timer); window.removeEventListener('focus', refresh); };
   }, [inPreorder, preorderCart.lines.length]);
   useEffect(() => {
-    if (!inLaptops && !viewingLaptop) return;
+    if (!inLaptops && !viewingLaptop && !cartItems.some(line => line.product.laptopVariant)) return;
     const refresh = async () => { try { const response = await fetch('/api/catalog', { cache: 'no-store' }); if (response.ok) setCatalog(await response.json()); } catch {} };
     void refresh();
     const timer = window.setInterval(() => void refresh(), 15000);
     window.addEventListener('focus', refresh);
     return () => { clearInterval(timer); window.removeEventListener('focus', refresh); };
-  }, [inLaptops, viewingLaptop]);
+  }, [inLaptops, viewingLaptop, cartItems.some(line => line.product.laptopVariant)]);
+  useEffect(() => { if (catalog) setCartItems(lines => refreshLaptopCart(lines, catalog.products)); }, [catalog]);
   const preorderResults = useMemo(
     () => (inPreorder ? searchPreorder(preorderProducts, searchQuery) : []),
     [inPreorder, preorderProducts, searchQuery]
@@ -290,6 +293,7 @@ export const App: React.FC = () => {
       const existingIdx = prev.findIndex(
         (item) =>
           item.product.itemId === product.itemId &&
+          item.product.laptopDelivery === product.laptopDelivery &&
           item.variant?.variantId === variant?.variantId &&
           item.selectedOs === selectedOs &&
           item.serviceOption?.optionId === serviceOption?.optionId &&
@@ -309,7 +313,7 @@ export const App: React.FC = () => {
       return [
         ...prev,
         {
-          id: `${product.itemId}-${serviceOption?.optionId || variant?.variantId || 'default'}-${selectedOs || 'std'}`,
+          id: `${product.itemId}-${serviceOption?.optionId || variant?.variantId || 'default'}-${selectedOs || 'std'}${product.laptopDelivery ? `-${product.laptopDelivery}` : ''}`,
           product,
           variant,
           selectedOs,
@@ -367,7 +371,7 @@ export const App: React.FC = () => {
     setBuyNowItem(item);
   };
 
-  const openProduct = (product: CatalogueItem) => navigate(`${product.kind === 'laptop' ? '/laptops' : '/product'}/${encodeURIComponent(product.itemId)}`);
+  const openProduct = (product: CatalogueItem) => navigate(product.kind === 'laptop' ? laptopItemUrl(product) : `/product/${encodeURIComponent(product.itemId)}`);
 
   // Featured software filtering logic
   const allProducts = catalog?.products || [];
@@ -631,6 +635,7 @@ export const App: React.FC = () => {
             items={(catalog?.products || []).filter(item => item.kind === 'laptop')}
             category={catalog?.categories.find(category => (catalog.products || []).some(item => item.kind === 'laptop' && item.categoryId === category.categoryId))}
             productId={window.location.pathname.split('/')[2] ? decodeURIComponent(window.location.pathname.split('/')[2]) : undefined}
+            variantRowId={new URLSearchParams(window.location.search).get('variant')} onAddToCart={handleAddToCart}
             onOpen={openProduct} onBack={() => navigate('/laptops')}
             searchQuery={searchQuery} advancedOpen={laptopAdvancedOpen} onAdvancedOpenChange={setLaptopAdvancedOpen}
             onSearchClose={() => setSearchQuery('')}

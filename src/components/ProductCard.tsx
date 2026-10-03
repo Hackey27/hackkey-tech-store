@@ -35,7 +35,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const [hoverLaptopAvailability, setHoverLaptopAvailability] = useState(false);
 
   const productName = product.name || STORE_COPY.product.softwareFallback;
-  const cardName = product.kind === 'laptop' && product.laptop
+  const cardName = product.kind === 'laptop' && product.laptop && !product.laptopVariant
     ? [product.laptop.brand, product.laptop.model].filter(Boolean).join(' ') || productName
     : productName;
   const laptopPreviewUrl = useMemo(() => renderableProductImageUrl(

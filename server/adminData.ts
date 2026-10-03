@@ -1,3 +1,4 @@
+import { validateLaptopVariants, laptopVariantOption } from '../shared/laptopVariants';
 import { normalizeLaptopTouchSpecs } from '../shared/laptopTouchSpecs';
 import { getRmbPricingSettings } from './rmbPricingSettings';
 import { isPreorderLaptop, laptopDeliveries, priceRmbLaptop, validateRmbSourceCost } from '../shared/rmbPricing';
@@ -787,17 +788,26 @@ export async function saveLaptop(laptopId: string, input: Laptop): Promise<Lapto
     ...normalizeLaptopTouchSpecs(input),
     laptopId,
     title: input.title.trim(),
+    variantsEnabled: input.variantsEnabled === true,
     availability: isPreorderLaptop({ availability: String(input.availability || '') }) ? 'Pre-order' : 'Available',
     categoryId: input.categoryId || 'LAPTOP',
     picturesUrl: input.picturesUrl || [],
     active: input.active !== false,
     sortOrder: Number.isFinite(input.sortOrder) ? input.sortOrder : 100
   };
+  validateLaptopVariants(laptop);
   if (isPreorderLaptop(laptop)) {
     const deliveries = laptopDeliveries(laptop);
     if (!deliveries.length || deliveries.some(delivery => !['express', 'two-months'].includes(delivery)) || new Set(deliveries).size !== deliveries.length) throw new Error('Choose one or both preorder delivery options.');
-    if (laptop.preorderCost) laptop.preorderCost = validateRmbSourceCost(laptop.preorderCost, deliveries);
-    const { errors } = priceRmbLaptop(laptop, await getRmbPricingSettings());
+    if (laptop.variantsEnabled) {
+      const settings = await getRmbPricingSettings();
+      for (const row of laptop.variantConfig!.rows) {
+        validateRmbSourceCost({ ...laptop.preorderCost, rawCostRmb: row.priceRmb! }, deliveries);
+        const option = laptopVariantOption(laptop, row.id, settings);
+        if (laptop.active && deliveries.some(delivery => option.deliveryPrices?.[delivery] === undefined)) throw new Error(`Combination ${row.id}: automatic pricing is incomplete. Check shipping and Exchange Rate & Charges.`);
+      }
+    } else if (laptop.preorderCost) laptop.preorderCost = validateRmbSourceCost(laptop.preorderCost, deliveries);
+    const { errors } = laptop.variantsEnabled ? { errors: [] } : priceRmbLaptop(laptop, await getRmbPricingSettings());
     if (laptop.active && errors.length) throw new Error(errors.join(' '));
   }
   await getFirestore().collection(COLLECTIONS.laptops).doc(laptopId).set(laptop);

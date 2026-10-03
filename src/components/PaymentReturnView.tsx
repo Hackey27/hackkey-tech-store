@@ -113,7 +113,7 @@ export const PaymentReturnView: React.FC<{ onDone: (order?: Order) => void }> = 
               {(cart?.lines?.length ? cart.lines : [order]).map((line) => (
                 <div key={line.orderId} className="text-sm text-slate-700 pt-1 flex justify-between gap-3">
                   <span>
-                    {line.productName} — {line.versionOrPlan}
+                    {line.productName} — {line.versionOrPlan}{line.laptopVariant && <small className="block">Variant: {line.laptopVariant.rowId} · {line.laptopVariant.currencyBasis === 'GHS' ? 'GHS direct' : 'RMB conversion'} · Unit price: {formatPesewas(line.laptopVariant.unitPricePesewas)}</small>}
                     {line.deliveryOs ? ` · ${line.deliveryOs}` : ''}
                     {line.quantity && line.quantity > 1 ? ` ×${line.quantity}` : ''}
                   </span>

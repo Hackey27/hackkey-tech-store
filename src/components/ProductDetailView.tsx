@@ -1,3 +1,5 @@
+import { laptopItemUrl } from '../../shared/laptopVariants';
+import { LaptopVariantPurchasePanel } from './LaptopVariantPurchasePanel';
 import { laptopTwoInOneStatus } from '../../shared/laptopTouchSpecs';
 import { LaptopDeliveryPrices } from './LaptopDeliveryPrices';
 import type { PreorderDelivery } from '../../shared/types';
@@ -19,6 +21,7 @@ interface ProductDetailViewProps {
   product: CatalogueItem;
   onClose: () => void;
   initialInterestForm?: boolean;
+  onLaptopVariantChange?: (rowId: string) => void;
   onAddToCart?: (
     product: CatalogueItem,
     variant?: Variant,
@@ -77,7 +80,7 @@ const LaptopSpecs: React.FC<{ laptop: LaptopDetails }> = ({ laptop }) => {
   );
 };
 
-export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose, initialInterestForm = false, onAddToCart, onBuyNow }) => {
+export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, onClose, initialInterestForm = false, onAddToCart, onBuyNow, onLaptopVariantChange }) => {
   // Keep the no-variants value referentially stable. A fresh [] on every
   // service-option render retriggered the product reset effect and restored
   // the first Turnitin option before the banner could show the new price.
@@ -212,7 +215,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
 
   const shareItem = async (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    const url = new URL(`/product/${encodeURIComponent(product.itemId)}`, window.location.origin).toString();
+    const url = new URL(product.kind === 'laptop' ? laptopItemUrl(product) : `/product/${encodeURIComponent(product.itemId)}`, window.location.origin).toString();
     const shareData = { title: productName, text: `View ${productName} on Hack-Key Tech Store.`, url };
     try {
       if (navigator.share) {
@@ -288,8 +291,8 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
         <aside className={product.kind === 'laptop' ? 'lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1' : `relative rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-24 ${isQuoteOnly ? '' : 'hk-brand-pattern hk-pattern-outline hk-price-pattern'}`}>
           {isQuoteOnly ? (
             product.kind === 'laptop'
-              ? <div className="space-y-5"><div className="rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6">{!showInterestForm && <LaptopDeliveryPrices item={product} selected={laptopDelivery} onSelect={setLaptopDelivery} />}{!showInterestForm
-                ? <div className="grid grid-cols-[1fr_auto_auto] gap-2"><button type="button" onClick={() => setShowInterestForm(true)} className="rounded-xl bg-[#014040] px-5 py-3.5 text-sm font-black text-white">I am interested</button><a href={`tel:${STORE_COPY.brand.phoneRaw}`} className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#014040] bg-white text-[#014040]" aria-label={`Call ${STORE_COPY.brand.phone}`}><Phone className="h-5 w-5" /></a><a href={STORE_COPY.brand.whatsAppUrl} target="_blank" rel="noreferrer" className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#05ef28] text-[#014040]" aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}><WhatsAppIcon className="h-5 w-5" /></a></div>
+              ? <div className="space-y-5"><div className="rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6">{!showInterestForm && product.laptopVariant && <LaptopVariantPurchasePanel item={product} delivery={laptopDelivery} onDeliveryChange={setLaptopDelivery} onChange={onLaptopVariantChange} onAddToCart={onAddToCart ? item => { onAddToCart(item); setAddedNotice(true); } : undefined} />}{!showInterestForm && !product.laptopVariant && <LaptopDeliveryPrices item={product} selected={laptopDelivery} onSelect={setLaptopDelivery} />}{!showInterestForm
+                ? <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2"><button type="button" onClick={() => setShowInterestForm(true)} className="rounded-xl bg-[#014040] px-5 py-3.5 text-sm font-black text-white">I am interested</button><a href={`tel:${STORE_COPY.brand.phoneRaw}`} className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#014040] bg-white text-[#014040]" aria-label={`Call ${STORE_COPY.brand.phone}`}><Phone className="h-5 w-5" /></a><a href={STORE_COPY.brand.whatsAppUrl} target="_blank" rel="noreferrer" className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#05ef28] text-[#014040]" aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}><WhatsAppIcon className="h-5 w-5" /></a></div>
                 : <QuoteRequestForm item={product} submitLabel="Submit details" delivery={laptopDelivery} onDeliveryChange={setLaptopDelivery} />}</div>{product.laptop && <div className="hidden px-1 lg:block"><LaptopSpecs laptop={product.laptop} /></div>}</div>
               : <QuoteRequestForm item={product} submitLabel="Submit details" />
           ) : isPurchasableService ? (

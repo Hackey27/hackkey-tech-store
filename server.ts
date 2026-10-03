@@ -1,3 +1,4 @@
+import { pricedLaptopVariant } from './shared/laptopVariants';
 import { findLaptop } from './server/catalogue';
 import { getRmbPricingSettings } from './server/rmbPricingSettings';
 import { isPreorderLaptop, calculateRmbPrice, laptopDeliveries } from './shared/rmbPricing';
@@ -699,7 +700,7 @@ async function startServer() {
   });
 
   app.post('/api/requests/laptop-enquiry', async (req: Request, res: Response) => {
-    const { customerName, phone, email, laptopId, laptopName, location, notes, delivery } = req.body;
+    const { customerName, phone, email, laptopId, laptopName, location, notes, delivery, laptopVariantRowId } = req.body;
     if (!customerName || !phone || !email || !laptopId) {
       return res.status(400).json({ error: 'Name, phone, email, and laptop are required.' });
     }
@@ -707,7 +708,10 @@ async function startServer() {
       const laptop = await findLaptop(String(laptopId));
       if (!laptop?.active) return res.status(400).json({ error: 'This laptop is no longer available.' });
       let priceDetails = {};
-      if (isPreorderLaptop(laptop)) {
+      if (laptop.variantsEnabled) {
+        const { option, price } = pricedLaptopVariant(laptop, String(laptopVariantRowId || ''), delivery, await getRmbPricingSettings());
+        priceDetails = { variantRowId: option.rowId, cpu: option.cpu, ram: option.ram, storage: option.storage, currencyBasis: option.currencyBasis, pricePesewas: price, ...(delivery ? { delivery } : {}) };
+      } else if (isPreorderLaptop(laptop)) {
         if (!laptopDeliveries(laptop).includes(delivery)) return res.status(400).json({ error: 'Choose a valid delivery option.' });
         try { priceDetails = { delivery, pricePesewas: calculateRmbPrice(laptop.preorderCost, delivery, await getRmbPricingSettings()).pricePesewas }; }
         catch { return res.status(400).json({ error: 'This delivery price is unavailable. Please contact us.' }); }

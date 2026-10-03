@@ -27,7 +27,7 @@ export function QuoteRequestForm({ item, submitLabel = 'Submit details', deliver
     try {
       const endpoint = item.kind === 'laptop' ? '/api/requests/laptop-enquiry' : '/api/services/submit';
       const payload = item.kind === 'laptop'
-        ? { customerName, phone, email, laptopId: item.itemId, laptopName: item.name, delivery: selectedDelivery, notes: answers.notes, location: answers.location }
+        ? { customerName, phone, email, laptopId: item.laptopVariant?.laptopId || item.itemId, laptopVariantRowId: item.laptopVariant?.rowId, laptopName: item.name, delivery: selectedDelivery, notes: answers.notes, location: answers.location }
         : { serviceId: item.itemId, serviceName: item.name, customerName, phone, email, answers, summary: answers.summary };
       const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await response.json();

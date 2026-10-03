@@ -1,3 +1,4 @@
+import { laptopItemUrl, resolveLaptopListing } from '../../shared/laptopVariants';
 import { laptopTwoInOneStatus } from '../../shared/laptopTouchSpecs';
 import { LaptopDeliveryPrices } from "./LaptopDeliveryPrices";
 import React, { useEffect, useRef, useState } from "react";
@@ -51,6 +52,8 @@ export function LaptopSection({
   items,
   category,
   productId,
+  variantRowId,
+  onAddToCart,
   onOpen,
   onBack,
   searchQuery,
@@ -61,6 +64,8 @@ export function LaptopSection({
   items: CatalogueItem[];
   category?: Category;
   productId?: string;
+  variantRowId?: string | null;
+  onAddToCart?: (item: CatalogueItem) => void;
   onOpen: (item: CatalogueItem) => void;
   onBack: () => void;
   searchQuery: string;
@@ -184,7 +189,15 @@ export function LaptopSection({
     setPicking(false);
     window.scrollTo({ top: 0 });
   };
-  const product = items.find((item) => item.itemId === productId);
+  const [localRow, setLocalRow] = useState<string | null | undefined>(variantRowId);
+  useEffect(() => setLocalRow(variantRowId), [productId, variantRowId]);
+  const product = resolveLaptopListing(items, productId, localRow);
+  const changeVariant = (rowId: string) => {
+    const next = resolveLaptopListing(items, productId, rowId);
+    if (!next) return;
+    window.history.replaceState(window.history.state, '', laptopItemUrl(next));
+    setLocalRow(rowId);
+  };
   const comparison = (
     <div className="min-w-0 overflow-x-auto rounded-2xl border border-[#b9d0cb] bg-white" tabIndex={0} aria-label="Comparison laptops">
       <table
@@ -359,7 +372,7 @@ export function LaptopSection({
           >
             Compare laptop
           </button>
-          <ProductDetailView product={product} onClose={onBack} />
+          <ProductDetailView product={product} onClose={onBack} onLaptopVariantChange={changeVariant} onAddToCart={onAddToCart} />
         </>
       ) : (
         <>

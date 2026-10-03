@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { ArrowDown, ArrowUp, BookOpen, Link, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import type { HackPost, HackStep, HacksCatalogue, HackTheme } from '../../shared/hacks';
+import { HACK_OPERATING_SYSTEMS, hackOperatingSystem } from '../../shared/hacks';
 import { adminRequest } from './api';
 import { GuideStepScreenshotsEditor } from './GuideScreenshotsEditor';
 
@@ -21,7 +22,7 @@ export function HacksSetupSection({ user, refreshToken }: { user: User; refreshT
   const selectTheme = (value: HackTheme) => { setTheme(structuredClone(value)); setPost(null); setMessage(''); };
   const selectPost = (value: HackPost) => { setPost(structuredClone(value)); setTheme(null); setMessage(''); };
   const addTheme = () => selectTheme({ themeId: `THEME-${crypto.randomUUID()}`, name: '', description: '', active: false, sortOrder: 100 });
-  const addPost = (themeId: string) => selectPost({ postId: `HACK-${crypto.randomUUID()}`, themeId, title: '', description: '', active: false, steps: [], links: [], createdAt: '', updatedAt: '', views: 0 });
+  const addPost = (themeId: string) => selectPost({ postId: `HACK-${crypto.randomUUID()}`, themeId, title: '', description: '', active: false, operatingSystem: 'General', steps: [], links: [], createdAt: '', updatedAt: '', views: 0 });
   const save = async () => {
     setBusy(true); setMessage('');
     try {
@@ -72,14 +73,18 @@ export function HacksSetupSection({ user, refreshToken }: { user: User; refreshT
             {data.themes.find(theme => theme.themeId === post.themeId)?.active === false && <p className="text-xs text-amber-800">Publish this theme too for customers to see the post.</p>}
           </section>
           <section className="space-y-4 rounded-2xl border bg-white p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-black text-[#014040]">Tutorial</h3><button type="button" className={button} disabled={post.steps.length >= 60} onClick={() => setPost({ ...post, steps: [...post.steps, { body: '' }] })}><BookOpen className="h-4 w-4" />{post.steps.length ? 'Add step' : 'Add tutorial'}</button></div>
+            <fieldset><legend className="mb-2 text-xs font-black text-[#014040]">OS</legend><div className="flex flex-wrap gap-2">{HACK_OPERATING_SYSTEMS.map(os => <button key={os} type="button" aria-pressed={hackOperatingSystem(post) === os} className={`${button} ${hackOperatingSystem(post) === os ? '!border-[#014040] !bg-[#014040] !text-[#05ef28]' : ''}`} onClick={() => setPost({ ...post, operatingSystem: os })}>{os}</button>)}</div></fieldset>
+            <h3 className="font-black text-[#014040]">Tutorial</h3>
             {!savedPost && <p className="text-xs text-slate-500">Save the post before uploading tutorial images. Titles on steps are optional.</p>}
             {post.steps.map((step, index) => <section key={`${post.postId}-${index}`} className="space-y-3 rounded-xl border bg-[#f8fbfa] p-4">
               <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-black text-[#014040]">Step {index + 1}</h4><div className="flex gap-1"><button type="button" aria-label={`Move step ${index + 1} up`} className={button} disabled={index === 0} onClick={() => moveStep(index, -1)}><ArrowUp className="h-4 w-4" /></button><button type="button" aria-label={`Move step ${index + 1} down`} className={button} disabled={index === post.steps.length - 1} onClick={() => moveStep(index, 1)}><ArrowDown className="h-4 w-4" /></button><button type="button" className={button} onClick={() => setPost({ ...post, steps: post.steps.filter((_, position) => position !== index) })}><Trash2 className="h-4 w-4" />Remove step</button></div></div>
               <label className={label}>Step title (optional)<input maxLength={120} className={input} value={step.title || ''} onChange={event => setStep(index, { title: event.target.value })} /></label>
               <label className={label}>Step description<textarea required maxLength={4000} rows={4} className={input} value={step.body} onChange={event => setStep(index, { body: event.target.value })} /></label>
+              <label className={label}>Copy text (optional)<textarea maxLength={4000} rows={3} className={`${input} font-mono`} value={step.copyText || ''} onChange={event => setStep(index, { copyText: event.target.value })} /><small className="block font-normal text-slate-500">Readers can copy this text exactly, including line breaks and spacing.</small></label>
+              <div className="grid gap-3 sm:grid-cols-2"><label className={label}>Step button label (optional)<input maxLength={80} className={input} value={step.actionLabel || ''} onChange={event => setStep(index, { actionLabel: event.target.value })} /></label><label className={label}>Step button URL<input type="url" maxLength={2048} placeholder="https://..." className={input} value={step.actionUrl || ''} onChange={event => setStep(index, { actionUrl: event.target.value })} /></label></div>
               <GuideStepScreenshotsEditor key={`${post.postId}-${index}`} productId={post.postId} user={user} images={step.images || []} uploadsEnabled={savedPost} uploadPath={`/hacks/posts/${post.postId}/images`} onChange={images => setStep(index, { images })} />
             </section>)}
+            <div className="sticky bottom-4 z-10 rounded-xl border bg-white p-2 shadow-sm"><button type="button" className={`${button} w-full`} disabled={post.steps.length >= 60} onClick={() => setPost({ ...post, steps: [...post.steps, { body: '' }] })}><BookOpen className="h-4 w-4" />{post.steps.length ? 'Add step' : 'Add tutorial'}</button></div>
           </section>
           <section className="space-y-4 rounded-2xl border bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-black text-[#014040]">Tool links</h3><button type="button" className={button} disabled={post.links.length >= 20} onClick={() => setPost({ ...post, links: [...post.links, { label: '', url: '' }] })}><Link className="h-4 w-4" />Add link button</button></div>
             {post.links.map((link, index) => <div key={index} className="grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]"><label className={label}>Button label<input required maxLength={80} className={input} value={link.label} onChange={event => setPost({ ...post, links: post.links.map((link, position) => position === index ? { ...link, label: event.target.value } : link) })} /></label><label className={label}>Tool URL<input required type="url" maxLength={2048} placeholder="https://..." className={input} value={link.url} onChange={event => setPost({ ...post, links: post.links.map((link, position) => position === index ? { ...link, url: event.target.value } : link) })} /></label><button type="button" aria-label={`Remove link ${index + 1}`} className={button} onClick={() => setPost({ ...post, links: post.links.filter((_, position) => position !== index) })}><Trash2 className="h-4 w-4" /></button></div>)}

@@ -1,3 +1,4 @@
+import { unavailableLaptopLine } from '../utils/laptopCart';
 import React, { useState } from 'react';
 import { CreditCard, X } from 'lucide-react';
 import type { CartItem } from './CartView';
@@ -51,6 +52,7 @@ export function CheckoutModal({ items, mode, paymentOptions, onClose, onPaymentR
   const [licenceAgreed, setLicenceAgreed] = useState(false);
   const restrictedSoftware = items.filter((item) => singleLicenceDisclaimerApplies(item.product));
 
+  const laptopUnavailable = unavailableLaptopLine(items);
   const total = items.reduce((sum, item) => sum + linePesewas(item), 0);
   const closeForm = useBackDismiss(true, onClose);
 
@@ -63,6 +65,7 @@ export function CheckoutModal({ items, mode, paymentOptions, onClose, onPaymentR
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (laptopUnavailable) { setError('Choose a current priced laptop combination before checkout.'); return; }
     setBusy(true); setError('');
     try {
       const response = await fetch('/api/orders/checkout', {
@@ -141,7 +144,8 @@ export function CheckoutModal({ items, mode, paymentOptions, onClose, onPaymentR
       </div>
       <p className="mt-3 text-[11px] text-slate-500">{STORE_COPY.cart.checkoutSubtitle}</p>
       {error && <p className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700">{error}</p>}
-      <button disabled={busy} className="hk-pressable mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-5 py-3.5 text-sm font-black text-[#014040] disabled:opacity-50"><CreditCard className="h-4 w-4" />{busy ? 'Starting payment…' : `${paymentOptions?.mode === 'momo' ? STORE_COPY.payment.momoOnlyButton : paymentOptions?.mode === 'both' ? STORE_COPY.payment.bothButton : STORE_COPY.cart.submitAndPay} — ${formatPesewas(total)}`}</button>
+      {laptopUnavailable && <p role="alert" className="mt-3 text-xs font-bold text-rose-700">A laptop selection is no longer priced. Remove it and choose a current combination before checkout.</p>}
+      <button disabled={busy || laptopUnavailable} className="hk-pressable mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-5 py-3.5 text-sm font-black text-[#014040] disabled:opacity-50"><CreditCard className="h-4 w-4" />{busy ? 'Starting payment…' : `${paymentOptions?.mode === 'momo' ? STORE_COPY.payment.momoOnlyButton : paymentOptions?.mode === 'both' ? STORE_COPY.payment.bothButton : STORE_COPY.cart.submitAndPay} — ${formatPesewas(total)}`}</button>
       </>}
     </form>
   </div>;

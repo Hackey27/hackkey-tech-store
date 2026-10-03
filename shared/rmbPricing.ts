@@ -139,7 +139,7 @@ export function publicRmbProduct(product: PreorderProduct): PreorderProduct {
   return { ...product, combinations: product.combinations.map(({ sourceCost: _private, ...combination }) => combination) };
 }
 export function publicRmbLaptop(laptop: Laptop): Laptop {
-  const { preorderCost: _private, ...publicLaptop } = laptop;
+  const { preorderCost: _private, variantConfig: _privateVariants, ...publicLaptop } = laptop;
   if (isPreorderLaptop(laptop)) delete publicLaptop.priceGhs;
   const twoInOne = laptopTwoInOneStatus(laptop);
   if (twoInOne) publicLaptop.twoInOne = twoInOne;

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import type { Firestore } from '@google-cloud/firestore';
-import { cleanHackPost, cleanHackTheme, cleanLaptopIssue, emptyHacksFilters, filterHackPosts, hackMatchedStep, publicHacks, HackPost, HackTheme } from '../shared/hacks';
+import { cleanHackPost, cleanHackTheme, cleanLaptopIssue, emptyHacksFilters, filterHackPosts, hackMatchedStep, publicHacks, HackPost, HackTheme, HACK_OPERATING_SYSTEMS, hackLinkCount } from '../shared/hacks';
 import { getPublicHacks, recordHackView, saveHackPost } from '../server/hacksData';
 import { createAdminHacksRouter, createLaptopIssueRouter, createHacksLimiter } from '../server/hacksRoutes';
 
@@ -113,4 +113,51 @@ test('request limiter expires full buckets and preserves limits for existing cal
   assert.equal(limited('c', 1), false);
   assert.equal(limited('c', 1), true);
   assert.equal(limited('a', 1), false);
+});
+
+
+test('guide copy text preserves exact whitespace and step links validate their label and HTTPS URL', () => {
+  const copyText = '  example text\n    preserve indentation\n';
+  const clean = cleanHackPost('dns', post({ operatingSystem: 'Windows', steps: [{ body: 'Copy this text.', copyText, actionLabel: ' Open tool ', actionUrl: ' https://example.com/tool ' }] }));
+  assert.equal(clean.operatingSystem, 'Windows');
+  assert.equal(clean.steps[0].copyText, copyText);
+  assert.equal(clean.steps[0].actionLabel, 'Open tool');
+  assert.equal(clean.steps[0].actionUrl, 'https://example.com/tool');
+  for (const url of ['javascript:alert(1)', 'data:text/html,test', 'http://example.com', '/local']) assert.throws(() => cleanHackPost('dns', post({ steps: [{ body: 'Go', actionLabel: 'Open', actionUrl: url }] })), /HTTPS/);
+  for (const step of [{ body: 'Go', actionLabel: 'Open' }, { body: 'Go', actionUrl: 'https://example.com' }]) assert.throws(() => cleanHackPost('dns', post({ steps: [step] })), /label and URL/);
+  assert.throws(() => cleanHackPost('dns', post({ steps: [{ body: 'Copy', copyText: 'x'.repeat(4001) }] })), /copy text/);
+  assert.equal(cleanHackPost('dns', post({ steps: [{ body: 'No actions', copyText: '   ', actionLabel: '', actionUrl: '' }] })).steps[0].copyText, undefined);
+});
+
+test('OS filters include All and General defaults for legacy posts, and combine with other filters', () => {
+  const posts = [post(), ...HACK_OPERATING_SYSTEMS.map(os => post({ postId: os, operatingSystem: os }))];
+  const catalogue = { themes: [theme], posts };
+  assert.equal(cleanHackPost('dns', post()).operatingSystem, 'General');
+  assert.equal(publicHacks([theme], [post()]).posts[0].operatingSystem, 'General');
+  assert.equal(filterHackPosts(catalogue, '', emptyHacksFilters()).length, 5);
+  for (const os of HACK_OPERATING_SYSTEMS) assert.equal(filterHackPosts(catalogue, '', { ...emptyHacksFilters(), os }).length, os === 'General' ? 2 : 1);
+  assert.equal(filterHackPosts(catalogue, 'connection', { ...emptyHacksFilters(), os: 'Windows', themeId: 'tips', links: 'with-links' }).length, 1);
+  assert.throws(() => cleanHackPost('dns', post({ operatingSystem: 'Linux' as any })), /tutorial OS/);
+});
+
+test('search and tool filtering include the text and links inside steps', () => {
+  const guide = post({ links: [], steps: [{ body: 'Follow along.', copyText: 'unique copied phrase', actionLabel: 'Launch editor', actionUrl: 'https://example.com/editor' }] });
+  const catalogue = { themes: [theme], posts: [guide] };
+  for (const query of ['copied phrase', 'Launch editor', 'example.com/editor']) {
+    assert.equal(filterHackPosts(catalogue, query, emptyHacksFilters()).length, 1);
+    assert.equal(hackMatchedStep(guide, query), 0);
+  }
+  assert.equal(hackLinkCount(guide), 1);
+  assert.equal(filterHackPosts(catalogue, '', { ...emptyHacksFilters(), links: 'with-links' }).length, 1);
+  assert.equal(filterHackPosts(catalogue, '', { ...emptyHacksFilters(), links: 'without-links' }).length, 0);
+});
+
+test('editing existing steps persists OS and actions without resetting image markers, views or creation time', async () => {
+  const { db } = database(); const original = post();
+  const updated = post({ operatingSystem: 'macOS', steps: [{ ...original.steps[0], copyText: 'exact text\n', actionLabel: 'Open settings help', actionUrl: 'https://example.com/settings' }] });
+  const saved = await saveHackPost('dns', updated, db);
+  assert.equal(saved.createdAt, original.createdAt); assert.equal(saved.views, original.views);
+  assert.equal(saved.steps[0].copyText, 'exact text\n'); assert.equal(saved.operatingSystem, 'macOS');
+  assert.deepEqual(saved.steps[0].images, original.steps[0].images);
+  assert.equal((await getPublicHacks(db)).posts[0].steps[0].actionUrl, 'https://example.com/settings');
 });

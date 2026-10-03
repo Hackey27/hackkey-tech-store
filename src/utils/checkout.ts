@@ -2,6 +2,7 @@ import type { CartItem } from '../components/CartView';
 
 /** Convert a customer selection into identifiers only. Pricing always remains server-side. */
 export function cartItemToCheckoutItem(item: CartItem) {
+  if (item.product.kind === 'laptop') return { laptopId: item.product.laptopVariant?.laptopId || item.product.itemId, laptopVariantRowId: item.product.laptopVariant?.rowId, delivery: item.product.laptopDelivery, expectedPricePesewas: item.product.pricePesewas, quantity: item.quantity };
   if (item.product.kind === 'service' || item.serviceOption) {
     return {
       serviceId: item.product.itemId,
