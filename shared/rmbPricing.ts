@@ -22,8 +22,8 @@ function number(value: unknown, label: string, decimals = 2): number {
 export function validateRmbPricingSettings(input: RmbPricingSettings): RmbPricingSettings {
   const exchangeRate = number(input?.exchangeRate, 'RMB to GHS exchange rate', 6);
   if (!exchangeRate) throw new Error('RMB to GHS exchange rate must be greater than zero.');
-  const bands = <T extends { minimum: number; maximum: number | null }>(rows: T[], label: string, field: string, optional: boolean, decimals = 2): T[] => {
-    if (!Array.isArray(rows) || rows.length > 5 || (!optional && !rows.length)) throw new Error(`${label}: configure ${optional ? 'up to' : 'one to'} five ranges.`);
+  const bands = <T extends { minimum: number; maximum: number | null }>(rows: T[], label: string, field: string, optional: boolean, decimals = 2, maximumRows: number | null = 5): T[] => {
+    if (!Array.isArray(rows) || (maximumRows !== null && rows.length > maximumRows) || (!optional && !rows.length)) throw new Error(`${label}: configure ${maximumRows === null ? 'at least one range' : `${optional ? 'up to' : 'one to'} five ranges`}.`);
     const clean = rows.map((row, index) => {
       const minimum = number(row.minimum, `${label} row ${index + 1} minimum`);
       const maximum = row.maximum === null ? null : number(row.maximum, `${label} row ${index + 1} maximum`);
@@ -41,7 +41,7 @@ export function validateRmbPricingSettings(input: RmbPricingSettings): RmbPricin
   const maximumPaymentRmb = number(policy?.maximumPaymentRmb, 'Maximum payment in RMB');
   if (!maximumPaymentRmb || maximumPaymentRmb <= freeUpToRmb) throw new Error('Maximum payment must be greater than the fee-free payment limit.');
   const bankSettings = validateBankChargeSettings(input);
-  return { exchangeRate, ...bankSettings, bankCharges: bands(input.bankCharges, 'Bank charges', 'charge', bankSettings.bankChargeMode === 'percentage_min'), transactionFee: { percent, freeUpToRmb, maximumPaymentRmb }, profitMargins: bands(input.profitMargins, 'Profit margins', 'percent', false, 4) };
+  return { exchangeRate, ...bankSettings, bankCharges: bands(input.bankCharges, 'Bank charges', 'charge', bankSettings.bankChargeMode === 'percentage_min'), transactionFee: { percent, freeUpToRmb, maximumPaymentRmb }, profitMargins: bands(input.profitMargins, 'Profit margins', 'percent', false, 4, null) };
 }
 
 export function validateRmbSourceCost(input: RmbSourceCost | undefined, deliveries: PreorderDelivery[]): RmbSourceCost {

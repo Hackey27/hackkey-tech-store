@@ -65,7 +65,7 @@ adapters for existing catalogue shapes. The sequence is:
    half-up to pesewas; the existing transaction-fee and landed-cost arithmetic
    keep their exact precision through the final ceiling.
 
-Bank-charge and profit-margin band tables each support at most five rows. Endpoints are inclusive; leave the
+Fixed bank-charge tables support at most five rows. Profit-margin tables have no band-count limit. Endpoints are inclusive; leave the
 maximum blank for an open-ended final band. Overlaps, inversions and negative
 values are rejected. Fixed-bank and margin gaps withhold the affected delivery price
 and appear as errors in Payments and the cost editor. One valid delivery can

@@ -111,15 +111,39 @@ test('legacy fixed-fee documents use the percentage rule on read without modifyi
   assert.equal('transactionFees' in rows.get(`settings/${RMB_SETTINGS_ID}`), false);
 });
 
-test('range validation rejects negative values, inversions, shared endpoints, overlaps and more than five rows', () => {
+test('range validation rejects negative values, inversions, shared endpoints and overlaps', () => {
   for (const key of ['bankCharges', 'profitMargins'] as const) {
     const field = key === 'bankCharges' ? 'charge' : 'percent';
-    const invalidRows = [[{ minimum: -1, maximum: 5, [field]: 1 }], [{ minimum: 5, maximum: 4, [field]: 1 }], [{ minimum: 0, maximum: 100, [field]: 1 }, { minimum: 100, maximum: null, [field]: 1 }], [{ minimum: 0, maximum: null, [field]: 1 }, { minimum: 1, maximum: 2, [field]: 1 }], [{ minimum: 0, maximum: null, [field]: -1 }], Array.from({ length: 6 }, (_, i) => ({ minimum: i * 10, maximum: i * 10 + 5, [field]: 1 }))];
+    const invalidRows = [[{ minimum: -1, maximum: 5, [field]: 1 }], [{ minimum: 5, maximum: 4, [field]: 1 }], [{ minimum: 0, maximum: 100, [field]: 1 }, { minimum: 100, maximum: null, [field]: 1 }], [{ minimum: 0, maximum: null, [field]: 1 }, { minimum: 1, maximum: 2, [field]: 1 }], [{ minimum: 0, maximum: null, [field]: -1 }]];
     for (const rows of invalidRows) assert.throws(() => validateRmbPricingSettings({ ...settings(), [key]: rows }));
   }
   assert.throws(() => validateRmbPricingSettings({ ...settings(), exchangeRate: 0 }));
   assert.throws(() => validateRmbPricingSettings({ ...settings(), exchangeRate: -1 }));
   assert.equal(validateRmbPricingSettings(settings()).bankCharges[0].maximum, null);
+});
+
+test('profit-margin tables save and price both deliveries beyond the fifth band without a count limit', async () => {
+  const profitMargins = Array.from({ length: 25 }, (_, i) => ({ minimum: i * 100, maximum: i === 24 ? null : (i + 1) * 100 - 0.01, percent: 10 + i }));
+  const config = { ...settings(), exchangeRate: 1, bankCharges: [{ minimum: 0, maximum: null, charge: 0 }], profitMargins };
+  const { db, rows } = database();
+  await saveRmbPricingSettings(config, { uid: 'test-admin' }, db);
+  const saved = await getRmbPricingSettings(db);
+  assert.deepEqual(saved.profitMargins, profitMargins);
+  assert.equal(rows.get(`settings/${RMB_SETTINGS_ID}`).profitMargins.length, 25);
+  const cost = { rawCostRmb: 120, shippingExpressGhs: 500, shippingTwoMonthsGhs: 1100 };
+  const express = calculateRmbPrice(cost, 'express', saved);
+  const slow = calculateRmbPrice(cost, 'two-months', saved);
+  assert.equal(express.marginPercent, 16);
+  assert.equal(express.pricePesewas, 72000);
+  assert.equal(slow.marginPercent, 22);
+  assert.equal(slow.pricePesewas, 148900);
+  assert.throws(() => validateRmbPricingSettings({ ...config, profitMargins: [] }), /at least one range/);
+  assert.throws(() => validateRmbPricingSettings({ ...config, profitMargins: [...profitMargins, { minimum: 2500, maximum: null, percent: 1 }] }), /overlap/);
+});
+
+test('fixed bank-charge ranges retain their five-band limit', () => {
+  const bankCharges = Array.from({ length: 6 }, (_, i) => ({ minimum: i * 100, maximum: i * 100 + 99.99, charge: 1 }));
+  assert.throws(() => validateRmbPricingSettings({ ...settings(), bankCharges }), /Bank charges: configure one to five ranges/);
 });
 
 test('missing mandatory bands or source costs withhold automatic prices instead of using a stale manual value', () => {
