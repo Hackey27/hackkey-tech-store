@@ -1,3 +1,4 @@
+import { laptopTwoInOneStatus } from './laptopTouchSpecs';
 import type { Laptop, PreorderCombination, PreorderDelivery, PreorderProduct, RmbPricingSettings, RmbSourceCost } from './types';
 import { defaultBankChargeSettings, percentageBankChargePesewas, resolveBankChargeSettings, roundHalfUp, validateBankChargeSettings } from './bankCharges';
 
@@ -140,5 +141,8 @@ export function publicRmbProduct(product: PreorderProduct): PreorderProduct {
 export function publicRmbLaptop(laptop: Laptop): Laptop {
   const { preorderCost: _private, ...publicLaptop } = laptop;
   if (isPreorderLaptop(laptop)) delete publicLaptop.priceGhs;
+  const twoInOne = laptopTwoInOneStatus(laptop);
+  if (twoInOne) publicLaptop.twoInOne = twoInOne;
+  else delete publicLaptop.twoInOne;
   return publicLaptop;
 }

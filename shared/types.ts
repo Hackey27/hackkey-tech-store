@@ -283,6 +283,8 @@ export interface Laptop {
   ram: string;
   storage: string;
   screen: string;
+  touchscreen?: string;
+  twoInOne?: 'No' | 'X360' | 'Detachable';
   colour: string;
   graphics: string;
   graphicsDetails?: string;

@@ -1,3 +1,4 @@
+import { laptopTwoInOneStatus } from '../../shared/laptopTouchSpecs';
 import { LaptopDeliveryPrices } from './LaptopDeliveryPrices';
 import type { PreorderDelivery } from '../../shared/types';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -48,6 +49,8 @@ const LaptopSpecs: React.FC<{ laptop: LaptopDetails }> = ({ laptop }) => {
     ['RAM', laptop.ram],
     ['Storage', laptop.storage],
     ['Screen size', laptop.screen],
+    ['Touchscreen', laptop.touchscreen],
+    ['2-in-1', laptopTwoInOneStatus(laptop)],
     ['Colour', laptop.colour],
     ['Operating system', laptop.operatingSystem],
     ['Graphics card', [laptop.graphics, laptop.graphicsDetails].filter(Boolean).join(' · ') || undefined],

@@ -1,3 +1,4 @@
+import { laptopTwoInOneStatus } from '../../shared/laptopTouchSpecs';
 import { LaptopDeliveryPrices } from "./LaptopDeliveryPrices";
 import React, { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
@@ -35,6 +36,8 @@ const specs = [
   ["ram", "RAM"],
   ["storage", "Storage"],
   ["screen", "Screen size"],
+  ["touchscreen", "Touchscreen"],
+  ["twoInOne", "2-in-1"],
   ["graphics", "Graphics"],
   ["graphicsDetails", "Graphics details"],
   ["operatingSystem", "Operating system"],
@@ -234,7 +237,7 @@ export function LaptopSection({
           </tr>
         </thead>
         <tbody>
-          {specs.map(([key, label]) => (
+          {specs.filter(([key]) => key !== "twoInOne" || chosen.some(item => item.laptop && laptopTwoInOneStatus(item.laptop))).map(([key, label]) => (
             <tr key={key} className="border-t border-[#b9d0cb]">
               {chosen.length > 2 && (
                 <th className="p-3 text-left font-bold">{label}</th>
@@ -248,13 +251,13 @@ export function LaptopSection({
                     <div
                       className={`flex gap-2 ${index === 0 ? "" : "flex-row-reverse"}`}
                     >
-                      <span className="w-2/5 break-words text-[10px] font-bold text-slate-500 sm:text-xs">
+                      {(key !== 'twoInOne' || (item.laptop && laptopTwoInOneStatus(item.laptop))) && <span className="w-2/5 break-words text-[10px] font-bold text-slate-500 sm:text-xs">
                         {label}
-                      </span>
+                      </span>}
                       <span
                         className={`flex-1 break-words ${index === 0 ? "text-right" : "text-left"}`}
                       >
-                        {item.laptop?.[key] || "—"}
+                        {(key === "twoInOne" ? item.laptop && laptopTwoInOneStatus(item.laptop) : item.laptop?.[key]) || "—"}
                       </span>
                     </div>
                   ) : (
@@ -262,7 +265,7 @@ export function LaptopSection({
                       {chosen.length === 1 && (
                         <span className="mr-2 font-bold">{label}</span>
                       )}
-                      {item.laptop?.[key] || "—"}
+                      {(key === "twoInOne" ? item.laptop && laptopTwoInOneStatus(item.laptop) : item.laptop?.[key]) || "—"}
                     </div>
                   )}
                 </td>

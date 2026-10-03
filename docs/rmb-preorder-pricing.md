@@ -66,7 +66,10 @@ adapters for existing catalogue shapes. The sequence is:
    keep their exact precision through the final ceiling.
 
 Fixed bank-charge tables support at most five rows. Profit-margin tables have no band-count limit. Endpoints are inclusive; leave the
-maximum blank for an open-ended final band. Overlaps, inversions and negative
+maximum blank for an open-ended final band. The admin range editor derives the first
+minimum as zero and each later minimum as the previous maximum plus ₵0.01.
+Only upper bounds and charges/markup need typing; finish the last upper bound
+before adding another row. Changes take effect when the settings are saved. Overlaps, inversions and negative
 values are rejected. Fixed-bank and margin gaps withhold the affected delivery price
 and appear as errors in Payments and the cost editor. One valid delivery can
 remain priced when the other lacks a margin band. Payments at or below the

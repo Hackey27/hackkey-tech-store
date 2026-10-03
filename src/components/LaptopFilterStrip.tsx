@@ -78,7 +78,7 @@ export function LaptopFilterStrip({
           Price filter
           <ChevronDown className="h-3 w-3" />
         </button>
-        {LAPTOP_FACETS.slice(0, 4).map(([key, label]) => (
+        {LAPTOP_FACETS.slice(0, 6).map(([key, label]) => (
           <button
             type="button"
             key={key}

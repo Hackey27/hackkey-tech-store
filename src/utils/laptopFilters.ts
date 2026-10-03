@@ -1,3 +1,4 @@
+import { laptopTwoInOneStatus } from '../../shared/laptopTouchSpecs';
 import type { CatalogueItem, Laptop } from "../../shared/types";
 
 export const LAPTOP_FACETS = [
@@ -5,6 +6,8 @@ export const LAPTOP_FACETS = [
   ["availability", "Availability"],
   ["storage", "Storage size"],
   ["ram", "RAM size"],
+  ["touchscreen", "Touchscreen"],
+  ["twoInOne", "2-in-1"],
   ["processor", "Processor"],
   ["screen", "Screen size"],
   ["graphics", "Graphics"],
@@ -30,6 +33,7 @@ export const emptyLaptopFilters = (): LaptopFilters => ({
   selections: {},
 });
 export function laptopValue(laptop: Laptop, facet: LaptopFacet): string {
+  if (facet === "twoInOne") return laptopTwoInOneStatus(laptop) || "";
   if (facet === "availability")
     return /pre/i.test(laptop.availability) ? "Pre-order" : "Available";
   return (laptop[facet] || "").trim();

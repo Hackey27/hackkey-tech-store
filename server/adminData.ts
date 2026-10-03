@@ -1,3 +1,4 @@
+import { normalizeLaptopTouchSpecs } from '../shared/laptopTouchSpecs';
 import { getRmbPricingSettings } from './rmbPricingSettings';
 import { isPreorderLaptop, laptopDeliveries, priceRmbLaptop, validateRmbSourceCost } from '../shared/rmbPricing';
 import { FieldValue, Firestore } from '@google-cloud/firestore';
@@ -783,7 +784,7 @@ export async function saveLaptop(laptopId: string, input: Laptop): Promise<Lapto
     throw new Error('Laptop name, brand and model are required.');
   }
   const laptop: Laptop = {
-    ...input,
+    ...normalizeLaptopTouchSpecs(input),
     laptopId,
     title: input.title.trim(),
     availability: isPreorderLaptop({ availability: String(input.availability || '') }) ? 'Pre-order' : 'Available',

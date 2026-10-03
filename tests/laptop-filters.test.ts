@@ -88,3 +88,13 @@ test('laptop price sorting puts quote-only entries last in either direction', ()
   assert.deepEqual(sortLaptops(items, 'price-desc').map(item => item.itemId), ['2', '0', '1', '3']);
   assert.deepEqual(items.map(item => item.itemId), ['0', '1', '2', '3']);
 });
+
+
+test('touchscreen and 2-in-1 facets combine with existing filters and omit stale non-touch statuses', () => {
+  const laptops = items.map((item,i) => ({ ...item, laptop: { ...item.laptop!, touchscreen:i === 2 ? 'No' : 'Yes', twoInOne: (i === 0 || i === 2 ? 'X360' : i === 1 ? 'No' : 'Detachable') as 'No' | 'X360' | 'Detachable' } }));
+  assert.deepEqual(filterLaptops(laptops,{...emptyLaptopFilters(),selections:{touchscreen:['Yes'],twoInOne:['X360','Detachable']}}).map(item=>item.itemId),['0','3']);
+  assert.equal(filterLaptops(laptops,{...emptyLaptopFilters(),selections:{touchscreen:['No'],twoInOne:['X360']}}).length,0);
+  assert.deepEqual(Object.fromEntries(laptopOptions(laptops,'twoInOne',{...emptyLaptopFilters(),selections:{brand:['Dell']}}).map(option=>[option.value,option.count])), {Detachable:0,No:0,X360:1});
+  assert.equal(laptopOptions(laptops,'touchscreen',emptyLaptopFilters()).find(option=>option.value==='Yes')!.count,3);
+  assert.deepEqual(filterLaptops(laptops,{...emptyLaptopFilters(),query:'detachable'}).map(item=>item.itemId),['3']);
+});
