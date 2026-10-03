@@ -106,6 +106,12 @@
   --hk-pattern-opacity: 0.21;
 }
 
+.hk-hack-card-pattern {
+  --hk-pattern-size: 380px;
+  --hk-pattern-opacity: 0.3;
+  --hk-pattern-blend: overlay;
+}
+
 .hk-category-title {
   position: relative;
   isolation: isolate;
@@ -140,6 +146,7 @@
   .hk-price-pattern { --hk-pattern-size: 130px; }
   .hk-licence-pattern { --hk-pattern-size: 120px; }
   .hk-footer-pattern { --hk-pattern-size: 110px; }
+  .hk-hack-card-pattern { --hk-pattern-size: 280px; }
   .hk-category-pattern-fade { width: 58%; }
   .hk-category-solid-pattern { -webkit-mask-size: 150px; mask-size: 150px; opacity: 0.3; }
 }

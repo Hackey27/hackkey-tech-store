@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, BookOpen, Check, Copy, Download, RefreshCw, X } 
 import type { CatalogueItem, Order } from '../../shared/types';
 import { installationGuideForOrder } from '../data/installationGuides';
 import { GuideImage } from './GuideImage';
+import { GuideProgressBar } from './GuideProgressBar';
 import { guideProgressKey, initialGuidePosition, shouldClearGuideProgress } from '../utils/guideProgress';
 
 interface Props {
@@ -110,7 +111,7 @@ export function InstallationGuide({ order, product, onClose, onOrderUpdated, onR
 
         <div className="px-5 pt-4 sm:px-7">
           <div className="flex justify-between text-sm font-bold text-[#014040]"><span>{complete ? 'Installation complete' : `Step ${stepIndex + 1} of ${guide.steps.length}`}</span><span>{percent}%</span></div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#d8e7e4]" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label="Installation progress"><motion.div className="hk-activation-gradient h-full rounded-full" initial={false} animate={{ width: `${percent}%` }} transition={{ duration: reduceMotion ? 0 : 0.35, ease: 'easeInOut' }} /></div>
+          <GuideProgressBar percent={percent} label="Installation progress" />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-7">

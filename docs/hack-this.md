@@ -31,3 +31,5 @@ Guides now have a post-level `operatingSystem`: General, Windows, macOS or Andro
 Each tutorial step optionally supports `copyText`, `actionLabel` and `actionUrl`. Copy text preserves its exact whitespace and line breaks; a labelled step link must use HTTPS. Search and tool-link filtering include these actions. Existing steps remain editable and reorderable. Add step stays below the step list.
 
 The last authored step automatically includes a store support message and links to every other hamburger section. Examples come from the current public catalogues, without changing saved guide steps. For technicians remains labelled Coming soon. Each post card and open post has a share action, using the device share sheet where available and a copy-link fallback otherwise.
+
+Opening tutorial steps hides the post overview. The guide shares the installation progress bar, with the percentage showing the current step out of the total. Post-card metadata and actions sit on a dark green outline-pattern footer, scaled to twice the header pattern. Admin text fields inherit English browser spell checking; corrections use the browser’s spelling suggestions.
