@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useFilterPopover } from "../utils/useFilterPopover";
+import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import type { CatalogueItem } from "../../shared/types";
@@ -26,40 +27,9 @@ export function LaptopFilterStrip({
   sticky: boolean;
 }) {
   const [open, setOpen] = useState<LaptopFacet | "price" | null>(null);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
-  const strip = useRef<HTMLDivElement>(null);
-  const menu = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const dismiss = (event: Event) => {
-      if (menu.current?.contains(event.target as Node)) return;
-      if (
-        event.type === "pointerdown" &&
-        strip.current?.contains(event.target as Node)
-      )
-        return;
-      setOpen(null);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(null);
-    };
-    document.addEventListener("pointerdown", dismiss);
-    window.addEventListener("scroll", dismiss, true);
-    window.addEventListener("resize", dismiss);
-    document.addEventListener("keydown", escape);
-    return () => {
-      document.removeEventListener("pointerdown", dismiss);
-      window.removeEventListener("scroll", dismiss, true);
-      window.removeEventListener("resize", dismiss);
-      document.removeEventListener("keydown", escape);
-    };
-  }, [open]);
+  const { strip, menu, anchorTo, position } = useFilterPopover(!!open, open === "price", () => setOpen(null));
   const toggle = (key: LaptopFacet | "price", button: HTMLButtonElement) => {
-    const rect = button.getBoundingClientRect();
-    setPosition({
-      top: rect.bottom + 6,
-      left: Math.max(12, Math.min(rect.left, window.innerWidth - 300)),
-    });
+    anchorTo(button);
     setOpen((old) => (old === key ? null : key));
   };
   return (

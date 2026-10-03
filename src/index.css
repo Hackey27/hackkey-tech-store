@@ -396,6 +396,14 @@
   transform: translateY(calc(100% + 12px));
 }
 
+/* History restoration must never briefly expose a remounting bar. Visibility
+   also covers reduced-motion mode, where docking transforms are disabled. */
+.hk-nav-dock[data-awaiting-scroll='true'] {
+  visibility: hidden;
+  pointer-events: none;
+  transition: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hk-nav-icon { transition: none; }
   /* The bar stays put: hiding it is pure movement, and reduced motion asks for

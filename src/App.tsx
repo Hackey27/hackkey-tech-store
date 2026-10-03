@@ -1,6 +1,6 @@
 import { refreshLaptopCart } from './utils/laptopCart';
 import { laptopItemUrl } from '../shared/laptopVariants';
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
 import { CategoryCard } from './components/CategoryCard';
@@ -97,6 +97,13 @@ export const App: React.FC = () => {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [paymentOptions, setPaymentOptions] = useState<PublicPaymentOptions | null>(null);
   const [route, setRoute] = useState<StoreRoute>(() => currentRoute());
+  const [navWaitingForScroll, setNavWaitingForScroll] = useState(false);
+  const backScrollY = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (backScrollY.current == null) return;
+    window.scrollTo({ top: backScrollY.current });
+    backScrollY.current = null;
+  }, [route]);
   /* The whole pre-order section, checkout included: it drives the nav's cart
      slot, its own bottom bar, and the panel that gets out of its way. */
   const inPreorder =
@@ -251,16 +258,16 @@ export const App: React.FC = () => {
     window.history.scrollRestoration = 'manual';
     window.history.replaceState({ ...(window.history.state || {}), hkScrollY: window.scrollY }, '');
     const onPopState = (event: PopStateEvent) => {
+      setNavWaitingForScroll(true);
+      backScrollY.current = Number(event.state?.hkScrollY || 0);
       setRoute(currentRoute());
-      window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-        window.scrollTo({ top: Number(event.state?.hkScrollY || 0) });
-      }));
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
   const navigate = (path: string) => {
+    setNavWaitingForScroll(false);
     window.history.replaceState({ ...(window.history.state || {}), hkScrollY: window.scrollY }, '');
     window.history.pushState({ hkPushed: true, hkScrollY: 0 }, '', path);
     setRoute(currentRoute());
@@ -858,6 +865,8 @@ export const App: React.FC = () => {
 
       {/* Mobile Fixed Bottom Navigation */}
       {!productDetailOpen && <CurvedNav
+        waitForScroll={navWaitingForScroll}
+        onResumeAfterBack={() => setNavWaitingForScroll(false)}
         // The pre-order tab gets its own three-item bar; every other section
         // keeps the software one.
         items={inHacks ? HACKS_NAV_ITEMS : inLaptops ? LAPTOP_NAV_ITEMS : inPreorder ? PREORDER_NAV_ITEMS : undefined}

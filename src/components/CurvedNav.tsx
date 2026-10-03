@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion, useSpring, useTransform } fr
 import { Home, SearchCheck, HelpCircle, FilePlus2, ShoppingBag, SlidersHorizontal, Layers } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 import { useHideOnScrollDown } from '../utils/useHideOnScrollDown';
+import { useResumeNavAfterBack } from '../utils/useResumeNavAfterBack';
 
 export type NavTab = 'home' | 'find-order' | 'help' | 'request' | 'cart' | 'filters' | 'categories';
 
@@ -33,6 +34,8 @@ interface CurvedNavProps {
   cartSlot?: CartSlotOverride;
   /** Which bar to render. Defaults to the software section's five. */
   items?: NavItem[];
+  waitForScroll?: boolean;
+  onResumeAfterBack?: () => void;
 }
 
 /*
@@ -79,6 +82,8 @@ export const CurvedNav: React.FC<CurvedNavProps> = ({
   onSelectTab,
   cartSlot,
   items = SOFTWARE_NAV_ITEMS,
+  waitForScroll = false,
+  onResumeAfterBack,
 }) => {
   /* Derived rather than fixed at five: the notch, the slider and the grid all
      have to agree on the column count, and a second hard-coded bar for the
@@ -88,7 +93,8 @@ export const CurvedNav: React.FC<CurvedNavProps> = ({
   const reduceMotion = useReducedMotion();
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   // Movement is the whole point of docking, so reduced motion keeps the bar put.
-  const hidden = useHideOnScrollDown(!reduceMotion);
+  const hidden = useHideOnScrollDown(!reduceMotion && !waitForScroll);
+  useResumeNavAfterBack(waitForScroll, onResumeAfterBack);
 
   // The cart opens the header flyout rather than becoming a page, so it has a
   // slot but never reads as the active tab. Falling back to Home keeps the
@@ -127,7 +133,8 @@ export const CurvedNav: React.FC<CurvedNavProps> = ({
     <nav
       id="mobile-bottom-nav"
       aria-label={STORE_COPY.navigation.ariaLabel}
-      data-docked={hidden ? 'false' : 'true'}
+      data-docked={hidden || waitForScroll ? 'false' : 'true'}
+      data-awaiting-scroll={waitForScroll}
       className="hk-nav-dock fixed inset-x-0 bottom-0 z-50 px-3 md:hidden"
       style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)' }}
     >
