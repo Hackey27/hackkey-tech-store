@@ -780,7 +780,7 @@ export async function saveBundle(bundleId: string, input: Bundle): Promise<Bundl
   return bundle;
 }
 
-export async function saveLaptop(laptopId: string, input: Laptop): Promise<Laptop> {
+export async function saveLaptop(laptopId: string, input: Laptop, db = getFirestore()): Promise<Laptop> {
   if (!input.title?.trim() || !input.brand?.trim() || !input.model?.trim()) {
     throw new Error('Laptop name, brand and model are required.');
   }
@@ -810,7 +810,21 @@ export async function saveLaptop(laptopId: string, input: Laptop): Promise<Lapto
     const { errors } = laptop.variantsEnabled ? { errors: [] } : priceRmbLaptop(laptop, await getRmbPricingSettings());
     if (laptop.active && errors.length) throw new Error(errors.join(' '));
   }
-  await getFirestore().collection(COLLECTIONS.laptops).doc(laptopId).set(laptop);
+  // Images are saved independently. Never let an older specification/variant
+  // draft overwrite a newer upload (or resurrect an image removed meanwhile).
+  await db.runTransaction(async tx => {
+    const ref = db.collection(COLLECTIONS.laptops).doc(laptopId);
+    const current = await tx.get(ref);
+    if (current.exists) {
+      const media = current.data() as Laptop;
+      for (const field of ['imagePath', 'cardImagePath', 'bannerImagePath', 'mobileBannerImagePath', 'screenshots', 'picturesUrl'] as const) {
+        delete laptop[field];
+        if (media[field] !== undefined) Object.assign(laptop, { [field]: media[field] });
+      }
+    }
+    laptop.picturesUrl ||= [];
+    tx.set(ref, laptop);
+  });
   invalidateCatalogueCache();
   return laptop;
 }

@@ -1,3 +1,5 @@
+import { LaptopEnquiryConfirmation } from './LaptopEnquiryConfirmation';
+import type { PublicPaymentOptions } from '../../shared/types';
 import { LaptopDeliveryPrices } from './LaptopDeliveryPrices';
 import type { PreorderDelivery } from '../../shared/types';
 import React, { useState } from 'react';
@@ -21,6 +23,7 @@ export function QuoteRequestForm({ item, submitLabel = 'Submit details', deliver
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [submitted, setSubmitted] = useState<{ reference: string; pricePesewas?: number; paymentOptions?: PublicPaymentOptions }>();
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault(); setBusy(true); setMessage('');
@@ -32,10 +35,13 @@ export function QuoteRequestForm({ item, submitLabel = 'Submit details', deliver
       const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Unable to send your request.');
+      if (item.kind === 'laptop') setSubmitted({ reference: data.request.requestId, pricePesewas: data.request.details?.pricePesewas, paymentOptions: data.paymentOptions });
       setMessage('Your details have been received. We will contact you within 24 hours.');
     } catch (caught) { setMessage(caught instanceof Error ? caught.message : 'Unable to send your request.'); }
     finally { setBusy(false); }
   };
+
+  if (submitted) return <LaptopEnquiryConfirmation {...submitted} />;
 
   return <form onSubmit={submit} className="space-y-4">
     <div><h2 className="text-xl font-black text-[#014040]">{item.kind === 'laptop' ? 'I am interested' : 'Get a quote'}</h2><p className="mt-1 text-xs leading-5 text-slate-600">Tell us what you need and we will contact you with the next steps.</p></div>

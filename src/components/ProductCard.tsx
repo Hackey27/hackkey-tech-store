@@ -35,16 +35,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const [hoverLaptopAvailability, setHoverLaptopAvailability] = useState(false);
 
   const productName = product.name || STORE_COPY.product.softwareFallback;
-  const cardName = product.kind === 'laptop' && product.laptop && !product.laptopVariant
+  const cardName = product.kind === 'laptop' && product.laptop
     ? [product.laptop.brand, product.laptop.model].filter(Boolean).join(' ') || productName
     : productName;
   const laptopPreviewUrl = useMemo(() => renderableProductImageUrl(
-    product.bannerImageUrl || product.mobileBannerImageUrl || product.imageUrl
-  ), [product.bannerImageUrl, product.mobileBannerImageUrl, product.imageUrl]);
+    product.bannerImageUrl || product.cardImageUrl || product.mobileBannerImageUrl || product.screenshots?.[0] || product.imageUrl
+  ), [product.bannerImageUrl, product.mobileBannerImageUrl, product.cardImageUrl, product.screenshots, product.imageUrl]);
   const laptopMobilePreviewUrl = useMemo(() => renderableProductImageUrl(
-    product.mobileBannerImageUrl || product.bannerImageUrl || product.imageUrl
-  ), [product.mobileBannerImageUrl, product.bannerImageUrl, product.imageUrl]);
-  useEffect(() => setLaptopPreviewFailed(false), [laptopPreviewUrl]);
+    product.mobileBannerImageUrl || product.bannerImageUrl || product.cardImageUrl || product.screenshots?.[0] || product.imageUrl
+  ), [product.mobileBannerImageUrl, product.bannerImageUrl, product.cardImageUrl, product.screenshots, product.imageUrl]);
+  useEffect(() => setLaptopPreviewFailed(false), [laptopPreviewUrl, laptopMobilePreviewUrl]);
 
   // Format ₵ price string: Starts at ₵... or ₵...
   // One resolution for every kind, and one formatter — a card must never build
@@ -76,7 +76,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     >
       <div className="p-5 sm:p-6">
         {/* Laptops use their product banner as the browsing preview. */}
-        {product.kind === 'laptop' ? <div className="relative -mx-5 -mt-5 mb-5 aspect-[4/5] overflow-hidden bg-gradient-to-br from-[#025656] to-[#002929] sm:-mx-6 sm:-mt-6 sm:aspect-[16/9]">
+        {product.kind === 'laptop' ? <div className="relative -mx-5 -mt-5 mb-5 aspect-[3/4] overflow-hidden bg-gradient-to-br from-[#025656] to-[#002929] sm:-mx-6 sm:-mt-6 sm:aspect-[16/10]">
           {laptopPreviewUrl && !laptopPreviewFailed && <picture><source media="(max-width: 639px)" srcSet={laptopMobilePreviewUrl || laptopPreviewUrl} /><img src={laptopPreviewUrl} alt={cardName} width="960" height="540" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none" onError={() => setLaptopPreviewFailed(true)} /></picture>}
           {(!laptopPreviewUrl || laptopPreviewFailed) && <div className="flex h-full items-center justify-center px-6 text-center text-2xl font-black text-white">{cardName}</div>}
           <div className="absolute inset-0 bg-gradient-to-t from-[#014040]/95 via-[#014040]/35 to-black/5" aria-hidden="true" />
@@ -92,7 +92,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <button type="button" onClick={() => setShowLaptopAvailability((value) => !value)} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider shadow-sm ${isPreorder ? 'bg-amber-300 text-amber-950' : 'bg-[#05ef28] text-[#014040]'}`} aria-expanded={laptopAvailabilityVisible} aria-describedby={`laptop-availability-${product.itemId}`}><Info className="h-3 w-3" />{isPreorder ? 'Pre-order' : 'Available'}</button>
             {laptopAvailabilityVisible && <div id={`laptop-availability-${product.itemId}`} role="tooltip" className="mt-2 w-64 max-w-[calc(100vw-3rem)] rounded-xl border border-[#cbdcd9] bg-white/95 p-3 text-left text-xs font-semibold normal-case leading-5 tracking-normal text-slate-700 shadow-xl backdrop-blur-sm">{availabilityMessage}</div>}
           </div>
-          <div className="absolute inset-x-0 bottom-0 p-5 text-white"><h3 className="text-xl font-black leading-tight sm:text-2xl">{cardName}</h3><p className="mt-1 text-2xl font-black text-[#05ef28]">{displayPrice}</p>{(product.promoLabel || product.promoPercent) && <p className="mt-1 text-[10px] font-black text-[#d9ffe0]">{product.promoLabel || `${product.promoPercent}% off`} · <PromotionCountdown endsAt={product.promoEndsAt} /></p>}</div>
+          <div className="absolute inset-x-0 bottom-0 p-5 text-white"><h3 className="text-xl font-black leading-tight sm:text-2xl">{cardName}</h3>{isPreorder ? <LaptopDeliveryPrices item={product} tone="banner" /> : <p className="mt-1 text-2xl font-black text-[#05ef28]">{minPrice > 0 ? formatPesewas(minPrice) : STORE_COPY.product.askForPrice}</p>}{(product.promoLabel || product.promoPercent) && <p className="mt-1 text-[10px] font-black text-[#d9ffe0]">{product.promoLabel || `${product.promoPercent}% off`} · <PromotionCountdown endsAt={product.promoEndsAt} /></p>}</div>
         </div> : product.cardImageUrl ? <div className="relative -mx-5 -mt-5 mb-5 aspect-[3/2] overflow-hidden bg-[#edf5f3] sm:-mx-6 sm:-mt-6"><img src={product.cardImageUrl} alt="" width="900" height="600" loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" /><div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" /><div className="absolute bottom-3 left-3"><ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} size="sm" /></div>{showCategoryLabel && <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-black uppercase text-[#014040]">{product.categoryName || STORE_COPY.product.softwareFallback}</span>}</div> : <div className="mb-4 flex items-start justify-between gap-3">
           <div className="rounded-2xl transition-transform group-hover:scale-105 motion-reduce:transition-none"><ProductImage name={productName} itemId={product.itemId} imageUrl={product.imageUrl} kind={product.kind} /></div>
           <div className="text-right">{showCategoryLabel && <span className="inline-block rounded-full border border-[#d0e4e0] bg-[#edf5f3] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-[#014040]">{product.categoryName || STORE_COPY.product.softwareFallback}</span>}{versionCount > 0 && <span className="mt-1 block text-[10px] font-medium text-slate-500">{STORE_COPY.product.versionsAvailable(versionCount)}</span>}</div>
@@ -106,7 +106,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
         {product.kind === 'laptop' && product.laptop && <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600"><span><b>CPU</b><br />{product.laptop.processor}</span><span><b>RAM</b><br />{product.laptop.ram}</span><span><b>Storage</b><br />{product.laptop.storage}</span>{(product.laptop.graphicsDetails || (/dedicated/i.test(product.laptop.graphics || '') && !/(?:no dedicated|integrated)/i.test(product.laptop.graphics || ''))) && <span><b>Dedicated graphics</b><br />{product.laptop.graphicsDetails || product.laptop.graphics}</span>}</div>}
 
-        <LaptopDeliveryPrices item={product} />
         {/* OS Compatibility badges */}
         {product.osList && product.osList.length > 0 && (
           <div className="mt-3.5 flex items-center gap-1.5 flex-wrap">

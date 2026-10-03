@@ -1,7 +1,8 @@
-import { pricedLaptopVariant } from './shared/laptopVariants';
+import { laptopEnquiryDetails } from './server/laptopEnquiry';
+import { getPricingConfig } from './server/pricingConfig';
 import { findLaptop } from './server/catalogue';
 import { getRmbPricingSettings } from './server/rmbPricingSettings';
-import { isPreorderLaptop, calculateRmbPrice, laptopDeliveries } from './shared/rmbPricing';
+import { isPreorderLaptop, emptyRmbPricingSettings } from './shared/rmbPricing';
 import express, { Request, Response } from 'express';
 import { readFile } from 'node:fs/promises';
 import path from 'path';
@@ -707,20 +708,17 @@ async function startServer() {
     try {
       const laptop = await findLaptop(String(laptopId));
       if (!laptop?.active) return res.status(400).json({ error: 'This laptop is no longer available.' });
-      let priceDetails = {};
-      if (laptop.variantsEnabled) {
-        const { option, price } = pricedLaptopVariant(laptop, String(laptopVariantRowId || ''), delivery, await getRmbPricingSettings());
-        priceDetails = { variantRowId: option.rowId, cpu: option.cpu, ram: option.ram, storage: option.storage, currencyBasis: option.currencyBasis, pricePesewas: price, ...(delivery ? { delivery } : {}) };
-      } else if (isPreorderLaptop(laptop)) {
-        if (!laptopDeliveries(laptop).includes(delivery)) return res.status(400).json({ error: 'Choose a valid delivery option.' });
-        try { priceDetails = { delivery, pricePesewas: calculateRmbPrice(laptop.preorderCost, delivery, await getRmbPricingSettings()).pricePesewas }; }
-        catch { return res.status(400).json({ error: 'This delivery price is unavailable. Please contact us.' }); }
-      }
+      const settings = isPreorderLaptop(laptop) ? await getRmbPricingSettings() : emptyRmbPricingSettings();
+      const config = await getPricingConfig();
+      let priceDetails: Record<string, unknown>;
+      try { priceDetails = laptopEnquiryDetails(laptop, String(laptopVariantRowId || ''), delivery, settings, config); }
+      catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : 'This delivery price is unavailable. Please contact us.' }); }
+      const paymentOptions = await getPublicPaymentOptions();
       const request = await createRequest('laptop-enquiry', {
         customerName, phone, email, notes,
         details: { laptopId, laptopName: laptop.title, location, ...priceDetails }
       });
-      res.json({ success: true, request });
+      res.json({ success: true, request, paymentOptions });
     } catch (err) {
       failed(res, err, 'Failed to submit laptop enquiry');
     }

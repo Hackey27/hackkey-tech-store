@@ -100,11 +100,11 @@ test('grids, filters and server search expose each variant; URL resolves exactly
   assert.equal(switchLaptopVariant(item.laptopVariantOptions!, current, 'cpuId', 'amd')?.rowId, 'amd-16');
 });
 
-test('selection renders before other variants, visible check chips and disabled missing combinations, with larger type', () => {
+test('selection renders before other variants, visible check chips and disabled missing combinations, with compact type and the interest action', () => {
   const item = laptopToCatalogueItems(variantLaptop(), DEFAULT_PRICING_CONFIG)[0];
-  const html = renderToStaticMarkup(React.createElement(LaptopVariantPurchasePanel, { item, onDeliveryChange: () => {}, onChange: () => {}, onAddToCart: () => {} }));
+  const html = renderToStaticMarkup(React.createElement(LaptopVariantPurchasePanel, { item, onDeliveryChange: () => {}, onChange: () => {}, onInterest: () => {} }));
   assert.ok(html.indexOf('Your selection') < html.indexOf('Other variants for this model'));
-  assert.match(html, /text-\[19\.55px\]/); assert.match(html, /text-\[17px\]/);
+  assert.match(html, /text-\[9\.775px\]/); assert.match(html, /text-\[8\.5px\]/);
   assert.match(html, /aria-pressed="true"/); assert.match(html, /lucide-check/);
   assert.match(html, /disabled=""[^>]*>.*?32GB/);
   const admin = renderToStaticMarkup(React.createElement(LaptopVariantBuilder, { laptop: variantLaptop(), onChange: () => {} }));
