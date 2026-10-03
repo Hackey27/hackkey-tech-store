@@ -639,7 +639,11 @@ export const App: React.FC = () => {
 
         {route.view === 'laptop-request' && <RequestView initialMode="laptop" onDismiss={() => navigate('/laptops')} />}
 
-        {inHacks && <HacksSection query={searchQuery} path={window.location.pathname} navigate={navigate} browseRevision={hackBrowseRevision} />}
+        {inHacks && (
+          <div className="mx-auto w-full min-w-0 max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+            <HacksSection query={searchQuery} path={window.location.pathname} navigate={navigate} browseRevision={hackBrowseRevision} />
+          </div>
+        )}
 
         {route.view === 'section' && route.section !== 'laptops' && route.section !== 'hacks' && (
           <SectionPlaceholder
