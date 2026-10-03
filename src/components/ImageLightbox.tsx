@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, RotateCcw, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 import { useBackDismiss } from '../utils/useBackDismiss';
@@ -332,7 +333,10 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ images, openAt, on
     : [wrappedIndex(activeIndex - 1, images.length), activeIndex, wrappedIndex(activeIndex + 1, images.length)];
   const currentPosition = images.length === 1 ? 0 : 1;
 
-  return (
+  // A below-the-fold gallery rail can have opacity: 0 and a transform from
+  // scroll reveal. Render at the document root so neither can hide the viewer
+  // or make its fixed position relative to that offscreen section.
+  return createPortal(
     <div
       ref={lightboxRef}
       className="hk-gallery-lightbox fixed inset-0 z-[80] overflow-hidden overscroll-none bg-[#001f1f]/95"
@@ -443,6 +447,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ images, openAt, on
 
       {images.length > 1 && <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); slide(1); }} className="absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white hover:bg-white/20" aria-label={STORE_COPY.gallery.next}><ChevronRight className="h-6 w-6" /></button>}
       <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 text-center text-xs font-bold text-white/80">{activeIndex + 1} / {images.length}</div>
-    </div>
+    </div>,
+    document.body,
   );
 };
