@@ -16,6 +16,16 @@ GHS shipping for each offered delivery in every combination, or use the same
 source costs for all combinations. The editor shows a private breakdown for
 2–3 weeks (`express`) and 6–8 weeks (`two-months`) independently.
 
+The **Live selling price** cards sit directly under the RMB and shipping inputs
+and update on every edit without saving. They show the final whole-cedi selling
+price for each offered delivery, including transaction/bank charges, shipping
+and markup. Expand **Price breakdown** for the internal calculation details.
+Each non-uniform variant combination has its own inline cost editor and price
+cards. Uniform pricing has one shared editor; preorder laptop setup uses these
+same cards. An incomplete or invalid delivery shows **Not ready** with the
+reason instead of displaying a previous or estimated price. The preview calls
+the same pricing function as the server; it does not persist calculated prices.
+
 Existing manual preorder products retain their prices until switched to
 **Automatically calculate from RMB costs** and supplied with source costs.
 This avoids inventing RMB costs from historical selling prices. Saving an

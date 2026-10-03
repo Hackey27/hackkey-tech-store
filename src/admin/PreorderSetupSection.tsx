@@ -1,4 +1,5 @@
 import { RmbCombinationCosts } from './RmbCombinationCosts';
+import { RmbCostEditor } from './RmbCostEditor';
 import { priceRmbProduct } from '../../shared/rmbPricing';
 import React, { useMemo, useState } from 'react';
 import { User } from 'firebase/auth';
@@ -13,6 +14,7 @@ import {
   PreorderDetail,
   PreorderImageAssignment,
   PreorderProduct,
+  RmbPricingSettings,
 } from '../../shared/types';
 import {
   combinationSlug,
@@ -298,10 +300,12 @@ function MediaEditor({
 
 function CombinationEditor({
   product,
+  settings,
   onChange,
   onPatch,
 }: {
   product: PreorderProduct;
+  settings: RmbPricingSettings;
   onChange: (combinations: PreorderCombination[]) => void;
   onPatch: (changes: Partial<PreorderProduct>) => void;
 }) {
@@ -317,7 +321,7 @@ function CombinationEditor({
         const next = { ...combination, ...patch };
         // The id follows the selections, so a row cannot keep an id describing
         // a combination it no longer is.
-        return { ...next, combinationId: combinationSlug(next.selections, axes) };
+        return { ...next, combinationId: patch.selections ? combinationSlug(next.selections, axes) : combination.combinationId };
       })
     );
   };
@@ -395,6 +399,7 @@ function CombinationEditor({
             </button>
           </td>
         </tr>
+        {automatic && !uniform && <tr className="max-md:block"><td colSpan={Math.max(1, axes.length + 1)} className="p-2 max-md:block"><RmbCostEditor cost={combination.sourceCost} deliveries={deliveries} settings={settings} onChange={sourceCost => update(index, { sourceCost })} /></td></tr>}
         <tr className="max-md:hidden">
           <td
             colSpan={axes.length + priceColumns + 1}
@@ -490,6 +495,7 @@ function CombinationEditor({
             </p>
           </div>
         )}
+        {uniform && automatic && <div className="mt-3"><RmbCombinationCosts product={product} settings={settings} onChange={onPatch} /></div>}
         {!deliveries.length && (
           <p className="mt-2 text-xs font-bold text-amber-800">
             Choose a delivery option above before setting a price.
@@ -1263,10 +1269,10 @@ export function PreorderSetupSection({
               <label className="block space-y-2 text-xs font-bold">Pricing method<select className={inputClass} value={editing.pricingMode || 'manual'} onChange={event => patch({ pricingMode: event.target.value as 'manual' | 'rmb' })}><option value="rmb">Automatically calculate from RMB costs</option><option value="manual">Existing manual selling prices</option></select><small className="block font-normal text-slate-500">RMB-based prices update whenever Payments → Exchange Rate &amp; Charges changes. Existing manual items keep their current prices until converted.</small></label>
               <CombinationEditor
                 product={editing}
+                settings={data.rmbPricing}
                 onChange={(combinations) => patch({ combinations })}
                 onPatch={patch}
               />
-              {editing.pricingMode === 'rmb' && <RmbCombinationCosts product={editing} settings={data.rmbPricing} onChange={patch} />}
 
               <MediaEditor
                 product={editing}
