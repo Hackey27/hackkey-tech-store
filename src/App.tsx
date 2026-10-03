@@ -103,6 +103,7 @@ export const App: React.FC = () => {
     route.view === 'preorder-request' ||
     route.view === 'preorder-compare' || (route.view === 'section-help' && route.section === 'preorder');
   const inLaptops = route.view === 'laptop-request' || ((route.view === 'section' || route.view === 'section-help') && route.section === 'laptops');
+  const viewingLaptop = route.view === 'product' && Boolean(catalog?.products.some(item => item.itemId === route.itemId && item.kind === 'laptop'));
   const inHacks = route.view === 'section' && route.section === 'hacks';
   const [hackBrowseRevision, setHackBrowseRevision] = useState(0);
   const hackNavTab = window.location.pathname === '/hacks/categories' ? 'categories' : window.location.pathname === '/hacks/issue' ? 'request' : 'home';
@@ -138,12 +139,38 @@ export const App: React.FC = () => {
   };
   /* The bottom bar and listing share the advanced filter's open state. */
   const [preorderFiltersOpen, setPreorderFiltersOpen] = useState(false);
-  /* Lifted so the header's search box can reach it. The section still owns the
-     fetch; this is the same list, not a second copy. */
+  /* Live server-priced products also feed header search and basket refreshes. */
   const [preorderProducts, setPreorderProducts] = useState<PreorderProduct[]>([]);
   /* The words that found nothing, carried into the request form. Retyping what
      you just typed is the quickest way to lose someone at this point. */
   const [requestedProductName, setRequestedProductName] = useState('');
+  const preorderPriceRequest = useRef(0);
+  const refreshPreorderPrices = async () => {
+    const request = ++preorderPriceRequest.current;
+    const response = await fetch('/api/preorder/catalogue', { cache: 'no-store' });
+    if (!response.ok) throw new Error('Could not refresh preorder prices. Please try again.');
+    const loaded = await response.json();
+    if (request !== preorderPriceRequest.current) return;
+    setPreorderProducts(loaded.products);
+    preorderCart.reprice(loaded.products);
+  };
+  useEffect(() => {
+    if (!inPreorder && !preorderCart.lines.length) return;
+    let active = true;
+    const refresh = () => { if (active) void refreshPreorderPrices().catch(() => undefined); };
+    refresh();
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener('focus', refresh);
+    return () => { active = false; clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [inPreorder, preorderCart.lines.length]);
+  useEffect(() => {
+    if (!inLaptops && !viewingLaptop) return;
+    const refresh = async () => { try { const response = await fetch('/api/catalog', { cache: 'no-store' }); if (response.ok) setCatalog(await response.json()); } catch {} };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15000);
+    window.addEventListener('focus', refresh);
+    return () => { clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [inLaptops, viewingLaptop]);
   const preorderResults = useMemo(
     () => (inPreorder ? searchPreorder(preorderProducts, searchQuery) : []),
     [inPreorder, preorderProducts, searchQuery]
@@ -576,6 +603,7 @@ export const App: React.FC = () => {
             onFiltersOpenChange={setPreorderFiltersOpen}
             combinationId={new URLSearchParams(window.location.search).get('combination') || undefined}
             onProductsLoaded={setPreorderProducts}
+            liveProducts={preorderProducts}
           />
         )}
 
@@ -590,6 +618,7 @@ export const App: React.FC = () => {
         {route.view === 'preorder-checkout' && (
           <PreorderCheckoutView
             lines={preorderCart.lines}
+            onPricesChanged={refreshPreorderPrices}
             onBack={() => navigateBack('/preorder')}
             onSubmitted={preorderCart.clear}
             onBrowse={() => navigate('/preorder')}

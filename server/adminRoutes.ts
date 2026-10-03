@@ -1,3 +1,5 @@
+import { getRmbPricingSettings, saveRmbPricingSettings } from './rmbPricingSettings';
+import { priceRmbProduct, priceRmbLaptop } from '../shared/rmbPricing';
 import express, { Router } from 'express';
 import { sendCustomerDelivery, sendCustomerOrderNotification, sendCustomerReceipt } from './email';
 import { AdminRequest, hasRecentAdminAuth, requireAdmin } from './adminAuth';
@@ -35,7 +37,7 @@ import { saveSupportSettings } from './supportSettings';
 import { setPaymentLater } from './paymentReminders';
 import { buildOrderNotification, validateNotificationPurpose } from '../src/utils/orderNotification';
 import { CustomerNotificationPurpose, Order, PreorderCategory, PreorderProduct } from '../shared/types';
-import { assignItemToPackage, createPreorderPackage, savePreorderCategory, savePreorderProduct, setPackageStatus, setPreorderItemStatus } from './preorderData';
+import { assignItemToPackage, createPreorderPackage, savePreorderCategory, savePreorderProduct, listPreorderProducts, setPackageStatus, setPreorderItemStatus } from './preorderData';
 import { invalidatePreorderCatalogueCache } from './preorderCatalogue';
 import { PreorderItemStatus, PreorderPackageStatus } from '../shared/types';
 
@@ -109,6 +111,18 @@ export function createAdminRouter(): Router {
   // bypass authentication by forgetting its own check.
   router.use(requireAdmin());
   router.use('/hacks', createAdminHacksRouter());
+
+  router.get('/rmb-pricing', async (_req, res) => {
+    try {
+      const [settings, products, laptops] = await Promise.all([getRmbPricingSettings(), listPreorderProducts(true), getFirestore().collection(COLLECTIONS.laptops).get()]);
+      const issues = [...products.flatMap(product => priceRmbProduct(product, settings).errors), ...laptops.docs.flatMap(doc => priceRmbLaptop(doc.data() as import('../shared/types').Laptop, settings).errors)];
+      res.json({ settings, issues });
+    } catch (error) { routeError(res, error, 'Could not load Exchange Rate & Charges.'); }
+  });
+  router.put('/rmb-pricing', async (req: AdminRequest, res) => {
+    try { res.json({ settings: await saveRmbPricingSettings(req.body, actor(req)) }); }
+    catch (error) { routeError(res, error, 'Could not save Exchange Rate & Charges.'); }
+  });
 
   router.get('/data', async (_req, res) => {
     try {

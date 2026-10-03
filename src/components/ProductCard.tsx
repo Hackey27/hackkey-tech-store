@@ -1,3 +1,4 @@
+import { LaptopDeliveryPrices } from './LaptopDeliveryPrices';
 import React, { useEffect, useMemo, useState } from 'react';
 import { CatalogueItem } from '../../shared/types';
 import { CheckCircle, CreditCard, Info, MessageSquareQuote, ShoppingCart } from 'lucide-react';
@@ -55,7 +56,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   const displayPrice =
     minPrice > 0
-      ? hasMultipleVariants
+      ? hasMultipleVariants || !!product.preorderPricesPesewas
         ? STORE_COPY.product.fromPrice(formatPesewas(minPrice))
         : formatPesewas(minPrice)
       : STORE_COPY.product.askForPrice;
@@ -63,7 +64,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const payable = product.kind === 'product' || product.kind === 'bundle' || (product.kind === 'service' && Boolean(product.options?.length));
   const isPreorder = product.kind === 'laptop' && product.laptop?.availability.toLowerCase().includes('pre');
   const availabilityMessage = isPreorder
-    ? 'This laptop will be shipped after purchase and delivered within 2 to 4 weeks after payment. Pay 70% now and the remaining 30% when the laptop arrives.'
+    ? 'This laptop will be shipped after purchase. Choose 2–3 weeks or 6–8 weeks delivery. Pay 70% now and the remaining 30% when the laptop arrives.'
     : 'This laptop is available with us and can be delivered as soon as your purchase is made.';
   const laptopAvailabilityVisible = showLaptopAvailability || hoverLaptopAvailability;
 
@@ -105,6 +106,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
         {product.kind === 'laptop' && product.laptop && <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600"><span><b>CPU</b><br />{product.laptop.processor}</span><span><b>RAM</b><br />{product.laptop.ram}</span><span><b>Storage</b><br />{product.laptop.storage}</span>{(product.laptop.graphicsDetails || (/dedicated/i.test(product.laptop.graphics || '') && !/(?:no dedicated|integrated)/i.test(product.laptop.graphics || ''))) && <span><b>Dedicated graphics</b><br />{product.laptop.graphicsDetails || product.laptop.graphics}</span>}</div>}
 
+        <LaptopDeliveryPrices item={product} />
         {/* OS Compatibility badges */}
         {product.osList && product.osList.length > 0 && (
           <div className="mt-3.5 flex items-center gap-1.5 flex-wrap">

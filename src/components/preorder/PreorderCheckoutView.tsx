@@ -8,6 +8,7 @@ import { PreorderCartLine } from '../../utils/usePreorderCart';
 
 interface PreorderCheckoutViewProps {
   lines: PreorderCartLine[];
+  onPricesChanged?: () => Promise<void>;
   onBack: () => void;
   /** Clears the basket once the order is safely recorded. */
   onSubmitted: () => void;
@@ -41,6 +42,7 @@ const DELIVERY_ORDER: PreorderDelivery[] = ['express', 'two-months'];
  */
 export const PreorderCheckoutView: React.FC<PreorderCheckoutViewProps> = ({
   lines,
+  onPricesChanged,
   onBack,
   onSubmitted,
   onBrowse,
@@ -82,11 +84,12 @@ export const PreorderCheckoutView: React.FC<PreorderCheckoutViewProps> = ({
             combinationId: line.combinationId,
             delivery: line.delivery,
             quantity: line.quantity,
+            expectedPricePesewas: line.pricePesewas,
           })),
         }),
       });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || STORE_COPY.preorder.checkout.failed);
+      if (!response.ok) { await onPricesChanged?.(); throw new Error(body.error || STORE_COPY.preorder.checkout.failed); }
       setReference(body.preorderId);
       onSubmitted();
     } catch (err) {
@@ -191,7 +194,7 @@ export const PreorderCheckoutView: React.FC<PreorderCheckoutViewProps> = ({
                       </p>
                     </div>
                     <p className="shrink-0 text-xs font-black text-[#014040]">
-                      {formatPesewas(line.pricePesewas * line.quantity)}
+                      {line.pricingUnavailable ? 'Price unavailable' : formatPesewas(line.pricePesewas * line.quantity)}
                     </p>
                   </div>
                 ))}
@@ -200,6 +203,7 @@ export const PreorderCheckoutView: React.FC<PreorderCheckoutViewProps> = ({
           ))}
         </section>
 
+        {lines.some(line => line.pricingUnavailable) && <p role="alert" className="rounded-xl bg-rose-50 p-4 text-sm font-bold text-rose-800">A delivery price is unavailable. Remove that item or wait for its price to be updated before submitting.</p>}
         {/* Details. */}
         <section className="space-y-3 rounded-2xl border border-[#d8e7e4] bg-white p-4 lg:sticky lg:top-5 lg:self-start">
           <h2 className="text-sm font-black text-[#014040]">
@@ -259,7 +263,7 @@ export const PreorderCheckoutView: React.FC<PreorderCheckoutViewProps> = ({
           <button
             type="button"
             data-testid="preorder-submit"
-            disabled={!complete || submitting}
+            disabled={!complete || submitting || lines.some(line => line.pricingUnavailable)}
             onClick={() => void submit()}
             className={`hk-pressable flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black ${
               complete && !submitting

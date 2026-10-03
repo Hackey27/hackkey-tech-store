@@ -1,3 +1,5 @@
+import { getRmbPricingSettings } from './rmbPricingSettings';
+import { isPreorderLaptop, laptopDeliveries, priceRmbLaptop, validateRmbSourceCost } from '../shared/rmbPricing';
 import { FieldValue, Firestore } from '@google-cloud/firestore';
 import {
   Announcement,
@@ -75,7 +77,7 @@ export async function listVariantSummaries(): Promise<VariantSummary[]> {
 
 export async function adminBootstrap() {
   const db = getFirestore();
-  const [ordersSnap, requestsSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, bundlesSnap, laptopsSnap, categoriesSnap, landingSnap, variants, pricing, payments, support, preorderProducts, preorderCategories, preorders, preorderPackages] = await Promise.all([
+  const [ordersSnap, requestsSnap, licencesSnap, servicesSnap, announcementsSnap, productsSnap, bundlesSnap, laptopsSnap, categoriesSnap, landingSnap, variants, pricing, payments, support, preorderProducts, preorderCategories, preorders, preorderPackages, rmbPricing] = await Promise.all([
     db.collection(COLLECTIONS.orders).get(),
     db.collection(COLLECTIONS.requests).get(),
     db.collection(COLLECTIONS.licencePool).get(),
@@ -94,7 +96,8 @@ export async function adminBootstrap() {
     listPreorderProducts(true),
     listPreorderCategories(),
     listPreorders(),
-    listPreorderPackages()
+    listPreorderPackages(),
+    getRmbPricingSettings()
   ]);
 
   const orders = ordersSnap.docs
@@ -145,7 +148,7 @@ export async function adminBootstrap() {
     ...categories.map((item) => ({ kind: 'category' as const, itemId: item.categoryId, name: item.name, imagePath: item.imagePath, iconImagePath: item.iconImagePath, sortOrder: item.sortOrder }))
   ].sort((a, b) => a.name.localeCompare(b.name));
 
-  return { orders, requests, licences, services, announcements, products, bundles, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {}, pricing, payments, support, preorderProducts, preorderCategories, preorders, preorderPackages };
+  return { orders, requests, licences, services, announcements, products, bundles, laptops, variants, mediaItems, categories, landing: landingSnap.exists ? landingSnap.data() as LandingSettings : {}, pricing, payments, support, preorderProducts, preorderCategories, preorders, preorderPackages, rmbPricing };
 }
 
 export async function savePricingConfiguration(input: Partial<PricingConfig>): Promise<PricingConfig> {
@@ -779,12 +782,19 @@ export async function saveLaptop(laptopId: string, input: Laptop): Promise<Lapto
     ...input,
     laptopId,
     title: input.title.trim(),
-    availability: input.availability === 'Pre-order' || input.availability === 'Preorder' ? 'Pre-order' : 'Available',
+    availability: isPreorderLaptop({ availability: String(input.availability || '') }) ? 'Pre-order' : 'Available',
     categoryId: input.categoryId || 'LAPTOP',
     picturesUrl: input.picturesUrl || [],
     active: input.active !== false,
     sortOrder: Number.isFinite(input.sortOrder) ? input.sortOrder : 100
   };
+  if (isPreorderLaptop(laptop)) {
+    const deliveries = laptopDeliveries(laptop);
+    if (!deliveries.length || deliveries.some(delivery => !['express', 'two-months'].includes(delivery)) || new Set(deliveries).size !== deliveries.length) throw new Error('Choose one or both preorder delivery options.');
+    if (laptop.preorderCost) laptop.preorderCost = validateRmbSourceCost(laptop.preorderCost, deliveries);
+    const { errors } = priceRmbLaptop(laptop, await getRmbPricingSettings());
+    if (laptop.active && errors.length) throw new Error(errors.join(' '));
+  }
   await getFirestore().collection(COLLECTIONS.laptops).doc(laptopId).set(laptop);
   invalidateCatalogueCache();
   return laptop;

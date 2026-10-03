@@ -1,3 +1,7 @@
+import type { Firestore } from "@google-cloud/firestore";
+import { COLLECTIONS, getFirestore } from './firestore';
+import { RMB_SETTINGS_ID, storedRmbSettings } from './rmbPricingSettings';
+import { priceRmbProduct } from '../shared/rmbPricing';
 import {
   Preorder,
   PreorderCustomer,
@@ -7,7 +11,7 @@ import {
 } from '../shared/types';
 import { readableSelections } from '../shared/preorderCombinations';
 import { newId } from './orders';
-import { createPreorder, getPreorderProduct, recordPreorderAlert } from './preorderData';
+import { recordPreorderAlert } from './preorderData';
 import { sendSellerPreorderAlert } from './email';
 
 /**
@@ -32,6 +36,7 @@ export interface PreorderSubmissionItem {
   combinationId: string;
   delivery: PreorderDelivery;
   quantity: number;
+  expectedPricePesewas?: number;
 }
 
 export interface PreorderSubmission {
@@ -57,7 +62,7 @@ function cleanCustomer(customer: PreorderCustomer | undefined): PreorderCustomer
   };
 }
 
-function priceFor(
+export function priceFor(
   product: PreorderProduct,
   combinationId: string,
   delivery: PreorderDelivery
@@ -76,7 +81,7 @@ function priceFor(
     delivery === 'express' ? combination.priceExpressPesewas : combination.priceTwoMonthsPesewas;
   // A blank price means "ask", never free. Refusing here is what stops an
   // unpriced combination becoming an order nobody can invoice.
-  if (typeof pricePesewas !== 'number') {
+  if (!Number.isSafeInteger(pricePesewas) || typeof pricePesewas !== 'number' || pricePesewas <= 0) {
     throw new PreorderSubmissionError(`${product.name} has no price for that delivery speed.`);
   }
 
@@ -87,59 +92,43 @@ function priceFor(
   };
 }
 
-export async function submitPreorder(submission: PreorderSubmission): Promise<Preorder> {
+export async function submitPreorder(submission: PreorderSubmission, dependencies: { db?: Firestore; notify?: (record: Preorder) => Promise<void> } = {}): Promise<Preorder> {
   const customer = cleanCustomer(submission.customer);
   const requested = Array.isArray(submission.items) ? submission.items : [];
   if (!requested.length) throw new PreorderSubmissionError('Your pre-order is empty.');
 
-  // One read per distinct product rather than one per line, since a basket
-  // often holds several variants of the same thing.
-  const products = new Map<string, PreorderProduct>();
-  for (const item of requested) {
-    const productId = requireText(item.productId, 'Product');
-    if (products.has(productId)) continue;
-    const product = await getPreorderProduct(productId);
-    if (!product || !product.active) {
-      throw new PreorderSubmissionError('One of these products is no longer available.');
+  const db = dependencies.db || getFirestore();
+  // Settings, source products and the immutable order snapshot share a
+  // transaction. A concurrent rate/product change retries before any write.
+  const preorder = await db.runTransaction(async transaction => {
+    const settingsDoc = await transaction.get(db.collection(COLLECTIONS.settings).doc(RMB_SETTINGS_ID));
+    const settings = storedRmbSettings(settingsDoc.data());
+    const products = new Map<string, PreorderProduct>();
+    for (const item of requested) {
+      const productId = requireText(item.productId, 'Product');
+      if (products.has(productId)) continue;
+      const snapshot = await transaction.get(db.collection(COLLECTIONS.preorderProducts).doc(productId));
+      const source = snapshot.data() as PreorderProduct | undefined;
+      if (!source?.active) throw new PreorderSubmissionError('One of these products is no longer available.');
+      products.set(productId, priceRmbProduct(source, settings).product);
     }
-    products.set(productId, product);
-  }
-
-  const now = new Date().toISOString();
-  const items: PreorderItem[] = requested.map((item, index) => {
-    const product = products.get(item.productId)!;
-    const quantity = Math.min(MAX_QUANTITY, Math.max(1, Math.trunc(Number(item.quantity) || 1)));
-    const { pricePesewas, selectionLabel } = priceFor(product, item.combinationId, item.delivery);
-    return {
-      // Stable within the order, so an admin status change names one line even
-      // when two lines share a product.
-      itemId: `${index + 1}`,
-      productId: product.productId,
-      combinationId: item.combinationId,
-      selectionLabel,
-      productName: product.name,
-      delivery: item.delivery,
-      pricePesewas,
-      quantity,
-      status: 'awaiting-order',
-      packageId: null,
-    };
+    const now = new Date().toISOString();
+    const items: PreorderItem[] = requested.map((item, index) => {
+      const product = products.get(requireText(item.productId, 'Product'))!;
+      const quantity = Math.min(MAX_QUANTITY, Math.max(1, Math.trunc(Number(item.quantity) || 1)));
+      const { pricePesewas, selectionLabel } = priceFor(product, item.combinationId, item.delivery);
+      if (item.expectedPricePesewas !== undefined && item.expectedPricePesewas !== pricePesewas) throw new PreorderSubmissionError('Prices have changed. Refresh and review your basket before submitting again.');
+      return { itemId: `${index + 1}`, productId: product.productId, combinationId: item.combinationId, selectionLabel, productName: product.name, delivery: item.delivery, pricePesewas, quantity, status: 'awaiting-order', packageId: null };
+    });
+    const record: Preorder = { preorderId: newId('PRE'), customer, items, submittedAt: now, lastUpdated: now, sellerAlertStatus: 'pending' };
+    transaction.create(db.collection(COLLECTIONS.preorders).doc(record.preorderId), record);
+    return record;
   });
-
-  const preorder: Preorder = {
-    preorderId: newId('PRE'),
-    customer,
-    items,
-    submittedAt: now,
-    lastUpdated: now,
-    sellerAlertStatus: 'pending',
-  };
-
-  await createPreorder(preorder);
 
   /* The alert is sent after the write and is never allowed to fail it. The
      pre-order is the record; an email that did not go out is a thing to chase,
      not a reason to lose the order. Same rule the payment path follows. */
+  if (dependencies.notify) { await dependencies.notify(preorder); return preorder; }
   try {
     await sendSellerPreorderAlert(preorder);
     await recordPreorderAlert(preorder.preorderId, 'sent');

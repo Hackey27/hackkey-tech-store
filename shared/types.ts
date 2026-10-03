@@ -271,6 +271,8 @@ export interface Service {
 // ==========================================
 
 export interface Laptop {
+  preorderCost?: RmbSourceCost;
+  preorderDeliveryOptions?: PreorderDelivery[];
   laptopId: string;
   title: string;
   priceGhs?: number; // absent means "ask for price" — never treat as free
@@ -329,6 +331,7 @@ export interface LandingSettings {
  *  empty. `kind` tells the frontend how to render and what the CTA should do.
  *  The raw typed record is carried alongside for consumers that need it. */
 export interface CatalogueItem {
+  preorderPricesPesewas?: Partial<Record<PreorderDelivery, number>>;
   kind: CatalogueItemKind;
   itemId: string;
   name: string;
@@ -767,6 +770,7 @@ export interface PreorderAxis {
 }
 
 export interface PreorderCombination {
+  sourceCost?: RmbSourceCost;
   /** Stable and addressable: the deferred search feature links to these. */
   combinationId: string;
   /** May be PARTIAL. `{Colour: 'Black'}` prices Black in any size. Empty for a
@@ -790,6 +794,7 @@ export interface PreorderDetail {
 }
 
 export interface PreorderProduct {
+  pricingMode?: 'manual' | 'rmb';
   productId: string;
   name: string;
   description: string;
@@ -901,4 +906,20 @@ export interface PreorderPackage {
   status: PreorderPackageStatus;
   /** Closed to new items once it leaves China. */
   closed: boolean;
+}
+
+/** Private source costs. Never returned by public catalogue endpoints. */
+export interface RmbSourceCost {
+  rawCostRmb: number;
+  shippingExpressGhs?: number;
+  shippingTwoMonthsGhs?: number;
+}
+export interface RmbAmountRange { minimum: number; maximum: number | null }
+export interface RmbPricingSettings {
+  exchangeRate: number | null;
+  bankCharges: Array<RmbAmountRange & { charge: number }>;
+  transactionFees: Array<RmbAmountRange & { fee: number }>;
+  profitMargins: Array<RmbAmountRange & { percent: number }>;
+  updatedAt?: string;
+  updatedBy?: string;
 }

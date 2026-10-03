@@ -311,7 +311,7 @@ export function validatePreorderProduct(product: PreorderProduct): PreorderProdu
         ? combination.priceExpressPesewas
         : combination.priceTwoMonthsPesewas) === 'number'
     );
-    if (!priced) {
+    if (!priced && product.pricingMode !== 'rmb') {
       errors.push(`Combination "${combination.combinationId}" has no price for any offered delivery option.`);
     }
   }

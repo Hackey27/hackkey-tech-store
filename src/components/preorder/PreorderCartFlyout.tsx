@@ -242,7 +242,7 @@ export const PreorderCartFlyout: React.FC<PreorderCartFlyoutProps> = ({
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-2">
                     <p className="text-xs font-black text-[#014040]">
-                      {formatPesewas(line.pricePesewas * line.quantity)}
+                      {line.pricingUnavailable ? 'Price unavailable' : formatPesewas(line.pricePesewas * line.quantity)}
                     </p>
                     <button
                       type="button"
@@ -265,6 +265,7 @@ export const PreorderCartFlyout: React.FC<PreorderCartFlyoutProps> = ({
               <button
                 type="button"
                 data-testid="preorder-submit-details"
+                disabled={lines.some(line => line.pricingUnavailable)}
                 onClick={onSubmitDetails}
                 className="hk-pressable flex w-full items-center justify-center gap-2 rounded-xl bg-[#05ef28] px-4 py-3 text-sm font-black text-[#014040] hover:bg-[#04d824]"
               >

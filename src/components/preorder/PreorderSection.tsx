@@ -10,6 +10,7 @@ import { PreorderComparePicker } from './PreorderComparePicker';
 import { PreorderCompareView } from './PreorderCompareView';
 
 interface PreorderSectionProps {
+  liveProducts?: PreorderProduct[];
   /** Present when the path is /preorder/{productId}. */
   productId?: string;
   onOpenProduct: (productId: string) => void;
@@ -49,6 +50,7 @@ interface PreorderSectionProps {
  */
 export const PreorderSection: React.FC<PreorderSectionProps> = ({
   productId,
+  liveProducts,
   onOpenProduct,
   onBack,
   onAdd,
@@ -115,7 +117,7 @@ export const PreorderSection: React.FC<PreorderSectionProps> = ({
     );
   }
 
-  const products = catalogue?.products || [];
+  const products = liveProducts || catalogue?.products || [];
 
   const addSingleCombination = (product: PreorderProduct) => {
     const addition = buildSingleCombinationAddition(product);

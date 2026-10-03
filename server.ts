@@ -1,3 +1,6 @@
+import { findLaptop } from './server/catalogue';
+import { getRmbPricingSettings } from './server/rmbPricingSettings';
+import { isPreorderLaptop, calculateRmbPrice, laptopDeliveries } from './shared/rmbPricing';
 import express, { Request, Response } from 'express';
 import { readFile } from 'node:fs/promises';
 import path from 'path';
@@ -229,6 +232,7 @@ async function startServer() {
     try {
       const categoryFilter = req.query.category as string | undefined;
       const searchQuery = req.query.q as string | undefined;
+      res.setHeader('Cache-Control', 'no-store');
       res.json(await getCatalogue(categoryFilter, searchQuery));
     } catch (err) {
       failed(res, err, 'Failed to retrieve catalogue from Firestore');
@@ -251,7 +255,7 @@ async function startServer() {
   // anything, so splitting it per product would only cost a second round trip.
   app.get('/api/preorder/catalogue', async (_req: Request, res: Response) => {
     try {
-      res.setHeader('Cache-Control', 'public, max-age=60');
+      res.setHeader('Cache-Control', 'no-store');
       res.json(await getPreorderCatalogue());
     } catch (err) {
       failed(res, err, 'Failed to retrieve the pre-order catalogue');
@@ -695,14 +699,22 @@ async function startServer() {
   });
 
   app.post('/api/requests/laptop-enquiry', async (req: Request, res: Response) => {
-    const { customerName, phone, email, laptopId, laptopName, location, notes } = req.body;
+    const { customerName, phone, email, laptopId, laptopName, location, notes, delivery } = req.body;
     if (!customerName || !phone || !email || !laptopId) {
       return res.status(400).json({ error: 'Name, phone, email, and laptop are required.' });
     }
     try {
+      const laptop = await findLaptop(String(laptopId));
+      if (!laptop?.active) return res.status(400).json({ error: 'This laptop is no longer available.' });
+      let priceDetails = {};
+      if (isPreorderLaptop(laptop)) {
+        if (!laptopDeliveries(laptop).includes(delivery)) return res.status(400).json({ error: 'Choose a valid delivery option.' });
+        try { priceDetails = { delivery, pricePesewas: calculateRmbPrice(laptop.preorderCost, delivery, await getRmbPricingSettings()).pricePesewas }; }
+        catch { return res.status(400).json({ error: 'This delivery price is unavailable. Please contact us.' }); }
+      }
       const request = await createRequest('laptop-enquiry', {
         customerName, phone, email, notes,
-        details: { laptopId, laptopName, location }
+        details: { laptopId, laptopName: laptop.title, location, ...priceDetails }
       });
       res.json({ success: true, request });
     } catch (err) {

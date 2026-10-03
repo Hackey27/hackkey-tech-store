@@ -30,7 +30,8 @@ Collections (all camelCase, in Firestore and in TypeScript):
 | `products/{productId}` | Variants are **embedded** as `variants[]`; `imageUrl` is the icon, while `bannerImagePath` and `screenshots[]` hold product-page media. |
 | `bundles/{bundleId}` | Items embedded as `items[]`; `altGroup`/`altLabel` mean "choose one of these". |
 | `services/{serviceId}` | `fields[]` is the parsed enquiry form. `options[]` present => purchasable. |
-| `laptops/{laptopId}` | `picturesUrl` is a `string[]`. |
+| `laptops/{laptopId}` | `picturesUrl` is a `string[]`. Preorder laptops use private `preorderCost` inputs. |
+| `settings/preorderRmbPricing` | Central exchange rate and band tables. See `docs/rmb-preorder-pricing.md`. |
 | `licencePool/{licenceId}` | Loaded and assigned through the Firebase-authenticated admin portal. |
 | `orders/{orderId}` | Survives instance restarts, which is the point of all this. |
 | `requests/{requestId}` | All request kinds in one inbox, discriminated by `kind`. |
@@ -53,8 +54,9 @@ variants need querying independently of their product.
   migration normalises `31.0` to `"31"` while leaving `"4.1.1.8"` untouched.
 - **A blank price is not a free item.** It means "ask for price": the field
   stays absent and the item is not sellable.
-- **Money is integer pesewas.** `src/utils/money.ts` is the only place money
-  arithmetic happens. Orders store `amountPesewas`; there is no `amountGhs`,
+- **Money is integer pesewas.** `shared/money.ts` handles payable money arithmetic and display.
+  `shared/rmbPricing.ts` uses exact decimal units for RMB source costs before
+  rounding final selling prices to whole-cedi integer pesewas. Orders store `amountPesewas`; there is no `amountGhs`,
   and the compiler enforces that. Cedis survive only as the human-authored
   figures in the workbook and in seeded service options, converted exactly once
   by `cedisToPesewas`. The payment check compares the order amount against

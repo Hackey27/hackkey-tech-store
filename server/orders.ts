@@ -1,3 +1,6 @@
+import { isPreorderLaptop, laptopDeliveries, calculateRmbPrice } from '../shared/rmbPricing';
+import { getRmbPricingSettings } from './rmbPricingSettings';
+import type { PreorderDelivery } from '../shared/types';
 import { Firestore } from '@google-cloud/firestore';
 import { createHash, randomBytes } from 'node:crypto';
 import {
@@ -113,6 +116,8 @@ export interface CheckoutItem {
   optionId?: string;
   bundleId?: string;
   laptopId?: string;
+  delivery?: PreorderDelivery;
+  expectedPricePesewas?: number;
   /** Maps an alternative group to the one variant the customer selected. */
   bundleSelections?: Record<string, string>;
 }
@@ -349,17 +354,21 @@ async function createLaptopOrder(
   if (!laptop) throw new Error(`Unknown laptop: ${item.laptopId}`);
   if (!laptop.active) throw new Error(`Laptop ${laptop.laptopId} is not available.`);
   // A blank price means "ask for price"; it must never be sold as free.
-  if (typeof laptop.priceGhs !== 'number' || laptop.priceGhs <= 0) {
+  if (!isPreorderLaptop(laptop) && (typeof laptop.priceGhs !== 'number' || laptop.priceGhs <= 0)) {
     throw new Error(`${laptop.title} is priced on enquiry and cannot be bought online.`);
   }
 
   const quantity = Math.max(1, Math.floor(item.quantity || 1) || 1);
   const pricingConfig = await getPricingConfig();
-  const applied = applyPricingRules(
-    cedisToPesewas(laptop.priceGhs),
-    [laptop.laptopId, `CATEGORY:${laptop.categoryId}`],
-    pricingConfig
-  );
+  let applied;
+  if (isPreorderLaptop(laptop)) {
+    if (!item.delivery || !laptopDeliveries(laptop).includes(item.delivery)) throw new Error('Choose a valid preorder delivery option.');
+    const calculated = calculateRmbPrice(laptop.preorderCost, item.delivery, await getRmbPricingSettings());
+    if (item.expectedPricePesewas !== undefined && item.expectedPricePesewas !== calculated.pricePesewas) throw new Error('This laptop price has changed. Please review the current price.');
+    applied = { payablePesewas: calculated.pricePesewas, listPesewas: calculated.pricePesewas };
+  } else {
+    applied = applyPricingRules(cedisToPesewas(laptop.priceGhs!), [laptop.laptopId, `CATEGORY:${laptop.categoryId}`], pricingConfig);
+  }
 
   return {
     orderId: buildOrderId(laptop.laptopId, laptop.model || 'LAPTOP'),
@@ -372,7 +381,7 @@ async function createLaptopOrder(
     variantId: laptop.laptopId,
     productId: laptop.laptopId,
     productName: laptop.title,
-    versionOrPlan: [laptop.processor, laptop.ram, laptop.storage].filter(Boolean).join(' · ') || 'Laptop',
+    versionOrPlan: [laptop.processor, laptop.ram, laptop.storage, isPreorderLaptop(laptop) ? (item.delivery === 'express' ? '2–3 weeks' : '6–8 weeks') : ''].filter(Boolean).join(' · ') || 'Laptop',
     quantity,
     deliveryOs: laptop.operatingSystem || '',
     amountPesewas: applied.payablePesewas * quantity,

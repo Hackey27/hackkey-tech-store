@@ -35,6 +35,12 @@ export function formatPesewas(pesewas: number): string {
   })}`;
 }
 
+/** Admin-only decimal GHS costs/rates. Preserves sub-pesewa precision for
+ * breakdowns; payable selling prices must still use formatPesewas. */
+export function formatGhsCost(cedis: number): string {
+  return `₵${cedis.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 8 })}`;
+}
+
 export interface ServiceLinePricing {
   /** What one unit costs at this quantity, in pesewas. */
   unitPricePesewas: number;

@@ -191,7 +191,7 @@ export const STORE_COPY = {
       /** Shown under the total. Pre-order prices are quoted per delivery
        *  speed, and a customer should see which one they picked before they
        *  commit to anything. */
-      note: 'Prices are held for each delivery speed you chose.',
+      note: 'Prices update for your selected delivery speed and are checked when you submit.',
       submitDetails: 'Submit details',
     },
     checkout: {

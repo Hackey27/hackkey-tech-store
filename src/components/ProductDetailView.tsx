@@ -1,3 +1,5 @@
+import { LaptopDeliveryPrices } from './LaptopDeliveryPrices';
+import type { PreorderDelivery } from '../../shared/types';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, AlertCircle, Check, CreditCard, Monitor, Phone, Share2, ShoppingCart } from 'lucide-react';
 import { CatalogueItem, MachineCodeType, ServiceOption, Variant } from '../../shared/types';
@@ -66,7 +68,7 @@ const LaptopSpecs: React.FC<{ laptop: LaptopDetails }> = ({ laptop }) => {
         ))}
       </dl>
       {isPreorder
-        ? <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-800">This laptop will be shipped after purchase and delivered within 2 to 4 weeks after payment. Pay 70% now and the remaining 30% when it arrives.</p>
+        ? <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-800">This laptop will be shipped after purchase and delivered with the selected 2–3 weeks or 6–8 weeks option. Pay 70% now and the remaining 30% when it arrives.</p>
         : <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800">This laptop is available with us and can be delivered as soon as your purchase is made.</p>}
     </section>
   );
@@ -82,6 +84,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
   const [bundleSelections, setBundleSelections] = useState<Record<string, string>>({});
   const [addedNotice, setAddedNotice] = useState(false);
   const [bannerFailed, setBannerFailed] = useState(false);
+  const [laptopDelivery, setLaptopDelivery] = useState<PreorderDelivery>('express');
   const [showInterestForm, setShowInterestForm] = useState(initialInterestForm);
   const [galleryOpenRequest, setGalleryOpenRequest] = useState(0);
   const [shareStatus, setShareStatus] = useState('');
@@ -131,7 +134,8 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
     setShareStatus('');
   }, [product.itemId]);
 
-  const price = isPurchasableService && selectedServiceOption
+  useEffect(() => { if (product.preorderPricesPesewas && product.preorderPricesPesewas[laptopDelivery] === undefined) { const first = (['express', 'two-months'] as const).find(delivery => product.preorderPricesPesewas?.[delivery] !== undefined); if (first) setLaptopDelivery(first); } }, [product.preorderPricesPesewas, laptopDelivery]);
+  const price = product.preorderPricesPesewas ? product.preorderPricesPesewas[laptopDelivery] || 0 : isPurchasableService && selectedServiceOption
     ? priceServiceLine(selectedServiceOption, 1).unitPricePesewas
     : resolveLinePricePesewas({ item: product, variant: selectedVariant, quantity: 1 }).unitPesewas;
   const listPrice = selectedVariant?.listPricePesewas ?? product.listPricePesewas;
@@ -281,9 +285,9 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product, o
         <aside className={product.kind === 'laptop' ? 'lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1' : `relative rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-24 ${isQuoteOnly ? '' : 'hk-brand-pattern hk-pattern-outline hk-price-pattern'}`}>
           {isQuoteOnly ? (
             product.kind === 'laptop'
-              ? <div className="space-y-5"><div className="rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6">{!showInterestForm
+              ? <div className="space-y-5"><div className="rounded-3xl border border-[#d8e7e4] bg-white p-5 shadow-sm sm:p-6">{!showInterestForm && <LaptopDeliveryPrices item={product} selected={laptopDelivery} onSelect={setLaptopDelivery} />}{!showInterestForm
                 ? <div className="grid grid-cols-[1fr_auto_auto] gap-2"><button type="button" onClick={() => setShowInterestForm(true)} className="rounded-xl bg-[#014040] px-5 py-3.5 text-sm font-black text-white">I am interested</button><a href={`tel:${STORE_COPY.brand.phoneRaw}`} className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#014040] bg-white text-[#014040]" aria-label={`Call ${STORE_COPY.brand.phone}`}><Phone className="h-5 w-5" /></a><a href={STORE_COPY.brand.whatsAppUrl} target="_blank" rel="noreferrer" className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#05ef28] text-[#014040]" aria-label={STORE_COPY.brand.whatsAppAccessibleLabel}><WhatsAppIcon className="h-5 w-5" /></a></div>
-                : <QuoteRequestForm item={product} submitLabel="Submit details" />}</div>{product.laptop && <div className="hidden px-1 lg:block"><LaptopSpecs laptop={product.laptop} /></div>}</div>
+                : <QuoteRequestForm item={product} submitLabel="Submit details" delivery={laptopDelivery} onDeliveryChange={setLaptopDelivery} />}</div>{product.laptop && <div className="hidden px-1 lg:block"><LaptopSpecs laptop={product.laptop} /></div>}</div>
               : <QuoteRequestForm item={product} submitLabel="Submit details" />
           ) : isPurchasableService ? (
             <ServicePurchasePanel item={product} onAddToCart={handleServiceAdd} onBuyNow={handleServiceBuy} onOptionChange={setSelectedServiceOption} />

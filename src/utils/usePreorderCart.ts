@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { PreorderDelivery } from '../../shared/types';
+import { PreorderDelivery, PreorderProduct } from '../../shared/types';
 
 /**
  * The pre-order basket.
@@ -18,6 +18,7 @@ import { PreorderDelivery } from '../../shared/types';
  */
 
 export interface PreorderCartLine {
+  pricingUnavailable?: boolean;
   /** Product, combination and delivery together: picking Express and Two
    *  months of the same shirt is two lines, because they are two prices. */
   id: string;
@@ -60,6 +61,7 @@ export interface PreorderCart {
   setQuantity: (id: string, quantity: number) => void;
   setDelivery: (id: string, delivery: PreorderDelivery) => void;
   clear: () => void;
+  reprice: (products: PreorderProduct[]) => void;
 }
 
 const MAX_QUANTITY = 99;
@@ -96,10 +98,12 @@ export function addPreorderLine(
   const updated = [...lines];
   updated[index] = {
     ...updated[index],
+    ...addition,
     // The price is re-taken from the addition, not kept from the old line. The
-    // catalogue refreshes every 60 seconds, and a basket quietly holding
+    // catalogue refreshes while the basket is open, and a basket holding
     // yesterday's price is one the server will reject at submission.
     pricePesewas: addition.pricePesewas,
+    pricingUnavailable: false,
     quantity: Math.min(MAX_QUANTITY, updated[index].quantity + quantity),
   };
   return updated;
@@ -131,7 +135,7 @@ export function setPreorderLineDelivery(
   if (typeof pricePesewas !== 'number') return lines;
 
   const movedId = preorderLineId(line.productId, line.combinationId, delivery);
-  const moved: PreorderCartLine = { ...line, id: movedId, delivery, pricePesewas };
+  const moved: PreorderCartLine = { ...line, id: movedId, delivery, pricePesewas, pricingUnavailable: false };
   const existing = lines.find((entry) => entry.id === movedId);
 
   if (!existing) return lines.map((entry) => (entry.id === id ? moved : entry));
@@ -140,7 +144,7 @@ export function setPreorderLineDelivery(
     .filter((entry) => entry.id !== id)
     .map((entry) =>
       entry.id === movedId
-        ? { ...entry, quantity: Math.min(MAX_QUANTITY, entry.quantity + line.quantity) }
+        ? { ...entry, pricePesewas, pricingUnavailable: false, quantity: Math.min(MAX_QUANTITY, entry.quantity + line.quantity) }
         : entry
     );
 }
@@ -168,6 +172,22 @@ export function preorderCartTotalPesewas(lines: PreorderCartLine[]): number {
   return lines.reduce((sum, line) => sum + line.pricePesewas * line.quantity, 0);
 }
 
+/** Refresh the basket from the same server-priced catalogue used by listings.
+ * Missing prices block checkout rather than retaining a stale or free price. */
+export function refreshPreorderLines(lines: PreorderCartLine[], products: PreorderProduct[]): PreorderCartLine[] {
+  const refreshed = lines.map(line => {
+    const product = products.find(product => product.productId === line.productId);
+    const combination = product?.combinations.find(entry => entry.combinationId === line.combinationId);
+    const pricesPesewas: Partial<Record<PreorderDelivery, number>> = {};
+    if (typeof combination?.priceExpressPesewas === 'number') pricesPesewas.express = combination.priceExpressPesewas;
+    if (typeof combination?.priceTwoMonthsPesewas === 'number') pricesPesewas['two-months'] = combination.priceTwoMonthsPesewas;
+    const pricePesewas = pricesPesewas[line.delivery];
+    const pricingUnavailable = !product || !product.deliveryOptions.includes(line.delivery) || pricePesewas === undefined;
+    return { ...line, pricingUnavailable, pricePesewas: pricingUnavailable ? 0 : pricePesewas!, pricesPesewas, availableDeliveries: product?.deliveryOptions || [] };
+  });
+  return JSON.stringify(refreshed) === JSON.stringify(lines) ? lines : refreshed;
+}
+
 export function usePreorderCart(): PreorderCart {
   const [lines, setLines] = useState<PreorderCartLine[]>([]);
   const [open, setOpen] = useState(false);
@@ -192,9 +212,10 @@ export function usePreorderCart(): PreorderCart {
   }, []);
 
   const clear = useCallback(() => setLines([]), []);
+  const reprice = useCallback((products: PreorderProduct[]) => setLines(current => refreshPreorderLines(current, products)), []);
 
   const count = useMemo(() => preorderCartCount(lines), [lines]);
   const totalPesewas = useMemo(() => preorderCartTotalPesewas(lines), [lines]);
 
-  return { lines, count, totalPesewas, open, setOpen, add, remove, setQuantity, setDelivery, clear };
+  return { lines, count, totalPesewas, open, setOpen, add, remove, setQuantity, setDelivery, clear, reprice };
 }

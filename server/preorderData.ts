@@ -1,3 +1,5 @@
+import { getRmbPricingSettings } from './rmbPricingSettings';
+import { priceRmbProduct, validateRmbSourceCost } from '../shared/rmbPricing';
 import { Transaction } from '@google-cloud/firestore';
 import { COLLECTIONS, getFirestore } from './firestore';
 import {
@@ -10,14 +12,8 @@ import {
 } from '../shared/types';
 import { combinationSlug, validatePreorderProduct } from '../shared/preorderCombinations';
 
-/**
- * Every Firestore read and write the pre-order feature makes.
- *
- * Nothing else in this feature calls getFirestore(). That function is already
- * the most connected node in the codebase; routes, seeds and admin handlers
- * calling it directly would roughly double that, and the collection names would
- * end up spelled out in a dozen places.
- */
+/** Catalogue editing and preorder fulfilment persistence. Checkout additionally
+ * reads source products and pricing settings within its order transaction. */
 
 function now(): string {
   return new Date().toISOString();
@@ -64,6 +60,7 @@ export async function getPreorderProduct(productId: string): Promise<PreorderPro
  * grid is legitimate.
  */
 export async function savePreorderProduct(product: PreorderProduct): Promise<{ warnings: string[] }> {
+  if (product.pricingMode && !['manual', 'rmb'].includes(product.pricingMode)) throw new Error('Choose a valid preorder pricing method.');
   const withIds: PreorderProduct = {
     ...product,
     combinations: product.combinations.map((combination) => ({
@@ -78,10 +75,16 @@ export async function savePreorderProduct(product: PreorderProduct): Promise<{ w
     throw new Error(`Pre-order product ${withIds.productId} is not valid: ${errors.join(' ')}`);
   }
 
+  if (withIds.pricingMode === 'rmb') {
+    withIds.combinations = withIds.combinations.map(({ priceExpressPesewas: _oldExpress, priceTwoMonthsPesewas: _oldSea, ...combination }) => ({ ...combination, ...(combination.sourceCost ? { sourceCost: validateRmbSourceCost(combination.sourceCost, withIds.deliveryOptions) } : {}) }));
+    const calculated = priceRmbProduct(withIds, await getRmbPricingSettings());
+    if (withIds.active && calculated.errors.length) throw new Error(calculated.errors.join(' '));
+    warnings.push(...calculated.errors);
+  }
   await getFirestore()
     .collection(COLLECTIONS.preorderProducts)
     .doc(withIds.productId)
-    .set(withIds, { merge: true });
+    .set(withIds);
 
   return { warnings };
 }

@@ -1,0 +1,28 @@
+import React, { useEffect, useState } from 'react';
+import type { User } from 'firebase/auth';
+import { Plus, Save, Trash2 } from 'lucide-react';
+import type { RmbPricingSettings } from '../../shared/types';
+import { emptyRmbPricingSettings, validateRmbPricingSettings } from '../../shared/rmbPricing';
+import { formatGhsCost } from '../../shared/money';
+import { adminRequest } from './api';
+
+const input = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#014040]';
+const button = 'inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold disabled:opacity-50';
+export function RmbPricingSection({ user, reload }: { user: User; reload: () => Promise<void> }) {
+  const [settings, setSettings] = useState(emptyRmbPricingSettings), [issues, setIssues] = useState<string[]>([]), [busy, setBusy] = useState(false), [message, setMessage] = useState('');
+  const load = async () => { try { const response = await adminRequest<{ settings: RmbPricingSettings; issues: string[] }>(user, '/rmb-pricing'); setSettings(response.settings); setIssues(response.issues); } catch (error) { setMessage((error as Error).message); } };
+  useEffect(() => { void load(); }, [user]);
+  const save = async () => {
+    setBusy(true); setMessage('');
+    try { const clean = validateRmbPricingSettings(settings); await adminRequest(user, '/rmb-pricing', { method: 'PUT', body: JSON.stringify(clean) }); await load(); await reload(); setMessage('Saved. RMB-based preorder prices now use these settings automatically.'); }
+    catch (error) { setMessage((error as Error).message); } finally { setBusy(false); }
+  };
+  const areas = [{ key: 'bankCharges' as const, title: 'Bank charges', currency: '₵', field: 'charge', amount: 'Bank charge (₵)', hint: 'Band uses the converted product cost before any charges or shipping.' }, { key: 'transactionFees' as const, title: 'Transaction fees', currency: '¥', field: 'fee', amount: 'Transaction fee (¥ RMB)', hint: 'Band uses the raw RMB cost. No matching range means zero, without a warning.' }, { key: 'profitMargins' as const, title: 'Profit margins', currency: '₵', field: 'percent', amount: 'Markup (%)', hint: 'Band uses the final landed cost including shipping, independently for each delivery option.' }];
+  return <section className="space-y-5 rounded-2xl border bg-white p-5">
+    <header className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-xl font-black text-[#014040]">Exchange Rate &amp; Charges</h3><p className="mt-1 text-sm text-slate-600">Central pricing settings for RMB-based preorders and preorder laptops.</p></div><button type="button" className={`${button} border-[#014040] bg-[#014040] text-white`} disabled={busy} onClick={() => void save()}><Save className="h-4 w-4" />{busy ? 'Saving…' : 'Save exchange rate & charges'}</button></header>
+    <label className="block max-w-sm space-y-2 text-xs font-bold">RMB to GHS exchange rate<input className={input} type="number" min="0.000001" step="0.000001" placeholder="Enter rate: 1 RMB = ₵…" value={settings.exchangeRate ?? ''} onChange={event => setSettings({ ...settings, exchangeRate: event.target.value === '' ? null : Number(event.target.value) })} /><span className="block font-normal text-slate-500">1 RMB = {settings.exchangeRate === null ? 'rate not set' : formatGhsCost(settings.exchangeRate)}</span></label>
+    {areas.map(area => <section key={area.key} className="space-y-3 rounded-xl border bg-[#f8fbfa] p-4"><h4 className="font-black text-[#014040]">{area.title}</h4><p className="text-xs text-slate-600">{area.hint}</p><div className="space-y-3">{settings[area.key].map((row, index) => <div key={index} className="grid items-end gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">{(['minimum', 'maximum', area.field] as const).map(field => <label key={field} className="space-y-1 text-xs font-bold">{field === 'minimum' ? `Minimum (${area.currency})` : field === 'maximum' ? `Maximum (${area.currency}) — blank = Above` : area.amount}<input className={input} type="number" min="0" step={field === 'percent' ? '0.0001' : '0.01'} placeholder={field === 'maximum' ? 'Above' : ''} value={(row as any)[field] ?? ''} onChange={event => setSettings({ ...settings, [area.key]: settings[area.key].map((entry, position) => position === index ? { ...entry, [field]: event.target.value === '' ? null : Number(event.target.value) } : entry) })} /></label>)}<button type="button" className={button} aria-label={`Remove ${area.title} range ${index + 1}`} onClick={() => setSettings({ ...settings, [area.key]: settings[area.key].filter((_, position) => position !== index) })}><Trash2 className="h-4 w-4" /></button></div>)}</div><button type="button" className={button} disabled={settings[area.key].length >= 5} onClick={() => setSettings({ ...settings, [area.key]: [...settings[area.key], { minimum: 0, maximum: null, [area.field]: 0 }] })}><Plus className="h-4 w-4" />Add {area.title.toLowerCase()} range</button><p className="text-[11px] text-slate-500">{settings[area.key].length}/5 ranges · endpoints included · ranges must not overlap</p></section>)}
+    {message && <p role="status" className={`rounded-xl p-3 text-sm font-bold ${message.startsWith('Saved.') ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800'}`}>{message}</p>}
+    {!!issues.length && <div role="alert" className="rounded-xl bg-rose-50 p-4 text-sm text-rose-800"><b>Pricing needs attention</b><p className="mt-1">These delivery prices are withheld until their configuration is complete.</p><ul className="mt-3 list-disc space-y-2 pl-5">{issues.map((issue, index) => <li key={index}>{issue}</li>)}</ul></div>}
+  </section>;
+}

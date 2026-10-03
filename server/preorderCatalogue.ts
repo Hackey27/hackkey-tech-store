@@ -1,3 +1,5 @@
+import { getRmbPricingSettings } from './rmbPricingSettings';
+import { priceRmbProduct, publicRmbProduct } from '../shared/rmbPricing';
 import { PreorderCatalogueResponse, PreorderProduct } from '../shared/types';
 import { catalogueImageUrl } from './catalogue';
 import { listPreorderCategories, listPreorderProducts } from './preorderData';
@@ -5,7 +7,8 @@ import { listPreorderCategories, listPreorderProducts } from './preorderData';
 /**
  * The public pre-order catalogue: what a customer is allowed to see.
  *
- * Two things happen here and nowhere else.
+ * Active products are priced using the current central settings, private
+ * source costs are removed, and image paths are converted to public URLs.
  *
  * INACTIVE PRODUCTS NEVER LEAVE THE SERVER. listPreorderProducts already
  * filters them, and this is the only route that reads it for a customer, so
@@ -21,21 +24,9 @@ import { listPreorderCategories, listPreorderProducts } from './preorderData';
  * whole reason that resolver lives in shared/.
  */
 
-/** Same 60 seconds as the software catalogue, for the same reason: this
- *  changes rarely and every page load reads it. */
-const CACHE_TTL_MS = 60_000;
-
-interface CacheEntry {
-  response: PreorderCatalogueResponse;
-  expiresAt: number;
-}
-
-let cache: CacheEntry | null = null;
-
-/** Exposed so the admin portal's save can force a re-read. */
-export function invalidatePreorderCatalogueCache(): void {
-  cache = null;
-}
+/** Kept for existing admin save callers. Prices are now calculated on every
+ * request from source products and uncached settings across Cloud Run instances. */
+export function invalidatePreorderCatalogueCache(): void {}
 
 /** Rewrites every image path on a product into something a browser can load. */
 function withImageUrls(product: PreorderProduct): PreorderProduct {
@@ -61,18 +52,17 @@ function withImageUrls(product: PreorderProduct): PreorderProduct {
 }
 
 export async function getPreorderCatalogue(): Promise<PreorderCatalogueResponse> {
-  if (cache && cache.expiresAt > Date.now()) return cache.response;
 
-  const [categories, products] = await Promise.all([
+  const [categories, products, settings] = await Promise.all([
     listPreorderCategories(),
     listPreorderProducts(),
+    getRmbPricingSettings(),
   ]);
 
   const response: PreorderCatalogueResponse = {
     categories,
-    products: products.map(withImageUrls),
+    products: products.map(product => withImageUrls(publicRmbProduct(priceRmbProduct(product, settings).product))),
   };
 
-  cache = { response, expiresAt: Date.now() + CACHE_TTL_MS };
   return response;
 }

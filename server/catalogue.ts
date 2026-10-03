@@ -1,3 +1,6 @@
+import { getRmbPricingSettings } from './rmbPricingSettings';
+import { emptyRmbPricingSettings, isPreorderLaptop, priceRmbLaptop, publicRmbLaptop } from '../shared/rmbPricing';
+import type { RmbPricingSettings } from '../shared/types';
 import { Firestore } from '@google-cloud/firestore';
 import { singleLicenceDisclaimerApplies } from '../shared/licenceDisclaimer';
 import {
@@ -259,9 +262,13 @@ function serviceToCatalogueItem(service: Service, config: PricingConfig): Catalo
   };
 }
 
-function laptopToCatalogueItem(laptop: Laptop, config: PricingConfig): CatalogueItem {
+export function laptopToCatalogueItem(laptop: Laptop, config: PricingConfig, rmbSettings: RmbPricingSettings = emptyRmbPricingSettings()): CatalogueItem {
+  const automatic = isPreorderLaptop(laptop);
+  const calculated = automatic ? priceRmbLaptop(laptop, rmbSettings).prices : undefined;
+  const autoPrices = Object.values(calculated || {});
+  const autoPrice = autoPrices.length ? Math.min(...autoPrices) : undefined;
   const pricing =
-    typeof laptop.priceGhs === 'number' && laptop.priceGhs > 0
+    !automatic && typeof laptop.priceGhs === 'number' && laptop.priceGhs > 0
       ? applyPricingRules(cedisToPesewas(laptop.priceGhs), [laptop.laptopId, `CATEGORY:${laptop.categoryId}`], config)
       : undefined;
 
@@ -284,13 +291,14 @@ function laptopToCatalogueItem(laptop: Laptop, config: PricingConfig): Catalogue
       ...(laptop.picturesUrl || [])
     ].filter((value): value is string => Boolean(value)),
     sortOrder: laptop.sortOrder ?? 0,
-    pricePesewas: pricing?.payablePesewas,
+    pricePesewas: automatic ? autoPrice : pricing?.payablePesewas,
+    preorderPricesPesewas: calculated,
     listPricePesewas: pricing?.listPesewas,
     promoLabel: pricing?.promoLabel,
     promoPercent: pricing?.promoPercent,
     promoEndsAt: pricing?.promoEndsAt,
     availabilitySentence: laptop.availability,
-    laptop
+    laptop: publicRmbLaptop(laptop)
   };
 }
 
@@ -427,7 +435,16 @@ export async function getCatalogue(
     cache = { response: await buildCatalogue(), expiresAt: now + CACHE_TTL_MS };
   }
 
-  const base = cache.response;
+  // Refresh only laptops against the uncached settings; software keeps its
+  // existing catalogue cache. No private RMB cost reaches the public response.
+  const [liveLaptops, rmbSettings, pricingConfig] = await Promise.all([
+    readCollection<Laptop>(getFirestore(), COLLECTIONS.laptops), getRmbPricingSettings(), getPricingConfig()
+  ]);
+  const visibleLaptops = liveLaptops.filter(laptop => laptop.active);
+  const laptopItems = visibleLaptops.map(laptop => laptopToCatalogueItem(laptop, pricingConfig, rmbSettings));
+  const base: CatalogResponse = { ...cache.response, laptops: visibleLaptops.map(publicRmbLaptop), products: [...cache.response.products.filter(item => item.kind !== 'laptop'), ...laptopItems].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)) };
+  base.products.forEach(item => { if (item.kind === 'laptop') item.categoryName = base.categories.find(category => category.categoryId === item.categoryId)?.name; });
+  base.totalProducts = base.products.length;
   const category = categoryFilter?.trim();
   const query = searchQuery?.trim().toLowerCase();
 

@@ -1,3 +1,5 @@
+import { RmbCombinationCosts } from './RmbCombinationCosts';
+import { priceRmbProduct } from '../../shared/rmbPricing';
 import React, { useMemo, useState } from 'react';
 import { User } from 'firebase/auth';
 import { ImagePlus, Plus, Trash2, TriangleAlert, UploadCloud } from 'lucide-react';
@@ -40,6 +42,7 @@ const DELIVERY_LABELS: Record<PreorderDelivery, string> = {
 function blankProduct(): PreorderProduct {
   return {
     productId: '',
+    pricingMode: 'rmb',
     name: '',
     description: '',
     details: [],
@@ -305,6 +308,7 @@ function CombinationEditor({
   const axes = product.variantAxes;
   const deliveries = product.deliveryOptions;
   const uniform = Boolean(product.uniformPricing);
+  const automatic = product.pricingMode === 'rmb';
 
   const update = (index: number, patch: Partial<PreorderCombination>) => {
     onChange(
@@ -333,11 +337,12 @@ function CombinationEditor({
   };
 
   const sharedPrice = () => ({
+    ...(automatic && product.combinations[0]?.sourceCost ? { sourceCost: product.combinations[0].sourceCost } : {}),
     priceExpressPesewas: sharedPesewas('express'),
     priceTwoMonthsPesewas: sharedPesewas('two-months'),
   });
 
-  const priceColumns = uniform ? 0 : deliveries.length;
+  const priceColumns = uniform || automatic ? 0 : deliveries.length;
 
   const rows = product.combinations.map((combination, index) => {
     const readable = readableSelections(combination.selections, axes) || 'No variants';
@@ -352,7 +357,7 @@ function CombinationEditor({
             selections={combination.selections}
             onChange={(selections) => update(index, { selections })}
           />
-          {!uniform && deliveries.map((delivery) => (
+          {!uniform && !automatic && deliveries.map((delivery) => (
             <td key={delivery} className="p-2 align-top">
               <label className="block">
                 <span className="mb-1 block text-[11px] font-bold text-slate-600 md:sr-only">
@@ -444,13 +449,7 @@ function CombinationEditor({
             checked={uniform}
             onChange={(event) => {
               const on = event.target.checked;
-              onPatch({ uniformPricing: on });
-              // Turning it on levels every row to the first row's pair, so what
-              // is stored matches what the seller is now being shown.
-              if (on) {
-                const shared = sharedPrice();
-                onChange(product.combinations.map((combination) => ({ ...combination, ...shared })));
-              }
+              onPatch({ uniformPricing: on, ...(on ? { combinations: product.combinations.map(combination => ({ ...combination, ...sharedPrice() })) } : {}) });
             }}
           />
           <span>
@@ -462,7 +461,7 @@ function CombinationEditor({
           </span>
         </label>
 
-        {uniform && (
+        {uniform && !automatic && (
           <div className="mt-3 flex flex-wrap items-end gap-3">
             {deliveries.map((delivery) => (
               <label key={delivery} className={`${labelClass} w-36`}>
@@ -506,7 +505,7 @@ function CombinationEditor({
               {axes.map((axis) => (
                 <th key={axis.name} className="p-2">{axis.name}</th>
               ))}
-              {!uniform && deliveries.map((delivery) => (
+              {!uniform && !automatic && deliveries.map((delivery) => (
                 <th key={delivery} className="p-2">{DELIVERY_LABELS[delivery]} ₵</th>
               ))}
               <th className="p-2" />
@@ -1017,8 +1016,13 @@ export function PreorderSetupSection({
   // Live, so the seller sees a duplicate or a gap as they type rather than on
   // save. The server runs the same function again before writing.
   const validation = useMemo(
-    () => (editing ? validatePreorderProduct(editing) : { errors: [], warnings: [] }),
-    [editing]
+    () => {
+      if (!editing) return { errors: [], warnings: [] };
+      const result = validatePreorderProduct(editing);
+      if (editing.pricingMode === 'rmb' && editing.active) result.errors.push(...priceRmbProduct(editing, data.rmbPricing).errors);
+      return result;
+    },
+    [editing, data.rmbPricing]
   );
 
   /* Categories typed in but not yet written. They are shown alongside the
@@ -1256,11 +1260,13 @@ export function PreorderSetupSection({
                 knownAxisNames={otherAxisNames}
               />
 
+              <label className="block space-y-2 text-xs font-bold">Pricing method<select className={inputClass} value={editing.pricingMode || 'manual'} onChange={event => patch({ pricingMode: event.target.value as 'manual' | 'rmb' })}><option value="rmb">Automatically calculate from RMB costs</option><option value="manual">Existing manual selling prices</option></select><small className="block font-normal text-slate-500">RMB-based prices update whenever Payments → Exchange Rate &amp; Charges changes. Existing manual items keep their current prices until converted.</small></label>
               <CombinationEditor
                 product={editing}
                 onChange={(combinations) => patch({ combinations })}
                 onPatch={patch}
               />
+              {editing.pricingMode === 'rmb' && <RmbCombinationCosts product={editing} settings={data.rmbPricing} onChange={patch} />}
 
               <MediaEditor
                 product={editing}

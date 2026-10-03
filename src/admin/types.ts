@@ -1,3 +1,4 @@
+import type { RmbPricingSettings } from "../../shared/types";
 import { Announcement, Bundle, CatalogueItemKind, Category, CustomerRequest, LandingSettings, Laptop, LicencePoolEntry, Order, PaymentSettings, Preorder, PreorderCategory, PreorderPackage, PreorderProduct, PricingConfig, Product, Service, SupportSettings } from '../../shared/types';
 
 export interface AdminMediaItem {
@@ -28,6 +29,7 @@ export interface VariantSummary {
 }
 
 export interface AdminData {
+  rmbPricing: RmbPricingSettings;
   orders: Order[];
   requests: CustomerRequest[];
   licences: AdminLicence[];

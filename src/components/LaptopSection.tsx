@@ -1,3 +1,4 @@
+import { LaptopDeliveryPrices } from "./LaptopDeliveryPrices";
 import React, { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { CatalogueItem, Category } from "../../shared/types";
@@ -227,6 +228,7 @@ export function LaptopSection({
                     ? formatPesewas(item.pricePesewas)
                     : STORE_COPY.product.askForPrice}
                 </span>
+                <LaptopDeliveryPrices item={item} />
               </th>
             ))}
           </tr>
