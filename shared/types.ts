@@ -915,10 +915,16 @@ export interface RmbSourceCost {
   shippingTwoMonthsGhs?: number;
 }
 export interface RmbAmountRange { minimum: number; maximum: number | null }
+export interface RmbTransactionFee {
+  /** Percentage of the full raw RMB payment, not just the excess. */
+  percent: number;
+  freeUpToRmb: number;
+  maximumPaymentRmb: number;
+}
 export interface RmbPricingSettings {
   exchangeRate: number | null;
   bankCharges: Array<RmbAmountRange & { charge: number }>;
-  transactionFees: Array<RmbAmountRange & { fee: number }>;
+  transactionFee: RmbTransactionFee;
   profitMargins: Array<RmbAmountRange & { percent: number }>;
   updatedAt?: string;
   updatedBy?: string;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import express from 'express';
 import type { Firestore } from '@google-cloud/firestore';
 import type { Laptop, PreorderProduct, RmbPricingSettings } from '../shared/types';
-import { calculateRmbPrice, emptyRmbPricingSettings, priceRmbLaptop, priceRmbProduct, publicRmbLaptop, publicRmbProduct, validateRmbPricingSettings } from '../shared/rmbPricing';
+import { calculateRmbPrice, defaultRmbTransactionFee, emptyRmbPricingSettings, priceRmbLaptop, priceRmbProduct, publicRmbLaptop, publicRmbProduct, validateRmbPricingSettings } from '../shared/rmbPricing';
 import { laptopToCatalogueItem } from '../server/catalogue';
 import { DEFAULT_PRICING_CONFIG } from '../server/pricingConfig';
 import { refreshPreorderLines, preorderCartTotalPesewas, setPreorderLineDelivery } from '../src/utils/usePreorderCart';
@@ -11,58 +11,109 @@ import { buildSingleCombinationAddition } from '../src/utils/preorderAdd';
 import { addPreorderLine } from '../src/utils/usePreorderCart';
 import { submitPreorder } from '../server/preorderOrders';
 import { createAdminRouter } from '../server/adminRoutes';
-import { RMB_SETTINGS_ID, getRmbPricingSettings, saveRmbPricingSettings } from '../server/rmbPricingSettings';
+import { RMB_SETTINGS_ID, getRmbPricingSettings, saveRmbPricingSettings, storedRmbSettings } from '../server/rmbPricingSettings';
 
-const settings = (): RmbPricingSettings => ({ exchangeRate: 2.1, bankCharges: [{ minimum: 0, maximum: null, charge: 15 }], transactionFees: [{ minimum: 101, maximum: 500, fee: 6 }], profitMargins: [{ minimum: 0, maximum: null, percent: 20 }] });
+const settings = (): RmbPricingSettings => ({ exchangeRate: 2.1, bankCharges: [{ minimum: 0, maximum: null, charge: 15 }], transactionFee: defaultRmbTransactionFee(), profitMargins: [{ minimum: 0, maximum: null, percent: 20 }] });
 const source = { rawCostRmb: 500, shippingExpressGhs: 80, shippingTwoMonthsGhs: 150 };
 const product = (): PreorderProduct => ({ productId: 'test', name: 'Test product', categoryId: 'tech', description: '', details: [], galleryImagePaths: [], variantAxes: [], combinations: [{ combinationId: 'default', selections: {}, sourceCost: structuredClone(source), priceExpressPesewas: 1 }], imageAssignments: [], deliveryOptions: ['express', 'two-months'], active: true, pricingMode: 'rmb' });
 const laptop = (availability = 'Pre-order'): Laptop => ({ laptopId: 'laptop', title: 'Test laptop', priceGhs: 777, categoryId: 'laptops', brand: 'Test', model: 'Model', processor: '', ram: '', storage: '', screen: '', colour: '', graphics: '', ports: '', operatingSystem: '', picturesUrl: [], availability, active: true, sortOrder: 1, preorderCost: structuredClone(source) });
 
-test('the supplied example produces exact breakdowns and whole-cedi ceilings for both deliveries', () => {
+test('the percentage fee produces exact breakdowns and whole-cedi ceilings for both deliveries', () => {
   const first = calculateRmbPrice(source, 'express', settings());
   assert.equal(first.convertedCostGhs, 1050);
   assert.equal(first.bankChargeGhs, 15);
-  assert.equal(first.transactionFeeGhs, 12.6);
-  assert.equal(first.landedCostGhs, 1157.6);
-  assert.equal(first.profitGhs, 231.52);
-  assert.equal(first.sellingPriceGhs, 1389.12);
-  assert.equal(first.pricePesewas, 139000);
+  assert.equal(first.transactionFeeGhs, 31.5);
+  assert.equal(first.landedCostGhs, 1176.5);
+  assert.equal(first.profitGhs, 235.3);
+  assert.equal(first.sellingPriceGhs, 1411.8);
+  assert.equal(first.pricePesewas, 141200);
   const second = calculateRmbPrice(source, 'two-months', settings());
-  assert.equal(second.landedCostGhs, 1227.6);
-  assert.equal(second.profitGhs, 245.52);
-  assert.equal(second.pricePesewas, 147400);
+  assert.equal(second.landedCostGhs, 1246.5);
+  assert.equal(second.profitGhs, 249.3);
+  assert.equal(second.pricePesewas, 149600);
 });
 
-test('bank bands use converted product cost; transaction bands use raw RMB; margin bands use each landed cost', () => {
+test('bank bands use converted product cost; percentage fees use raw RMB; margin bands use each landed cost', () => {
   const config = settings();
   config.bankCharges = [{ minimum: 0, maximum: 1050, charge: 15 }, { minimum: 1050.01, maximum: null, charge: 999 }];
   config.profitMargins = [{ minimum: 0, maximum: 1200, percent: 20 }, { minimum: 1200.01, maximum: null, percent: 10 }];
   const first = calculateRmbPrice(source, 'express', config), second = calculateRmbPrice(source, 'two-months', config);
   assert.equal(first.bankChargeGhs, 15);
-  assert.equal(first.transactionFeeRmb, 6);
+  assert.equal(first.transactionFeeRmb, 15);
   assert.equal(first.marginPercent, 20);
   assert.equal(second.marginPercent, 10);
-  assert.equal(second.pricePesewas, 135100);
+  assert.equal(second.pricePesewas, 137200);
 });
 
-test('an unmatched or unconfigured transaction-fee band is valid and adds zero', () => {
-  for (const transactionFees of [[], [{ minimum: 1, maximum: 100, fee: 6 }]]) {
-    const price = calculateRmbPrice(source, 'express', { ...settings(), transactionFees });
-    assert.equal(price.transactionFeeRmb, 0);
-    assert.equal(price.transactionFeeGhs, 0);
+test('payments up to and including ¥200 are free; above the cutoff, 3% applies to the full amount', () => {
+  for (const [rawCostRmb, fee] of [[199.99, 0], [200, 0], [200.01, 6.0003], [500, 15], [6000, 180]]) {
+    const price = calculateRmbPrice({ ...source, rawCostRmb }, 'express', settings());
+    assert.equal(price.transactionFeeRmb, fee);
+    assert.equal(price.transactionFeePercent, rawCostRmb <= 200 ? 0 : 3);
+    if (!fee) assert.equal(price.transactionFeeGhs, 0);
   }
 });
 
 test('decimal ceiling preserves exact whole cedis and never loses a sub-pesewa charge', () => {
-  const config = { ...settings(), exchangeRate: 1, bankCharges: [{ minimum: 0, maximum: null, charge: 0 }], transactionFees: [], profitMargins: [{ minimum: 0, maximum: null, percent: 0 }] };
+  const config = { ...settings(), exchangeRate: 1, bankCharges: [{ minimum: 0, maximum: null, charge: 0 }], transactionFee: { ...defaultRmbTransactionFee(), percent: 0 }, profitMargins: [{ minimum: 0, maximum: null, percent: 0 }] };
   for (const [rawCostRmb, expected] of [[1389, 138900], [1389.01, 139000], [1389.12, 139000], [1389.99, 139000]]) assert.equal(calculateRmbPrice({ rawCostRmb, shippingExpressGhs: 0 }, 'express', config).pricePesewas, expected);
   assert.equal(calculateRmbPrice({ rawCostRmb: 0.1, shippingExpressGhs: 0 }, 'express', { ...config, exchangeRate: 10 }).pricePesewas, 100);
   assert.equal(calculateRmbPrice({ rawCostRmb: 0.01, shippingExpressGhs: 0 }, 'express', { ...config, exchangeRate: 0.000001 }).pricePesewas, 100);
+  // Rounding ¥6.0003 to ¥6.00 early would incorrectly publish 207 cedis.
+  const percentage = calculateRmbPrice({ rawCostRmb: 200.01, shippingExpressGhs: 0.99 }, 'express', { ...config, transactionFee: defaultRmbTransactionFee() });
+  assert.equal(percentage.landedCostGhs, 207.0003);
+  assert.equal(percentage.pricePesewas, 20800);
+});
+
+test('percentage policy validates amounts and precision rather than accepting an invalid fee', () => {
+  for (const policy of [null, {}, { ...defaultRmbTransactionFee(), percent: -1 }, { ...defaultRmbTransactionFee(), percent: 101 }, { ...defaultRmbTransactionFee(), percent: 3.00001 }, { ...defaultRmbTransactionFee(), percent: NaN }, { ...defaultRmbTransactionFee(), freeUpToRmb: -1 }, { ...defaultRmbTransactionFee(), freeUpToRmb: 200.001 }, { ...defaultRmbTransactionFee(), maximumPaymentRmb: 0 }, { ...defaultRmbTransactionFee(), maximumPaymentRmb: 200 }, { ...defaultRmbTransactionFee(), maximumPaymentRmb: Infinity }]) {
+    assert.throws(() => validateRmbPricingSettings({ ...settings(), transactionFee: policy } as RmbPricingSettings));
+  }
+});
+
+test('fee percentage, cutoff and payment limit are central settings that recalculate prices', () => {
+  const config = settings();
+  assert.equal(calculateRmbPrice(source, 'express', { ...config, transactionFee: { ...config.transactionFee, freeUpToRmb: 500 } }).transactionFeeRmb, 0);
+  assert.equal(calculateRmbPrice(source, 'express', { ...config, transactionFee: { ...config.transactionFee, percent: 4 } }).transactionFeeRmb, 20);
+  const highCost = { ...source, rawCostRmb: 6000.01 };
+  assert.throws(() => calculateRmbPrice(highCost, 'express', config), /per-payment limit.*Admin review/);
+  assert.equal(calculateRmbPrice(highCost, 'express', { ...config, transactionFee: { ...config.transactionFee, maximumPaymentRmb: 7000 } }).transactionFeeRmb, 180.0003);
+});
+
+test('over-limit automatic preorders and laptops withhold prices; checkout cannot charge a stale price', async () => {
+  const overLimit = product(); overLimit.combinations[0].sourceCost!.rawCostRmb = 6000.01;
+  const priced = priceRmbProduct(overLimit, settings());
+  assert.equal(priced.product.combinations[0].priceExpressPesewas, undefined);
+  assert.equal(priced.product.combinations[0].priceTwoMonthsPesewas, undefined);
+  assert.ok(priced.errors.every(error => error.includes('Admin review')));
+  const preorderLaptop = laptop(); preorderLaptop.preorderCost!.rawCostRmb = 6000.01;
+  assert.deepEqual(priceRmbLaptop(preorderLaptop, settings()).prices, {});
+  const { db, rows } = database(); rows.set('preorderProducts/test', overLimit);
+  await assert.rejects(submitPreorder({ customer: { name: 'Test', phone: '0241234567', email: 'test@example.com', location: 'Test' }, items: [{ productId: 'test', combinationId: 'default', delivery: 'express', quantity: 1, expectedPricePesewas: 141200 }] }, { db, notify: async () => {} }));
+  assert.equal([...rows.keys()].filter(key => key.startsWith('preorders/')).length, 0);
+});
+
+test('legacy fixed-fee documents use the percentage rule on read without modifying bank bands or stored data', async () => {
+  const { transactionFee: _policy, ...previous } = settings();
+  const legacy = { ...previous, transactionFees: [{ minimum: 101, maximum: 500, fee: 6 }] };
+  const original = structuredClone(legacy);
+  const { db, rows } = database(); rows.set(`settings/${RMB_SETTINGS_ID}`, legacy);
+  const upgraded = await getRmbPricingSettings(db);
+  assert.deepEqual(upgraded.bankCharges, legacy.bankCharges);
+  assert.deepEqual(upgraded.profitMargins, legacy.profitMargins);
+  assert.deepEqual(upgraded.transactionFee, defaultRmbTransactionFee());
+  assert.equal(calculateRmbPrice(source, 'express', upgraded).transactionFeeRmb, 15);
+  assert.equal('transactionFees' in upgraded, false);
+  assert.deepEqual(rows.get(`settings/${RMB_SETTINGS_ID}`), original);
+  assert.throws(() => calculateRmbPrice(source, 'express', storedRmbSettings({ ...legacy, transactionFee: null })), /percentage/);
+  await saveRmbPricingSettings(upgraded, { uid: 'test-admin' }, db);
+  assert.deepEqual(rows.get(`settings/${RMB_SETTINGS_ID}`).bankCharges, legacy.bankCharges);
+  assert.equal('transactionFees' in rows.get(`settings/${RMB_SETTINGS_ID}`), false);
 });
 
 test('range validation rejects negative values, inversions, shared endpoints, overlaps and more than five rows', () => {
-  for (const key of ['bankCharges', 'transactionFees', 'profitMargins'] as const) {
-    const field = key === 'bankCharges' ? 'charge' : key === 'transactionFees' ? 'fee' : 'percent';
+  for (const key of ['bankCharges', 'profitMargins'] as const) {
+    const field = key === 'bankCharges' ? 'charge' : 'percent';
     const invalidRows = [[{ minimum: -1, maximum: 5, [field]: 1 }], [{ minimum: 5, maximum: 4, [field]: 1 }], [{ minimum: 0, maximum: 100, [field]: 1 }, { minimum: 100, maximum: null, [field]: 1 }], [{ minimum: 0, maximum: null, [field]: 1 }, { minimum: 1, maximum: 2, [field]: 1 }], [{ minimum: 0, maximum: null, [field]: -1 }], Array.from({ length: 6 }, (_, i) => ({ minimum: i * 10, maximum: i * 10 + 5, [field]: 1 }))];
     for (const rows of invalidRows) assert.throws(() => validateRmbPricingSettings({ ...settings(), [key]: rows }));
   }
@@ -84,14 +135,14 @@ test('missing mandatory bands or source costs withhold automatic prices instead 
 test('all pricing inputs recalculate without overwriting source costs; manual legacy items remain unchanged', () => {
   const original = product(), before = structuredClone(original);
   const price = (config: RmbPricingSettings) => priceRmbProduct(original, config).product.combinations[0].priceExpressPesewas;
-  assert.equal(price(settings()), 139000);
-  assert.notEqual(price({ ...settings(), exchangeRate: 2.18 }), 139000);
-  assert.notEqual(price({ ...settings(), bankCharges: [{ minimum: 0, maximum: null, charge: 50 }] }), 139000);
-  assert.notEqual(price({ ...settings(), transactionFees: [{ minimum: 0, maximum: null, fee: 25 }] }), 139000);
-  assert.notEqual(price({ ...settings(), profitMargins: [{ minimum: 0, maximum: null, percent: 10 }] }), 139000);
+  assert.equal(price(settings()), 141200);
+  assert.notEqual(price({ ...settings(), exchangeRate: 2.18 }), 141200);
+  assert.notEqual(price({ ...settings(), bankCharges: [{ minimum: 0, maximum: null, charge: 50 }] }), 141200);
+  assert.notEqual(price({ ...settings(), transactionFee: { ...defaultRmbTransactionFee(), percent: 5 } }), 141200);
+  assert.notEqual(price({ ...settings(), profitMargins: [{ minimum: 0, maximum: null, percent: 10 }] }), 141200);
   assert.deepEqual(original, before);
   const changed = product(); changed.combinations[0].sourceCost!.shippingExpressGhs = 180;
-  assert.notEqual(priceRmbProduct(changed, settings()).product.combinations[0].priceExpressPesewas, 139000);
+  assert.notEqual(priceRmbProduct(changed, settings()).product.combinations[0].priceExpressPesewas, 141200);
   const manual = { ...original, pricingMode: 'manual' as const };
   assert.equal(priceRmbProduct(manual, emptyRmbPricingSettings()).product.combinations[0].priceExpressPesewas, 1);
 });
@@ -103,8 +154,8 @@ test('public payloads strip private costs; preorder laptops use the engine while
   assert.equal(publicRmbLaptop(laptop()).priceGhs, undefined);
   const config = DEFAULT_PRICING_CONFIG;
   const preorder = laptopToCatalogueItem(laptop(), config, settings());
-  assert.equal(preorder.preorderPricesPesewas?.express, 139000);
-  assert.equal(preorder.preorderPricesPesewas?.['two-months'], 147400);
+  assert.equal(preorder.preorderPricesPesewas?.express, 141200);
+  assert.equal(preorder.preorderPricesPesewas?.['two-months'], 149600);
   const stock = laptopToCatalogueItem(laptop('Available'), config, settings());
   const changed = laptopToCatalogueItem(laptop('Available'), config, { ...settings(), exchangeRate: 10 });
   assert.equal(stock.pricePesewas, 77700);
@@ -148,14 +199,14 @@ test('settings save is audited, uncached reads see edits, and no example rate is
 
 test('real preorder submission snapshots authoritative prices and never reprices past orders; stale quotes are rejected', async () => {
   const { db, rows } = database();
-  const submission = { customer: { name: 'Test', phone: '0241234567', email: 'test@example.com', location: 'Test location' }, items: [{ productId: 'test', combinationId: 'default', delivery: 'express' as const, quantity: 2, expectedPricePesewas: 139000 }] };
+  const submission = { customer: { name: 'Test', phone: '0241234567', email: 'test@example.com', location: 'Test location' }, items: [{ productId: 'test', combinationId: 'default', delivery: 'express' as const, quantity: 2, expectedPricePesewas: 141200 }] };
   const first = await submitPreorder(submission, { db, notify: async () => {} });
-  assert.equal(first.items[0].pricePesewas, 139000);
+  assert.equal(first.items[0].pricePesewas, 141200);
   rows.set(`settings/${RMB_SETTINGS_ID}`, { ...settings(), exchangeRate: 2.18 });
   await assert.rejects(submitPreorder(submission, { db, notify: async () => {} }), /Prices have changed/);
   const second = await submitPreorder({ ...submission, items: [{ ...submission.items[0], expectedPricePesewas: undefined }] }, { db, notify: async () => {} });
   assert.notEqual(second.items[0].pricePesewas, first.items[0].pricePesewas);
-  assert.equal(rows.get(`preorders/${first.preorderId}`).items[0].pricePesewas, 139000);
+  assert.equal(rows.get(`preorders/${first.preorderId}`).items[0].pricePesewas, 141200);
   assert.equal(rows.get('preorderProducts/test').combinations[0].sourceCost.rawCostRmb, 500);
 });
 
@@ -175,7 +226,7 @@ test('a cart can switch from a withheld delivery to a correctly priced one', () 
   assert.equal(refreshed[0].pricingUnavailable, true);
   const switched = setPreorderLineDelivery(refreshed, refreshed[0].id, 'two-months');
   assert.equal(switched[0].pricingUnavailable, false);
-  assert.equal(switched[0].pricePesewas, 147400);
+  assert.equal(switched[0].pricePesewas, 149600);
 });
 
 test('variants retain distinct RMB costs and order prices; an invalid delivery does not hide a valid delivery', async () => {
@@ -189,6 +240,6 @@ test('variants retain distinct RMB costs and order prices; an invalid delivery d
   assert.equal(order.items[0].pricePesewas, priced.combinations[1].priceExpressPesewas);
   const partial = priceRmbProduct(product(), { ...settings(), profitMargins: [{ minimum: 1200, maximum: null, percent: 20 }] });
   assert.equal(partial.product.combinations[0].priceExpressPesewas, undefined);
-  assert.equal(partial.product.combinations[0].priceTwoMonthsPesewas, 147400);
+  assert.equal(partial.product.combinations[0].priceTwoMonthsPesewas, 149600);
   assert.equal(partial.errors.length, 1);
 });

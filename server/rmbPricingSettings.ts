@@ -1,13 +1,13 @@
 import type { Firestore } from '@google-cloud/firestore';
 import type { RmbPricingSettings } from '../shared/types';
-import { emptyRmbPricingSettings, validateRmbPricingSettings } from '../shared/rmbPricing';
+import { normalizeRmbPricingSettings, validateRmbPricingSettings } from '../shared/rmbPricing';
 import { COLLECTIONS, getFirestore } from './firestore';
 import { buildAdminAuditEntry } from './adminAudit';
 import type { AdminActor } from './adminAuth';
 
 export const RMB_SETTINGS_ID = 'preorderRmbPricing';
 export function storedRmbSettings(value?: Record<string, unknown>): RmbPricingSettings {
-  return { ...emptyRmbPricingSettings(), ...value } as RmbPricingSettings;
+  return normalizeRmbPricingSettings(value);
 }
 /** No instance-local cache: a save on any Cloud Run instance affects the next
  * catalogue request and checkout on every instance. */

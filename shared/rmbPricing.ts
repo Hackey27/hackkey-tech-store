@@ -1,6 +1,14 @@
 import type { Laptop, PreorderCombination, PreorderDelivery, PreorderProduct, RmbPricingSettings, RmbSourceCost } from './types';
 
-export const emptyRmbPricingSettings = (): RmbPricingSettings => ({ exchangeRate: null, bankCharges: [], transactionFees: [], profitMargins: [] });
+export const defaultRmbTransactionFee = () => ({ percent: 3, freeUpToRmb: 200, maximumPaymentRmb: 6000 });
+export const emptyRmbPricingSettings = (): RmbPricingSettings => ({ exchangeRate: null, bankCharges: [], transactionFee: defaultRmbTransactionFee(), profitMargins: [] });
+/** Upgrade legacy fixed-fee settings on read without changing bank bands,
+ * source costs or orders. Only an absent policy gets the default; malformed
+ * saved policies must fail validation rather than silently changing prices. */
+export function normalizeRmbPricingSettings(value?: Record<string, unknown>): RmbPricingSettings {
+  const { transactionFees: _legacyFixedFees, ...stored } = value || {};
+  return { ...emptyRmbPricingSettings(), ...stored } as RmbPricingSettings;
+}
 export const isPreorderLaptop = (laptop: Pick<Laptop, 'availability'>) => /^pre[ -]?order$/i.test(laptop.availability.trim());
 export const laptopDeliveries = (laptop: Laptop): PreorderDelivery[] => laptop.preorderDeliveryOptions || ['express', 'two-months'];
 
@@ -25,7 +33,13 @@ export function validateRmbPricingSettings(input: RmbPricingSettings): RmbPricin
     for (let i = 1; i < clean.length; i++) if (clean[i - 1].maximum === null || clean[i].minimum <= clean[i - 1].maximum!) throw new Error(`${label} ranges overlap. An open-ended range must be last.`);
     return clean;
   };
-  return { exchangeRate, bankCharges: bands(input.bankCharges, 'Bank charges', 'charge', false), transactionFees: bands(input.transactionFees, 'Transaction fees', 'fee', true), profitMargins: bands(input.profitMargins, 'Profit margins', 'percent', false, 4) };
+  const policy = input.transactionFee;
+  const percent = number(policy?.percent, 'Transaction fee percentage', 4);
+  if (percent > 100) throw new Error('Transaction fee percentage cannot exceed 100%.');
+  const freeUpToRmb = number(policy?.freeUpToRmb, 'Fee-free payment limit in RMB');
+  const maximumPaymentRmb = number(policy?.maximumPaymentRmb, 'Maximum payment in RMB');
+  if (!maximumPaymentRmb || maximumPaymentRmb <= freeUpToRmb) throw new Error('Maximum payment must be greater than the fee-free payment limit.');
+  return { exchangeRate, bankCharges: bands(input.bankCharges, 'Bank charges', 'charge', false), transactionFee: { percent, freeUpToRmb, maximumPaymentRmb }, profitMargins: bands(input.profitMargins, 'Profit margins', 'percent', false, 4) };
 }
 
 export function validateRmbSourceCost(input: RmbSourceCost | undefined, deliveries: PreorderDelivery[]): RmbSourceCost {
@@ -43,7 +57,7 @@ export function validateRmbSourceCost(input: RmbSourceCost | undefined, deliveri
 
 export interface RmbPriceBreakdown {
   rawCostRmb: number; exchangeRate: number; convertedCostGhs: number; bankChargeGhs: number;
-  transactionFeeRmb: number; transactionFeeGhs: number; shippingGhs: number;
+  transactionFeePercent: number; transactionFeeRmb: number; transactionFeeGhs: number; shippingGhs: number;
   landedCostGhs: number; marginPercent: number; profitGhs: number; sellingPriceGhs: number; pricePesewas: number;
 }
 
@@ -53,26 +67,36 @@ export function calculateRmbPrice(source: RmbSourceCost | undefined, delivery: P
   const config = validateRmbPricingSettings(settings);
   const cost = validateRmbSourceCost(source, [delivery]);
   const scaled = (value: number, decimals: number) => BigInt(value.toFixed(decimals).replace('.', ''));
+  // Convert the exact decimal string for display, avoiding rounding a large
+  // BigInt to a Number before division (payable arithmetic stays in BigInt).
+  const display = (value: bigint, decimals: number) => {
+    const digits = value.toString().padStart(decimals + 1, '0');
+    return Number(`${digits.slice(0, -decimals)}.${digits.slice(-decimals)}`);
+  };
   const minor = (value: number) => scaled(value, 2);
   const rate = scaled(config.exchangeRate!, 6);
-  // Units are 10^-8 cedis: two RMB decimals times six exchange-rate decimals.
-  const unit = 100000000n, cediMinorUnit = 1000000n;
-  const converted = minor(cost.rawCostRmb) * rate;
+  // Units are 10^-14 cedis: RMB decimals × percentage × exchange rate.
+  // Preserve sub-pesewa percentage fees until the final whole-cedi ceiling.
+  const unit = 100000000000000n, cediMinorUnit = 1000000000000n, percentUnit = 1000000n;
+  const raw = minor(cost.rawCostRmb);
+  if (raw > minor(config.transactionFee.maximumPaymentRmb)) throw new Error(`Raw RMB cost exceeds the configured ¥${config.transactionFee.maximumPaymentRmb} per-payment limit. Admin review is required; automatic pricing does not assume split payments.`);
+  const converted = raw * rate * percentUnit;
   const match = <T extends { minimum: number; maximum: number | null }>(amount: bigint, rows: T[], multiplier: bigint) => rows.find(row => amount >= minor(row.minimum) * multiplier && (row.maximum === null || amount <= minor(row.maximum) * multiplier));
   const bank = match(converted, config.bankCharges, cediMinorUnit);
   if (!bank) throw new Error('No bank-charge range covers the converted product cost. Check Payments → Exchange Rate & Charges.');
-  const fee = match(minor(cost.rawCostRmb), config.transactionFees, 1n)?.fee || 0;
-  const feeGhs = minor(fee) * rate;
+  const feePercent = raw > minor(config.transactionFee.freeUpToRmb) ? config.transactionFee.percent : 0;
+  const feeRmbUnits = raw * scaled(feePercent, 4);
+  const feeGhs = feeRmbUnits * rate;
   const shipping = delivery === 'express' ? cost.shippingExpressGhs! : cost.shippingTwoMonthsGhs!;
   const landed = converted + minor(bank.charge) * cediMinorUnit + feeGhs + minor(shipping) * cediMinorUnit;
   const margin = match(landed, config.profitMargins, cediMinorUnit);
   if (!margin) throw new Error('No profit-margin range covers this delivery option’s landed cost. Check Payments → Exchange Rate & Charges.');
-  const percent = scaled(margin.percent, 4), percentUnit = 1000000n;
+  const percent = scaled(margin.percent, 4);
   const numerator = landed * (percentUnit + percent), denominator = unit * percentUnit;
   const roundedCedis = (numerator + denominator - 1n) / denominator;
   const pesewas = roundedCedis * 100n;
   if (pesewas > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Calculated selling price exceeds the supported money limit.');
-  return { rawCostRmb: cost.rawCostRmb, exchangeRate: config.exchangeRate!, convertedCostGhs: Number(converted) / Number(unit), bankChargeGhs: bank.charge, transactionFeeRmb: fee, transactionFeeGhs: Number(feeGhs) / Number(unit), shippingGhs: shipping, landedCostGhs: Number(landed) / Number(unit), marginPercent: margin.percent, profitGhs: Number(landed * percent) / Number(denominator), sellingPriceGhs: Number(numerator) / Number(denominator), pricePesewas: Number(pesewas) };
+  return { rawCostRmb: cost.rawCostRmb, exchangeRate: config.exchangeRate!, convertedCostGhs: display(converted, 14), bankChargeGhs: bank.charge, transactionFeePercent: feePercent, transactionFeeRmb: display(feeRmbUnits, 8), transactionFeeGhs: display(feeGhs, 14), shippingGhs: shipping, landedCostGhs: display(landed, 14), marginPercent: margin.percent, profitGhs: display(landed * percent, 20), sellingPriceGhs: display(numerator, 20), pricePesewas: Number(pesewas) };
 }
 
 /** One adapter feeds every existing preorder view/resolver/cart. An invalid
