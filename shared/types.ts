@@ -922,6 +922,11 @@ export interface RmbTransactionFee {
   maximumPaymentRmb: number;
 }
 export interface RmbPricingSettings {
+  /** Optional only for reading legacy documents that predate bank modes. */
+  bankChargeMode?: 'percentage_min' | 'ranges';
+  bankChargeRateBps?: number;
+  bankChargeMinimumGhs?: number;
+  bankChargeMaximumGhs?: number | null;
   exchangeRate: number | null;
   bankCharges: Array<RmbAmountRange & { charge: number }>;
   transactionFee: RmbTransactionFee;

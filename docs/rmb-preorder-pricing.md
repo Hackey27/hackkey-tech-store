@@ -1,7 +1,9 @@
 # Automated RMB preorder pricing
 
 Configure **Admin → Payments → Exchange Rate & Charges** before publishing
-RMB-based items. No example exchange rate, bank charge or profit margin is installed.
+RMB-based items. No example exchange rate or profit margin is installed.
+New bank settings default to **Percentage with minimum**: 850 basis points
+(8.5%), minimum ₵7.47, no maximum cap.
 The international-card transaction policy defaults to 3% above ¥200 and a
 configured ¥6,000 per-payment limit. The
 central Firestore document is `settings/preorderRmbPricing`; authenticated
@@ -34,24 +36,60 @@ RMB settings cannot alter an in-stock laptop's price.
 adapters for existing catalogue shapes. The sequence is:
 
 1. Convert raw RMB cost with the configured rate.
-2. Select a fixed GHS bank charge using only that converted product cost.
-3. Payments up to and including the configured fee-free limit (default ¥200)
+2. Payments up to and including the configured fee-free limit (default ¥200)
    have no transaction fee. Above that limit, multiply the **full raw RMB cost**
    by the configured fee percentage (default 3%), then convert that fee with
    the same exchange rate. Shipping and bank charges are not part of the fee base.
+3. Calculate bank charges with `shared/bankCharges.ts`:
+   - `percentage_min`: consume the existing transaction-fee output and round
+     `(raw RMB cost + transaction fee RMB) × rate` half-up to pesewas. Charge
+     `max(roundHalfUp(basePesewas × rateBps / 10000), minimumPesewas)`, capped
+     by the maximum if set. A non-positive rounded base has zero charge.
+   - `ranges`: select the existing fixed GHS charge from the converted **product
+     cost alone**, before transaction fees or other charges. This behavior is
+     unchanged.
 4. Add each delivery's shipping and select its markup band from its own landed
    cost. Multiply landed cost by `1 + percent / 100`.
 5. Round upward to a whole cedi and return integer pesewas, always a multiple
-   of 100. Intermediate amounts are not rounded to pesewas.
+   of 100. Only the new bank-charge base and percentage charge are rounded
+   half-up to pesewas; the existing transaction-fee and landed-cost arithmetic
+   keep their exact precision through the final ceiling.
 
 Bank-charge and profit-margin band tables each support at most five rows. Endpoints are inclusive; leave the
 maximum blank for an open-ended final band. Overlaps, inversions and negative
-values are rejected. Bank and margin gaps withhold the affected delivery price
+values are rejected. Fixed-bank and margin gaps withhold the affected delivery price
 and appear as errors in Payments and the cost editor. One valid delivery can
 remain priced when the other lacks a margin band. Payments at or below the
 transaction cutoff are valid and add zero without an error. Amount inputs
 support two decimal places, rates six, and percentages four. The admin cost formatter can show sub-pesewa amounts; customer
 selling prices never show pesewas.
+
+## Bank modes, storage and migration
+
+The Bank charges card adds **Percentage with minimum** / **Fixed ranges**.
+Rate is entered as a percentage with at most two decimal places and persisted
+as integer `bankChargeRateBps` (0–10000). `bankChargeMinimumGhs` is a
+non-negative two-decimal amount. Optional `bankChargeMaximumGhs` is stored as
+`null` when blank and must be at least the minimum. `bankChargeMode` is stored
+with the other settings through the existing authenticated/audited Save action.
+
+New configurations default to percentage mode at 8.5% / ₵7.47 / no cap. For
+backwards compatibility, existing documents with non-empty fixed ranges but no
+mode are read as `ranges`; their prices do not change until the admin switches
+modes. Missing percentage fields receive the defaults above. The next Save
+persists the explicit mode and fields. Existing bank ranges are retained in
+`bankCharges` when hidden, so switching back restores them. Both modes validate
+retained range data; percentage mode does not require any ranges.
+
+The live example and break-even display use the same integer helper as pricing.
+The crossover is approximately ₵87.88 at the defaults. The product editor shows
+the selected bank mode, its charge base and the bank charge. For a ¥1000 product
+at 1.75 GHS/RMB, the existing fee calculation yields ¥30; the bank base is
+₵1,802.50 and the bank charge is ₵153.21. Shipping does not affect the bank base.
+
+No order migration is needed. Orders contain charged-price snapshots, rather
+than internal RMB cost breakdowns; those snapshots and existing totals are never
+updated when settings change. Cost and profit data remain admin-only.
 
 ## International-card transaction policy
 
@@ -108,9 +146,11 @@ is available only through the authenticated admin interface.
 ## Verification
 
 Run `npm run lint`, `npm test`, and `npm run build`. Automated coverage includes
-the percentage-priced ¥500 example (₵1,412 / ₵1,496), fee cutoff boundaries,
+the original fixed-bank ¥500 example (₵1,412 / ₵1,496), fee cutoff boundaries,
 per-payment limits, legacy policy migration, exact ceiling rounding, fee and band
-validation, distinct delivery margins, global recalculation,
+validation, bank statement examples, half-up rounding, minimum/cap handling,
+transaction-fee-inclusive bank bases, mode persistence and legacy migration,
+distinct delivery margins, global recalculation,
 private-cost removal, manual stock prices, basket recovery, authoritative order
 snapshots and admin authentication. UI verification uses isolated local
 fixtures, never live example rates or test orders.
