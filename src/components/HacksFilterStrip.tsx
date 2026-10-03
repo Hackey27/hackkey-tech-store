@@ -16,10 +16,10 @@ export function HacksFilterStrip({ themes, filters, onChange }: { themes: HackTh
   }, [open]);
   const options: Record<keyof HacksFilters, Array<[string, string]>> = {
     sort: [['popular', 'Popular'], ['newest', 'Newest'], ['oldest', 'Oldest'], ['with-steps', 'With steps'], ['without-steps', 'Without steps']],
-    themeId: [['', 'All themes'], ...themes.map(theme => [theme.themeId, theme.name] as [string, string])],
+    themeId: [['', 'All categories'], ...themes.map(theme => [theme.themeId, theme.name] as [string, string])],
     links: [['all', 'All posts'], ['with-links', 'With tool links'], ['without-links', 'Without tool links']],
   };
-  const labels = { sort: 'Sort by', themeId: 'Themes', links: 'Tool links' };
+  const labels = { sort: 'Sort by', themeId: 'Categories', links: 'Tool links' };
   return <div ref={strip} data-testid="hacks-filter-strip" className="hk-activation-gradient sticky top-[112px] z-40 mt-4 flex items-center gap-2 rounded-xl p-2 text-white md:top-[76px]">
     <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {(['sort', 'themeId', 'links'] as const).map(key => <button type="button" key={key} className={control} aria-expanded={open === key} aria-haspopup="listbox" onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); setPosition({ top: rect.bottom + 6, left: Math.max(12, Math.min(rect.left, window.innerWidth - 292)) }); setOpen(current => current === key ? null : key); }}><span>{labels[key]}{filters[key] && !(key === 'links' && filters.links === 'all') ? `: ${options[key].find(([value]) => value === filters[key])?.[1] || ''}` : ''}</span><ChevronDown className="h-3.5 w-3.5" /></button>)}

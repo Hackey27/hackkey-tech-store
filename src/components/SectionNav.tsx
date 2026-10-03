@@ -32,9 +32,16 @@ export const SectionNav: React.FC<SectionNavProps> = ({ activeSection, onSelectS
       <nav
         aria-label={STORE_COPY.sections.ariaLabel}
         data-expanded={expanded ? 'true' : 'false'}
-        className="hk-section-nav fixed left-4 top-[104px] z-[120] sm:left-6 md:top-[84px] lg:left-8"
+        className="hk-section-nav fixed left-4 top-[128px] z-[120] sm:left-6 sm:top-[84px] lg:left-[max(2rem,calc(50%-38rem))]"
         style={{ width: SECTION_PANEL_WIDTH_PX }}
       >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 14"
+          className="pointer-events-none absolute -top-3 left-2 h-3.5 w-6 overflow-visible drop-shadow-[0_4px_4px_rgba(0,0,0,0.12)]"
+        >
+          <path d="M0 14 L12 0 L24 14" fill="white" stroke="rgba(1,64,64,0.1)" strokeLinejoin="round" />
+        </svg>
         <ul
           className="flex flex-col gap-1 rounded-2xl border border-[#014040]/10 bg-white p-2 shadow-lg"
         >

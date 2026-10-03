@@ -1,4 +1,4 @@
-import { Boxes, CalendarClock, Laptop, Sparkles, Wrench } from 'lucide-react';
+import { Boxes, ShoppingBag, Laptop, Lightbulb, Wrench } from 'lucide-react';
 import { STORE_COPY } from './storeCopy';
 
 /** Top-level storefront sections in the hamburger menu. */
@@ -37,7 +37,7 @@ export const SECTION_TABS: SectionTab[] = [
     path: '/preorder',
     label: STORE_COPY.sections.preorder.label,
     caption: STORE_COPY.sections.preorder.caption,
-    icon: CalendarClock,
+    icon: ShoppingBag,
     live: true,
   },
   {
@@ -45,7 +45,7 @@ export const SECTION_TABS: SectionTab[] = [
     path: '/hacks',
     label: STORE_COPY.sections.hacks.label,
     caption: STORE_COPY.sections.hacks.caption,
-    icon: Sparkles,
+    icon: Lightbulb,
     live: true,
   },
   {

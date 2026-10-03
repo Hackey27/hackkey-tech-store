@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { PackagePlus, Search, ShoppingBag } from 'lucide-react';
+import { Search, ShoppingBag } from 'lucide-react';
 import type { NavItem, NavTab } from './CurvedNav';
 import { BrandLogo } from './BrandLogo';
 import { STORE_COPY } from '../config/storeCopy';
@@ -112,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({
             title={STORE_COPY.sections.ariaLabel}
             className="hk-pressable flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white hover:bg-white/20"
           >
-            <span aria-hidden="true" className="flex flex-col gap-[3.5px]">
+            <span aria-hidden="true" className="flex flex-col gap-[3.5px] transition-transform duration-200 motion-reduce:transition-none" style={{ transform: sectionsExpanded ? 'scale(1.05)' : 'scale(1)' }}>
               <span className="block h-[2px] w-[18px] rounded-full bg-current" />
               <span className="block h-[2px] w-[18px] rounded-full bg-current" />
               <span className="block h-[2px] w-[18px] rounded-full bg-current" />
@@ -242,9 +242,7 @@ export const Header: React.FC<HeaderProps> = ({
               className="relative hidden p-2.5 sm:px-3.5 sm:py-2 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm md:flex items-center gap-2 transition-colors shadow-xs cursor-pointer"
               title={preorderCart ? STORE_COPY.preorder.cart.title : STORE_COPY.navigation.cart}
             >
-              {preorderCart
-                ? <PackagePlus className="w-4 h-4 text-[#05ef28]" />
-                : <ShoppingBag className="w-4 h-4 text-[#05ef28]" />}
+              <ShoppingBag className="w-4 h-4 text-[#05ef28]" />
               <span className="hidden sm:inline">
                 {preorderCart ? STORE_COPY.preorder.title : STORE_COPY.navigation.cart}
               </span>

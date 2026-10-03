@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { AnimatePresence, motion, useReducedMotion, useSpring, useTransform } from 'motion/react';
-import { Home, SearchCheck, HelpCircle, FilePlus2, PackagePlus, ShoppingBag, SlidersHorizontal, Layers } from 'lucide-react';
+import { Home, SearchCheck, HelpCircle, FilePlus2, ShoppingBag, SlidersHorizontal, Layers } from 'lucide-react';
 import { STORE_COPY } from '../config/storeCopy';
 import { useHideOnScrollDown } from '../utils/useHideOnScrollDown';
 
@@ -54,7 +54,7 @@ export const SOFTWARE_NAV_ITEMS: NavItem[] = [
 export const PREORDER_NAV_ITEMS: NavItem[] = [
   { id: 'filters', label: STORE_COPY.preorder.filters.open, icon: SlidersHorizontal },
   { id: 'home', label: STORE_COPY.navigation.home, icon: Home },
-  { id: 'cart', label: STORE_COPY.preorder.title, icon: PackagePlus }
+  { id: 'cart', label: STORE_COPY.preorder.title, icon: ShoppingBag }
 ];
 export const LAPTOP_NAV_ITEMS: NavItem[] = [
   { id: 'filters', label: 'Advanced filter', icon: SlidersHorizontal },
@@ -177,7 +177,7 @@ export const CurvedNav: React.FC<CurvedNavProps> = ({
           {NAV_ITEMS.map((item, position) => {
             const isActive = position === activeIndex;
             const overridden = item.id === 'cart' && cartSlot ? cartSlot : null;
-            const Icon = overridden ? PackagePlus : item.icon;
+            const Icon = overridden ? ShoppingBag : item.icon;
             const label = overridden ? overridden.label : item.label;
             return (
               <button
